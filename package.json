@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "Django project with Bootstrap customization",
   "scripts": {
-    "build-css": "npx sass static/scss/custom.scss static/css/bootstrap.css --style=compressed",
-    "watch-css": "npx sass --watch static/scss/custom.scss:static/css/bootstrap.css --style=compressed",
+    "build-css": "npx sass static/scss/custom.scss static/css/bootstrap.css --style=compressed --no-source-map",
+    "watch-css": "npx sass --watch static/scss/custom.scss:static/css/bootstrap.css --style=compressed --no-source-map",
     "copy-js": "mkdir -p static/js && cp node_modules/bootstrap/dist/js/bootstrap.bundle.min.js static/js/bootstrap.bundle.min.js",
     "build": "npm run build-css && npm run copy-js"
   },
