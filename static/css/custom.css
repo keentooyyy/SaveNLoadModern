@@ -16,3 +16,22 @@ body {
     overflow-x: hidden;
 }
 
+/* White placeholder text for inputs with primary background */
+.bg-primary::placeholder,
+.form-control.bg-primary::placeholder {
+    color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.bg-primary::-webkit-input-placeholder {
+    color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.bg-primary::-moz-placeholder {
+    color: rgba(255, 255, 255, 0.6) !important;
+    opacity: 1;
+}
+
+.bg-primary:-ms-input-placeholder {
+    color: rgba(255, 255, 255, 0.6) !important;
+}
+

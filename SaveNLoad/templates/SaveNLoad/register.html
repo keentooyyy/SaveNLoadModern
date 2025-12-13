@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Login{% endblock %}
+{% block title %}Register{% endblock %}
 
 {% block content %}
     <div class="login-page">
@@ -10,7 +10,7 @@
                     <div class="card shadow-lg bg-primary text-white">
                         <div class="card-body p-4">
                             <h2 class="card-title mt-3">Save N Load</h2>
-                            <p class="fs-6 opacity-50 text-white mb-4">Managing saves has never been easier.</p>
+                            <p class="fs-6 opacity-50 text-white mb-4">Create your account to get started.</p>
                             
                             <form>
                                 <div class="mb-3">
@@ -18,19 +18,27 @@
                                     <input type="text" class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white" id="username" placeholder="Enter your username">
                                 </div>
                                 <div class="mb-3">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <label for="password" class="fs-6 mb-0">PASSWORD</label>
-                                        <a href="#" class="text-secondary text-decoration-none fs-6">Forgot Password?</a>
-                                    </div>
+                                    <label for="email" class="fs-6">EMAIL</label>
+                                    <input type="email" class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white" id="email" placeholder="Enter your email">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="password" class="fs-6 mb-0">PASSWORD</label>
                                     <div class="position-relative">
                                         <input type="password" class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white pe-5" id="password" placeholder="Enter your password">
                                         <i class="fas fa-eye-slash position-absolute top-50 end-0 translate-middle-y me-3 text-white-50" id="togglePassword" style="cursor: pointer; font-weight: 300;"></i>
                                     </div>
                                 </div>
-                                <div class="d-grid">
-                                    <button type="submit" class="btn btn-secondary text-white fw-bold mt-3 py-2">LOGIN</button>
+                                <div class="mb-3">
+                                    <label for="repeatPassword" class="fs-6 mb-0">REPEAT PASSWORD</label>
+                                    <div class="position-relative">
+                                        <input type="password" class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white pe-5" id="repeatPassword" placeholder="Repeat your password">
+                                        <i class="fas fa-eye-slash position-absolute top-50 end-0 translate-middle-y me-3 text-white-50" id="toggleRepeatPassword" style="cursor: pointer; font-weight: 300;"></i>
+                                    </div>
                                 </div>
-                                <p class="text-white fs-6 text-center mt-3 ">Don't have an account? <a href="{% url 'SaveNLoad:route_register' %}" class="text-secondary text-decoration-none fs-6">Create an account</a></p>
+                                <div class="d-grid">
+                                    <button type="submit" class="btn btn-secondary text-white fw-bold mt-3 py-2">REGISTER</button>
+                                </div>
+                                <p class="text-white fs-6 text-center mt-3">Already have an account? <a href="{% url 'SaveNLoad:route_login' %}" class="text-secondary text-decoration-none fs-6">Login</a></p>
 
                             </form>
                         </div>
@@ -42,5 +50,6 @@
     <script>
         {% include 'SaveNLoad/js/togglePasswordVisibility.js' %}
     </script>
+    
 {% endblock %}
 

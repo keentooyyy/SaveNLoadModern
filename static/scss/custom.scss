@@ -1,20 +1,22 @@
 // Custom Bootstrap variables
-// Import Bootstrap's functions and variables first
+// Import Bootstrap's functions first
 @import "../../node_modules/bootstrap/scss/functions";
-@import "../../node_modules/bootstrap/scss/variables";
 
-// Override Bootstrap's primary color
+// Override Bootstrap's primary color BEFORE importing variables
 // Change this to your desired primary color
-$primary: #0d6efd; // Default Bootstrap blue - change this!
+$primary: #283144; // Custom primary color
 
 // You can also customize other colors:
-// $secondary: #6c757d;
+$secondary: #5a8dee; // Custom secondary color
 // $success: #198754;
 // $danger: #dc3545;
 // $warning: #ffc107;
 // $info: #0dcaf0;
 // $light: #f8f9fa;
 // $dark: #212529;
+
+// Now import Bootstrap's variables (will use our overrides due to !default)
+@import "../../node_modules/bootstrap/scss/variables";
 
 // Import the rest of Bootstrap
 @import "../../node_modules/bootstrap/scss/bootstrap";
