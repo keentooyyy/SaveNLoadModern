@@ -14,7 +14,12 @@ RUN apt-get update \
         postgresql-client \
         build-essential \
         libpq-dev \
+        curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js (for npm and Sass compilation)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs
 
 # Install Python dependencies
 COPY requirements.txt /app/

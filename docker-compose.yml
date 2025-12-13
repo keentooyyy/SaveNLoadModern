@@ -19,7 +19,7 @@ services:
   web:
     build: .
     container_name: web
-    command: sh -c "python manage.py runserver 0.0.0.0:8000"
+    command: sh -c "npm install && npm run build && python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
     ports:

@@ -38,8 +38,14 @@ db.sqlite3
 db.sqlite3-journal
 /media
 /staticfiles
-/static
 *.mo
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
 
 # Environment variables
 .env

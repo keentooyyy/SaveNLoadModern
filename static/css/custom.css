@@ -1,0 +1,18 @@
+/* Custom styles for SaveNLoad Modern */
+
+body {
+    background-image: url('../images/background.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    min-height: 100vh;
+}
+
+/* Login page specific - one-off overflow handling */
+.login-page {
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
