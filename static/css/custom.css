@@ -1,11 +1,7 @@
 /* Custom styles for SaveNLoad Modern */
 
 body {
-    background-image: url('../images/background.jpg');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    background-attachment: fixed;
+    background-color: #1c222f;
     min-height: 100vh;
 }
 
@@ -33,5 +29,11 @@ body {
 
 .bg-primary:-ms-input-placeholder {
     color: rgba(255, 255, 255, 0.6) !important;
+}
+
+/* Custom checkbox styling to match dark theme */
+.form-check-input.bg-primary:checked {
+    background-color: #5a8dee !important;
+    border-color: #5a8dee !important;
 }
 

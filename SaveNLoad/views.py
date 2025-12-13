@@ -1,9 +1,13 @@
 from django.shortcuts import render
 
-def route_login(request):
-    """Front-facing login/home page"""
+def login(request):
+    """Login page"""
     return render(request, 'SaveNLoad/login.html')
 
-def route_register(request):
+def register(request):
     """Registration page"""
     return render(request, 'SaveNLoad/register.html')
+
+def forgot_password(request):
+    """Forgot password page"""
+    return render(request, 'SaveNLoad/forgot_password.html')
