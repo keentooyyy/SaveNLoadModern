@@ -271,33 +271,30 @@ body {
     -webkit-overflow-scrolling: touch;
 }
 
-/* Expandable card transitions */
-.expandable-card {
-    transition: width 0.4s ease-in-out;
-    overflow: hidden;
+/* Game card hover zoom effect - custom CSS only for transform animation */
+.game-card {
+    cursor: pointer;
+    transition: transform 0.3s ease;
 }
 
-.expandable-card .card {
-    transition: all 0.4s ease-in-out;
+.game-card:hover {
+    transform: translateY(-4px);
 }
 
-.expandable-card .card-body {
-    transition: width 0.4s ease-in-out, max-width 0.4s ease-in-out, opacity 0.4s ease-in-out, visibility 0.4s ease-in-out, padding-left 0.4s ease-in-out, padding-right 0.4s ease-in-out;
-    white-space: nowrap;
+.game-card-img {
+    transition: transform 0.5s ease;
 }
 
-.expandable-card .card-img-left {
-    transition: width 0.4s ease-in-out, border-radius 0.4s ease-in-out;
-    border-radius: 0.375rem;
+.game-card:hover .game-card-img {
+    transform: scale(1.1);
 }
 
-/* When card body is hidden (collapsed), image should have full border radius */
-.expandable-card .card-body[style*="visibility: hidden"] ~ .card-img-left,
-.expandable-card:not(:hover) .card-body[style*="max-width: 0"] ~ .card-img-left {
-    border-radius: 0.375rem;
+.game-card-overlay {
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.4) 50%, transparent 100%);
+    transition: opacity 0.3s ease;
 }
 
-/* When expanded, image should only have left-side border radius */
-.expandable-card .card-body[style*="visibility: visible"] ~ .card-img-left {
-    border-radius: 0.375rem 0 0 0.375rem;
+.game-card:hover .game-card-overlay {
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.5) 50%, transparent 100%);
 }
+

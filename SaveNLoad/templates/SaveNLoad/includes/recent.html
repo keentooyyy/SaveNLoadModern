@@ -1,0 +1,61 @@
+<!-- Recently Played Games Section -->
+<div class="container-fluid p-4 position-relative">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="text-white mb-0 fs-5 fw-bold">Recently played games</h6>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-light btn-sm scroll-arrow scroll-left" aria-label="Scroll left">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <button class="btn btn-outline-light btn-sm scroll-arrow scroll-right" aria-label="Scroll right">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+    <div id="cardsScrollContainer" class="d-flex gap-3 overflow-x-auto pb-3 cards-scroll-container" style="scrollbar-width: thin;">
+        <!-- Card 1 -->
+        <div class="flex-shrink-0" style="width: 400px;">
+            {% include 'SaveNLoad/components/card.html' with title="Cyberpunk 2077" footer="Last played 3 mins ago" image="https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800&h=600&fit=crop" %}
+        </div>
+        <!-- Card 2 -->
+        <div class="flex-shrink-0" style="width: 400px;">
+            {% include 'SaveNLoad/components/card.html' with title="The Witcher 3" footer="Last played 1 hour ago" image="https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&h=600&fit=crop" %}
+        </div>
+        <!-- Card 3 -->
+        <div class="flex-shrink-0" style="width: 400px;">
+            {% include 'SaveNLoad/components/card.html' with title="Elden Ring" footer="Last played 2 hours ago" image="https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&h=600&fit=crop" %}
+        </div>
+        <!-- Card 4 -->
+        <div class="flex-shrink-0" style="width: 400px;">
+            {% include 'SaveNLoad/components/card.html' with title="Red Dead Redemption 2" footer="Last played 5 hours ago" image="https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?w=800&h=600&fit=crop" %}
+        </div>
+        <!-- Card 5 -->
+        <div class="flex-shrink-0" style="width: 400px;">
+            {% include 'SaveNLoad/components/card.html' with title="God of War" footer="Last played 1 day ago" image="https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=800&h=600&fit=crop" %}
+        </div>
+        <!-- Card 6 -->
+        <div class="flex-shrink-0" style="width: 400px;">
+            {% include 'SaveNLoad/components/card.html' with title="Horizon Zero Dawn" footer="Last played 2 days ago" image="https://images.unsplash.com/photo-1552820728-8b83bb6b773f?w=800&h=600&fit=crop" %}
+        </div>
+        <!-- Card 7 -->
+        <div class="flex-shrink-0" style="width: 400px;">
+            {% include 'SaveNLoad/components/card.html' with title="Assassin's Creed Valhalla" footer="Last played 3 days ago" image="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop" %}
+        </div>
+        <!-- Card 8 -->
+        <div class="flex-shrink-0" style="width: 400px;">
+            {% include 'SaveNLoad/components/card.html' with title="Spider-Man: Miles Morales" footer="Last played 1 week ago" image="https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?w=800&h=600&fit=crop" %}
+        </div>
+        <!-- Card 9 -->
+        <div class="flex-shrink-0" style="width: 400px;">
+            {% include 'SaveNLoad/components/card.html' with title="Ghost of Tsushima" footer="Last played 2 weeks ago" image="https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=800&h=600&fit=crop" %}
+        </div>
+        <!-- Card 10 -->
+        <div class="flex-shrink-0" style="width: 400px;">
+            {% include 'SaveNLoad/components/card.html' with title="The Last of Us Part II" footer="Last played 3 weeks ago" image="https://images.unsplash.com/photo-1607799279861-4dd421887fb3?w=800&h=600&fit=crop" %}
+        </div>
+    </div>
+</div>
+
+<script>
+    {% include 'SaveNLoad/js/horizontalScroll.js' %}
+</script>
+
