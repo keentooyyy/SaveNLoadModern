@@ -64,10 +64,20 @@ body {
 .sidebar.offcanvas {
     --bs-offcanvas-width: var(--sidebar-width) !important;
     width: var(--sidebar-width) !important;
+    background-color: #283046 !important;
 }
 
 .sidebar.offcanvas.offcanvas-start {
     width: var(--sidebar-width) !important;
+}
+
+/* Smooth animations for offcanvas */
+.offcanvas {
+    transition: transform 0.3s ease-in-out;
+}
+
+.offcanvas-backdrop {
+    transition: opacity 0.3s ease-in-out;
 }
 
 /* Mobile: Use 80% width instead of fixed width */
@@ -80,15 +90,10 @@ body {
     .sidebar.offcanvas.offcanvas-start {
         width: 80% !important;
     }
-}
-
-/* Smooth animations for offcanvas */
-.offcanvas {
-    transition: transform 0.3s ease-in-out;
-}
-
-.offcanvas-backdrop {
-    transition: opacity 0.3s ease-in-out;
+    
+    .offcanvas-backdrop {
+        background-color: rgba(0, 0, 0, 0.5);
+    }
 }
 
 /* Override offcanvas for desktop - fixed positioning */
@@ -100,7 +105,6 @@ body {
         height: 100vh !important;
         visibility: visible !important;
         transform: none !important;
-        background-color: #283046 !important;
         z-index: 1000 !important;
         border: none !important;
     }
@@ -117,17 +121,6 @@ body {
     /* Main content margin for fixed sidebar */
     .main-content {
         margin-left: var(--sidebar-width);
-    }
-}
-
-/* Mobile offcanvas styling */
-@media (max-width: 991.98px) {
-    .sidebar.offcanvas {
-        background-color: #283046 !important;
-    }
-    
-    .offcanvas-backdrop {
-        background-color: rgba(0, 0, 0, 0.5);
     }
 }
 
@@ -158,7 +151,6 @@ body {
     height: auto;
     max-width: 50px;
     min-width: 40px;
-    display: block;
     flex-shrink: 0;
 }
 
@@ -183,17 +175,6 @@ body {
     .sidebar-brand {
         font-size: 1.1rem;
     }
-}
-
-.sidebar-user-icon {
-    cursor: pointer;
-    font-size: 1.1rem;
-    opacity: 0.8;
-    transition: opacity 0.2s;
-}
-
-.sidebar-user-icon:hover {
-    opacity: 1;
 }
 
 .sidebar-nav .nav-link {
@@ -233,4 +214,3 @@ body {
     line-height: 1;
     vertical-align: middle;
 }
-
