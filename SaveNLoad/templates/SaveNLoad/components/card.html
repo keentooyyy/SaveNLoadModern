@@ -1,0 +1,38 @@
+{% load static %}
+
+<div class="card {{ card_class|default:'' }} flex-row h-100" style="{{ card_style|default:'' }}">
+    {% if image %}
+    <div class="card-img-left" style="width: 33.333%; background-color: {{ image_bg|default:'#f5f5f5' }}; display: flex; align-items: center; justify-content: center; overflow: hidden; min-height: 200px;">
+        <img src="{{ image }}" class="w-100 h-100" alt="{{ title|default:'' }}" style="object-fit: cover;">
+    </div>
+    {% endif %}
+    <div class="card-body d-flex flex-column justify-content-between" style="width: {% if image %}66.667%{% else %}100%{% endif %}; background-color: {{ body_bg|default:'#283046' }};">
+        <div>
+            {% if icon %}
+            <div class="text-center mb-3">
+                <i class="{{ icon }} {{ icon_size|default:'fs-1' }} {{ icon_color|default:'text-primary' }}"></i>
+            </div>
+            {% endif %}
+            {% if title %}
+            <h5 class="card-title {{ title_class|default:'text-white fw-bold' }} mb-2">{{ title }}</h5>
+            {% endif %}
+            {% if description %}
+            <p class="card-text {{ description_class|default:'text-white-50' }} mb-2">{{ description }}</p>
+            {% endif %}
+            {% if value %}
+            <h3 class="{{ value_class|default:'text-primary' }} mb-0">{{ value }}</h3>
+            {% endif %}
+        </div>
+        <div>
+            {% if button_text and button_url %}
+            <a href="{{ button_url }}" class="btn {{ button_class|default:'btn-primary' }} mt-2">{{ button_text }}</a>
+            {% endif %}
+            {% if footer %}
+            <div class="card-footer {{ footer_class|default:'bg-transparent border-0 px-0' }} mt-2">
+                <small class="{{ footer_text_class|default:'text-white-50' }}">{{ footer }}</small>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+

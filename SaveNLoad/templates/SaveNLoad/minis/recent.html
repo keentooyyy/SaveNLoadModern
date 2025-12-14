@@ -1,0 +1,37 @@
+<!-- Cards Section -->
+<div class="container-fluid p-4 position-relative">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="text-white mb-0 fs-5 fw-bold">Recently played games</h6>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-light btn-sm scroll-arrow scroll-left" aria-label="Scroll left">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <button class="btn btn-outline-light btn-sm scroll-arrow scroll-right" aria-label="Scroll right">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+    <div id="cardsScrollContainer" class="d-flex gap-3 overflow-x-auto pb-3 cards-scroll-container" style="scrollbar-width: thin;">
+        <!-- Card 1 -->
+        <div class="flex-shrink-0 expandable-card" style="width: 266px;">
+            {% include 'SaveNLoad/components/card.html' with title="Card title" description="This is a wider card with supporting text below as a natural lead-in to additional content. This content is a little bit longer." footer="Last played 3 mins ago" image="https://via.placeholder.com/400x200?text=Image" card_class="border-0 shadow h-100" body_bg="#283046" %}
+        </div>
+        <!-- Card 2 -->
+        <div class="flex-shrink-0 expandable-card" style="width: 266px;">
+            {% include 'SaveNLoad/components/card.html' with title="Card title" description="This is a wider card with supporting text below as a natural lead-in to additional content. This content is a little bit longer." footer="Last played 3 mins ago" image="https://via.placeholder.com/400x200?text=Image" card_class="border-0 shadow h-100" body_bg="#283046" %}
+        </div>
+        <!-- Card 3 -->
+        <div class="flex-shrink-0 expandable-card" style="width: 266px;">
+            {% include 'SaveNLoad/components/card.html' with title="Card title" description="This is a wider card with supporting text below as a natural lead-in to additional content. This content is a little bit longer." footer="Last played 3 mins ago" image="https://via.placeholder.com/400x200?text=Image" card_class="border-0 shadow h-100" body_bg="#283046" %}
+        </div>
+    </div>
+</div>
+
+<script>
+    {% include 'SaveNLoad/js/horizontalScroll.js' %}
+</script>
+
+<script>
+    {% include 'SaveNLoad/js/expandableCard.js' %}
+</script>
+
