@@ -3,11 +3,29 @@
 {% block title %}User Dashboard{% endblock %}
 
 {% block content %}
-    <div class="container mt-5">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1 class="text-white">User Dashboard</h1>
-            <a href="{% url 'SaveNLoad:logout' %}" class="btn btn-secondary text-white">Logout</a>
+    <!-- Desktop Sidebar (Fixed) -->
+    <div class="d-none d-lg-block">
+        {% include 'SaveNLoad/includes/sidebar.html' %}
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container-fluid p-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="d-flex align-items-center gap-3">
+                    <span class="text-white d-lg-none p-0 d-flex align-items-center hamburger-btn" style="cursor: pointer;" data-bs-toggle="offcanvas" data-bs-target="#sidebarMobile" aria-controls="sidebarMobile" aria-label="Toggle sidebar" role="button" tabindex="0">
+                        <i class="fas fa-bars fs-3"></i>
+                    </span>
+                    <h1 class="text-white mb-0">User Dashboard</h1>
+                </div>
+                <a href="{% url 'SaveNLoad:logout' %}" class="btn btn-secondary text-white">Logout</a>
+            </div>
         </div>
+    </div>
+    
+    <!-- Mobile Sidebar (Offcanvas) -->
+    <div class="d-lg-none">
+        {% include 'SaveNLoad/includes/sidebar.html' with sidebar_id="sidebarMobile" %}
     </div>
 {% endblock %}
 

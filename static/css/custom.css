@@ -1,5 +1,9 @@
 /* Custom styles for SaveNLoad Modern */
 
+:root {
+    --sidebar-width: 300px; /* Change this value to adjust sidebar width everywhere */
+}
+
 body {
     background-color: #1c222f;
     min-height: 100vh;
@@ -47,5 +51,186 @@ body {
     background-image: none !important;
     border-color: #dc3545 !important;
     box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+}
+
+/* Sidebar Styles - Only custom CSS where Bootstrap can't handle it */
+.sidebar {
+    width: var(--sidebar-width) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: #283046 !important;
+}
+
+/* Override Bootstrap offcanvas width variable and width */
+.sidebar.offcanvas {
+    --bs-offcanvas-width: var(--sidebar-width) !important;
+    width: var(--sidebar-width) !important;
+}
+
+.sidebar.offcanvas.offcanvas-start {
+    width: var(--sidebar-width) !important;
+}
+
+/* Mobile: Use 80% width instead of fixed width */
+@media (max-width: 991.98px) {
+    .sidebar.offcanvas {
+        --bs-offcanvas-width: 80% !important;
+        width: 80% !important;
+    }
+    
+    .sidebar.offcanvas.offcanvas-start {
+        width: 80% !important;
+    }
+}
+
+/* Smooth animations for offcanvas */
+.offcanvas {
+    transition: transform 0.3s ease-in-out;
+}
+
+.offcanvas-backdrop {
+    transition: opacity 0.3s ease-in-out;
+}
+
+/* Override offcanvas for desktop - fixed positioning */
+@media (min-width: 992px) {
+    .sidebar.offcanvas {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        height: 100vh !important;
+        visibility: visible !important;
+        transform: none !important;
+        background-color: #283046 !important;
+        z-index: 1000 !important;
+        border: none !important;
+    }
+    
+    .sidebar.offcanvas.show {
+        transform: none !important;
+    }
+    
+    /* Hide backdrop on desktop */
+    .offcanvas-backdrop {
+        display: none !important;
+    }
+    
+    /* Main content margin for fixed sidebar */
+    .main-content {
+        margin-left: var(--sidebar-width);
+    }
+}
+
+/* Mobile offcanvas styling */
+@media (max-width: 991.98px) {
+    .sidebar.offcanvas {
+        background-color: #283046 !important;
+    }
+    
+    .offcanvas-backdrop {
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+}
+
+.sidebar-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    min-height: 70px;
+    gap: 0.5rem;
+    overflow: hidden;
+}
+
+/* Reduce header height on mobile */
+@media (max-width: 575.98px) {
+    .sidebar-header {
+        min-height: 60px;
+        padding: 0.5rem !important;
+    }
+}
+
+/* Ensure SVG logo is consistent across all devices */
+.sidebar .logo-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidebar .logo-icon svg {
+    width: 100%;
+    height: auto;
+    max-width: 50px;
+    min-width: 40px;
+    display: block;
+    flex-shrink: 0;
+}
+
+.sidebar-brand {
+    font-size: 1.25rem;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+/* Responsive brand text */
+@media (max-width: 575.98px) {
+    .sidebar-brand {
+        font-size: 0.9rem;
+        letter-spacing: 0.3px;
+    }
+}
+
+@media (min-width: 576px) and (max-width: 991.98px) {
+    .sidebar-brand {
+        font-size: 1.1rem;
+    }
+}
+
+.sidebar-user-icon {
+    cursor: pointer;
+    font-size: 1.1rem;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.sidebar-user-icon:hover {
+    opacity: 1;
+}
+
+.sidebar-nav .nav-link {
+    transition: background-color 0.2s;
+    border-radius: 4px;
+    margin: 2px 8px;
+}
+
+.sidebar-nav .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-nav .nav-link.active {
+    background-color: rgba(90, 141, 238, 0.15);
+    color: #5a8dee !important;
+}
+
+.sidebar-nav .nav-link.active i {
+    color: #5a8dee;
+}
+
+.sidebar-nav .nav-link i {
+    width: 20px;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+/* Hamburger menu button - ensure no extra lines */
+.hamburger-btn {
+    line-height: 1;
+}
+
+.hamburger-btn i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    vertical-align: middle;
 }
 
