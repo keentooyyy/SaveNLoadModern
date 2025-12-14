@@ -18,5 +18,7 @@ from django.urls import path, include
 
 urlpatterns = [
     path('', include('SaveNLoad.urls')),
+    path('admin/', include('SaveNLoad.url_configs.admin.urls')),
+    path('user/', include('SaveNLoad.url_configs.user.urls')),
 ]
 

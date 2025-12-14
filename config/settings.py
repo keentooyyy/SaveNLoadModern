@@ -65,7 +65,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # Removed AuthenticationMiddleware - using custom session-based auth
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -134,4 +134,14 @@ STATICFILES_DIRS = [
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Custom User Model (not using Django's auth system)
+# AUTH_USER_MODEL = 'SaveNLoad.User'  # Removed - using custom session auth
+
+# CSRF Protection Settings
+CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'False') == 'True'  # Set to True in production with HTTPS
+CSRF_COOKIE_HTTPONLY = False  # Must be False for AJAX to work
+CSRF_COOKIE_SAMESITE = 'Lax'  # Prevents CSRF attacks while allowing AJAX
+CSRF_USE_SESSIONS = False  # Use cookie-based CSRF tokens
+CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'  # Default CSRF failure view
 

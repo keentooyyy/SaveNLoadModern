@@ -40,28 +40,33 @@
                             <h2 class="card-title mt-3">Save N Load</h2>
                             <p class="fs-6 opacity-50 text-white mb-4">Create your account to get started.</p>
                             
-                            <form>
+                            <form method="POST" action="{% url 'SaveNLoad:register' %}" id="registerForm">
+                                {% csrf_token %}
                                 <div class="mb-3">
                                     <label for="username" class="fs-6 opacity-50">USERNAME</label>
-                                    <input type="text" class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white" id="username" placeholder="Enter your username">
+                                    <input type="text" class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white" id="username" name="username" placeholder="Enter your username" value="{{ request.POST.username }}" required>
+                                    <div class="invalid-feedback text-warning" id="username-error" style="display: none;"></div>
                                 </div>
                                 <div class="mb-3">
                                     <label for="email" class="fs-6 opacity-50">EMAIL</label>
-                                    <input type="email" class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white" id="email" placeholder="Enter your email">
+                                    <input type="email" class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white" id="email" name="email" placeholder="Enter your email" value="{{ request.POST.email }}" required>
+                                    <div class="invalid-feedback text-warning" id="email-error" style="display: none;"></div>
                                 </div>
                                 <div class="mb-3">
                                     <label for="password" class="fs-6 mb-0 opacity-50">PASSWORD</label>
                                     <div class="position-relative">
-                                        <input type="password" class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white pe-5" id="password" placeholder="Enter your password">
+                                        <input type="password" class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white pe-5" id="password" name="password" placeholder="Enter your password" required>
                                         <i class="fas fa-eye-slash position-absolute top-50 end-0 translate-middle-y me-3 text-white-50" id="togglePassword" style="cursor: pointer; font-weight: 300;"></i>
                                     </div>
+                                    <div class="invalid-feedback text-warning" id="password-error" style="display: none;"></div>
                                 </div>
                                 <div class="mb-3">
                                     <label for="repeatPassword" class="fs-6 mb-0 opacity-50">REPEAT PASSWORD</label>
                                     <div class="position-relative">
-                                        <input type="password" class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white pe-5" id="repeatPassword" placeholder="Repeat your password">
+                                        <input type="password" class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white pe-5" id="repeatPassword" name="repeatPassword" placeholder="Repeat your password" required>
                                         <i class="fas fa-eye-slash position-absolute top-50 end-0 translate-middle-y me-3 text-white-50" id="toggleRepeatPassword" style="cursor: pointer; font-weight: 300;"></i>
                                     </div>
+                                    <div class="invalid-feedback text-warning" id="repeatPassword-error" style="display: none;"></div>
                                 </div>
                                 <div class="d-grid">
                                     <button type="submit" class="btn btn-secondary text-white fw-bold mt-3 py-2">REGISTER</button>
@@ -78,6 +83,8 @@
     <script>
         {% include 'SaveNLoad/js/togglePasswordVisibility.js' %}
     </script>
-    
+    <script>
+        {% include 'SaveNLoad/js/registerAjax.js' %}
+    </script>
 {% endblock %}
 

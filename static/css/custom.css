@@ -37,3 +37,15 @@ body {
     border-color: #5a8dee !important;
 }
 
+/* Remove Bootstrap validation icons, keep only red border */
+.form-control.is-invalid {
+    background-image: none !important;
+    padding-right: calc(1.5em + 0.75rem) !important;
+}
+
+.form-control.is-invalid:focus {
+    background-image: none !important;
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+}
+
