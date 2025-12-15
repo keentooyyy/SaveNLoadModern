@@ -1,8 +1,8 @@
 from django.shortcuts import render, redirect
 from django.urls import reverse
-from .custom_decorators import login_required, get_current_user
-from .rawg_api import get_popular_games
-from ..models import SimpleUsers, Game
+from SaveNLoad.views.custom_decorators import login_required, get_current_user
+from SaveNLoad.views.rawg_api import get_popular_games
+from SaveNLoad.models import SimpleUsers, Game
 
 
 def get_playtime_strings():

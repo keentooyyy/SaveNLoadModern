@@ -2,9 +2,9 @@ from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
-from .custom_decorators import login_required, get_current_user
-from .rawg_api import search_games as rawg_search_games
-from ..models import Game
+from SaveNLoad.views.custom_decorators import login_required, get_current_user
+from SaveNLoad.views.rawg_api import search_games as rawg_search_games
+from SaveNLoad.models import Game
 import json
 
 

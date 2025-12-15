@@ -1,7 +1,7 @@
 from django.shortcuts import redirect
 from django.urls import reverse
 from functools import wraps
-from ..models import SimpleUsers
+from SaveNLoad.models import SimpleUsers
 
 
 def login_required(view_func):

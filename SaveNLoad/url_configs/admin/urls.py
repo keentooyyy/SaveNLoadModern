@@ -1,5 +1,5 @@
 from django.urls import path
-from ...views import dashboard, settings
+from SaveNLoad.views import dashboard, settings
 
 app_name = 'admin'
 

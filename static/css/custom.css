@@ -239,19 +239,6 @@ body {
     background: rgba(255, 255, 255, 0.5);
 }
 
-/* Horizontal card layout */
-.card.flex-row {
-    border-radius: 0.375rem;
-}
-
-.card-img-left {
-    border-radius: 0.375rem 0 0 0.375rem;
-}
-
-.card.flex-row .card-body {
-    border-radius: 0 0.375rem 0.375rem 0;
-}
-
 /* Scroll arrows */
 .scroll-arrow {
     transition: opacity 0.3s, transform 0.2s;

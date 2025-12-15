@@ -1,5 +1,5 @@
 from django.urls import path
-from ...views import dashboard
+from SaveNLoad.views import dashboard
 
 app_name = 'user'
 

@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import auth
+from SaveNLoad.views import auth
 
 app_name = 'SaveNLoad'
 

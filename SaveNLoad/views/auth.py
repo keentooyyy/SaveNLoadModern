@@ -4,9 +4,9 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.utils.html import escape
 
-from ..models import SimpleUsers, UserRole
-from .custom_decorators import login_required, get_current_user
-from .input_sanitizer import (
+from SaveNLoad.models import SimpleUsers, UserRole
+from SaveNLoad.views.custom_decorators import login_required, get_current_user
+from SaveNLoad.views.input_sanitizer import (
     sanitize_username,
     sanitize_email,
     validate_username_format,
