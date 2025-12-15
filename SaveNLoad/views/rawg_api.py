@@ -60,7 +60,7 @@ def get_popular_games(limit: int = 10) -> List[Dict]:
 def search_game(query: str) -> Optional[Dict]:
     """
     Search for a specific game by name.
-    Returns game data with title and cover image.
+    Returns the best matching game with title and cover image.
     """
     api_key = os.getenv('RAWG')
     if not api_key:
@@ -90,6 +90,7 @@ def search_game(query: str) -> Optional[Dict]:
             image = game.get('background_image')
             if image:  # Only return games with images
                 return {
+                    'id': game.get('id'),
                     'title': game.get('name', 'Unknown'),
                     'image': image,
                 }
@@ -102,4 +103,60 @@ def search_game(query: str) -> Optional[Dict]:
     except Exception as e:
         print(f"Unexpected error: {e}")
         return None
+
+
+def search_games(query: str, limit: int = 10) -> List[Dict]:
+    """
+    Search RAWG for multiple games by name.
+    Returns a list of base games (no DLCs) with id, title, and image.
+    """
+    api_key = os.getenv('RAWG')
+    if not api_key:
+        return []
+    
+    try:
+        url = "https://api.rawg.io/api/games"
+        params = {
+            'key': api_key,
+            'search': query,
+            'page_size': limit * 2,   # fetch extra to account for DLC filtering
+            'exclude_additions': 'true',
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        results = data.get('results', [])
+        
+        games: List[Dict] = []
+        
+        for game in results:
+            # Skip DLCs and addons
+            if game.get('parent_game') or game.get('is_addon', False):
+                continue
+            
+            image = game.get('background_image')
+            if not image:
+                continue
+            
+            games.append(
+                {
+                    'id': game.get('id'),
+                    'title': game.get('name', 'Unknown'),
+                    'image': image,
+                }
+            )
+            
+            if len(games) >= limit:
+                break
+        
+        return games
+    
+    except requests.exceptions.RequestException as e:
+        print(f"Error searching games in RAWG API: {e}")
+        return []
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return []
 

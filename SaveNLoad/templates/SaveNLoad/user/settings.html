@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+    <!-- Desktop Sidebar (Fixed) -->
+    <div class="d-none d-lg-block">
+        {% include 'SaveNLoad/includes/sidebar.html' %}
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container-fluid p-4">
+            <div class="d-flex align-items-center mb-4">
+                <div class="d-flex align-items-center gap-3">
+                    <span class="text-white d-lg-none p-0 d-flex align-items-center hamburger-btn" style="cursor: pointer;" data-bs-toggle="offcanvas" data-bs-target="#sidebarMobile" aria-controls="sidebarMobile" aria-label="Toggle sidebar" role="button" tabindex="0">
+                        <i class="fas fa-bars fs-3"></i>
+                    </span>
+                    <h1 class="text-white mb-0">Settings</h1>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title mb-4">Add/Edit Game</h5>
+                            
+                            {% if error %}
+                                <div class="alert alert-danger" role="alert">
+                                    {{ error }}
+                                </div>
+                            {% endif %}
+
+                            <form method="POST">
+                                {% csrf_token %}
+                                <input type="hidden" id="game_id" name="game_id" value="">
+                                
+                                <div class="mb-3">
+                                    <label for="name" class="form-label">Game Name:</label>
+                                    <input type="text" class="form-control" id="name" name="name" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="banner" class="form-label">Banner/Image URL:</label>
+                                    <input type="url" class="form-control" id="banner" name="banner" placeholder="https://example.com/image.jpg">
+                                    <div id="banner_preview" class="mt-2"></div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="save_file_location" class="form-label">Save File Location:</label>
+                                    <input type="text" class="form-control" id="save_file_location" name="save_file_location" required>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary">Save Game</button>
+                                <button type="button" class="btn btn-secondary" onclick="clearForm()">Clear</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title mb-4">Search Game</h5>
+                            
+                            <div class="mb-3">
+                                <label for="search_input" class="form-label">Search by Game Name:</label>
+                                <input type="text" class="form-control" id="search_input" placeholder="Type game name to search...">
+                                <div id="search_results" class="mt-3"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Mobile Sidebar (Offcanvas) -->
+    <div class="d-lg-none">
+        {% include 'SaveNLoad/includes/sidebar.html' with sidebar_id="sidebarMobile" %}
+    </div>
+
+    <script>
+        let searchTimeout;
+        const searchInput = document.getElementById('search_input');
+        const searchResults = document.getElementById('search_results');
+        const nameInput = document.getElementById('name');
+        const bannerInput = document.getElementById('banner');
+        const saveFileLocationInput = document.getElementById('save_file_location');
+        const gameIdInput = document.getElementById('game_id');
+        const bannerPreview = document.getElementById('banner_preview');
+
+        // Search functionality
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const query = this.value.trim();
+            
+            if (query.length < 2) {
+                searchResults.innerHTML = '';
+                return;
+            }
+
+            searchTimeout = setTimeout(() => {
+                fetch(`{% url 'user:search_game' %}?q=${encodeURIComponent(query)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        displaySearchResults(data.games);
+                    })
+                    .catch(error => {
+                        console.error('Search error:', error);
+                    });
+            }, 300);
+        });
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function escapeAttr(text) {
+            return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function displaySearchResults(games) {
+            if (games.length === 0) {
+                searchResults.innerHTML = '<p class="text-muted">No games found.</p>';
+                return;
+            }
+
+            let html = '<div class="list-group">';
+            games.forEach(game => {
+                const gameId = escapeHtml(String(game.id));
+                const gameName = escapeHtml(game.name);
+                const gameNameAttr = escapeAttr(game.name);
+                const saveLocation = escapeHtml(game.save_file_location);
+                const saveLocationAttr = escapeAttr(game.save_file_location);
+                const bannerUrl = game.banner ? escapeAttr(game.banner) : '';
+                const bannerImg = game.banner ? `<img src="${escapeAttr(game.banner)}" alt="${gameNameAttr}" class="me-3" style="width: 50px; height: 50px; object-fit: cover;">` : '';
+                
+                html += `
+                    <a href="#" class="list-group-item list-group-item-action" data-game-id="${gameId}" data-game-name="${gameNameAttr}" data-save-location="${saveLocationAttr}" data-banner-url="${bannerUrl}">
+                        <div class="d-flex align-items-center">
+                            ${bannerImg}
+                            <div>
+                                <h6 class="mb-0">${gameName}</h6>
+                                <small class="text-muted">${saveLocation}</small>
+                            </div>
+                        </div>
+                    </a>
+                `;
+            });
+            html += '</div>';
+            searchResults.innerHTML = html;
+            
+            // Add click handlers to the links
+            searchResults.querySelectorAll('.list-group-item-action').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const gameId = this.getAttribute('data-game-id');
+                    const gameName = this.getAttribute('data-game-name');
+                    const saveLocation = this.getAttribute('data-save-location');
+                    const bannerUrl = this.getAttribute('data-banner-url');
+                    populateForm(gameId, gameName, saveLocation, bannerUrl);
+                });
+            });
+        }
+
+        function populateForm(id, name, saveFileLocation, bannerUrl) {
+            gameIdInput.value = id;
+            nameInput.value = name;
+            saveFileLocationInput.value = saveFileLocation;
+            
+            if (bannerUrl) {
+                const img = document.createElement('img');
+                img.src = bannerUrl;
+                img.alt = 'Banner preview';
+                img.style.maxWidth = '200px';
+                img.style.maxHeight = '200px';
+                img.style.objectFit = 'cover';
+                img.className = 'img-thumbnail';
+                bannerPreview.innerHTML = '';
+                bannerPreview.appendChild(img);
+            } else {
+                bannerPreview.innerHTML = '';
+            }
+            
+            // Scroll to top of form
+            document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function clearForm() {
+            gameIdInput.value = '';
+            nameInput.value = '';
+            bannerInput.value = '';
+            saveFileLocationInput.value = '';
+            bannerPreview.innerHTML = '';
+            searchInput.value = '';
+            searchResults.innerHTML = '';
+        }
+
+        // Preview banner when file is selected
+        bannerInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    bannerPreview.innerHTML = `<img src="${e.target.result}" alt="Banner preview" style="max-width: 200px; max-height: 200px; object-fit: cover;" class="img-thumbnail">`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    </script>
+{% endblock %}
+

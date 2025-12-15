@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+    <!-- Desktop Sidebar (Fixed) -->
+    <div class="d-none d-lg-block">
+        {% include 'SaveNLoad/includes/sidebar.html' %}
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container-fluid p-4">
+            <div class="d-flex align-items-center mb-4">
+                <div class="d-flex align-items-center gap-3">
+                    <span class="text-white d-lg-none p-0 d-flex align-items-center hamburger-btn" style="cursor: pointer;" data-bs-toggle="offcanvas" data-bs-target="#sidebarMobile" aria-controls="sidebarMobile" aria-label="Toggle sidebar" role="button" tabindex="0">
+                        <i class="fas fa-bars fs-3"></i>
+                    </span>
+                    <h1 class="text-white mb-0">Settings</h1>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <h5 class="card-title mb-0">Add/Edit Game</h5>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="toggle_search_btn" onclick="toggleSearch()">
+                                    <i class="fas fa-search me-1"></i>Search Game
+                                </button>
+                            </div>
+                            
+                            {% if error %}
+                                <div class="alert alert-danger" role="alert">
+                                    {{ error }}
+                                </div>
+                            {% endif %}
+
+                            <div id="search_section" class="mb-4" style="display: none;">
+                                <div class="mb-3">
+                                    <label for="search_input" class="form-label">Search by Game Name:</label>
+                                    <input
+                                        type="text"
+                                        class="form-control"
+                                        id="search_input"
+                                        placeholder="Type game name to search..."
+                                        data-search-url="{% url 'admin:search_game' %}">
+                                </div>
+                                <hr>
+                            </div>
+
+                            <form method="POST">
+                                {% csrf_token %}
+                                <input type="hidden" id="game_id" name="game_id" value="">
+                                
+                                <!-- Banner Image Preview at the top -->
+                                <div class="mb-3">
+                                    <label class="form-label d-block">Banner Image</label>
+                                    <div
+                                        id="banner_preview"
+                                        class="mt-2 border rounded bg-dark-subtle"
+                                        style="height: 260px; max-width: 180px; margin: 0 auto; display: flex; align-items: center; justify-content: center;">
+                                        <span class="text-muted small">
+                                            Preview will appear here when a valid image URL is provided.
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Banner URL input (drives the image above) -->
+                                <div class="mb-3">
+                                    <label for="banner" class="form-label">Banner/Image URL</label>
+                                    <input
+                                        type="url"
+                                        class="form-control"
+                                        id="banner"
+                                        name="banner"
+                                        placeholder="https://example.com/image.jpg">
+                                    <small class="form-text text-muted">
+                                        Updating this URL will refresh the banner image preview above.
+                                    </small>
+                                </div>
+
+                                <!-- Game name below banner -->
+                                <div class="mb-3">
+                                    <label for="name" class="form-label">Game Name</label>
+                                    <input type="text" class="form-control" id="name" name="name" required>
+                                </div>
+
+                                <!-- Save file location -->
+                                <div class="mb-3">
+                                    <label for="save_file_location" class="form-label">Save File Location</label>
+                                    <input type="text" class="form-control" id="save_file_location" name="save_file_location" required>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary">Save Game</button>
+                                <button type="button" class="btn btn-secondary" onclick="clearForm()">Clear</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Game search results modal -->
+    <div class="modal fade" id="gameSearchModal" tabindex="-1" aria-labelledby="gameSearchModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="gameSearchModalLabel">Select a Game</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="modal_search_results">
+                    <!-- Results rendered by settings.js -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Mobile Sidebar (Offcanvas) -->
+    <div class="d-lg-none">
+        {% include 'SaveNLoad/includes/sidebar.html' with sidebar_id="sidebarMobile" %}
+    </div>
+
+    <script>
+        {% include 'SaveNLoad/js/settings.js' %}
+    </script>
+{% endblock %}
+
