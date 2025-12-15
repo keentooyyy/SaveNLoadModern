@@ -1,66 +1,77 @@
-class GameSettings {
-    constructor() {
-        this.searchTimeout = null;
-        this.searchInput = document.getElementById('search_input');
-        // Results are rendered into the RAWG search modal
-        this.modalElement = document.getElementById('gameSearchModal');
-        this.searchResults = document.getElementById('modal_search_results');
-        this.nameInput = document.getElementById('name');
-        this.bannerInput = document.getElementById('banner');
-        this.saveFileLocationInput = document.getElementById('save_file_location');
-        this.gameIdInput = document.getElementById('game_id');
-        this.bannerPreview = document.getElementById('banner_preview');
-        this.searchUrl = this.searchInput ? this.searchInput.dataset.searchUrl : '';
-        
-        this.init();
-    }
+document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.getElementById('search_input');
+    const modalElement = document.getElementById('gameSearchModal');
+    const searchResults = document.getElementById('modal_search_results');
+    const nameInput = document.getElementById('name');
+    const bannerInput = document.getElementById('banner');
+    const saveFileLocationInput = document.getElementById('save_file_location');
+    const bannerPreview = document.getElementById('banner_preview');
+    const searchUrl = searchInput ? searchInput.dataset.searchUrl : '';
 
-    init() {
-        if (this.searchInput) {
-            this.searchInput.addEventListener('input', () => this.handleSearchInput());
-        }
-        
-        if (this.bannerInput) {
-            this.bannerInput.addEventListener('input', () => this.handleBannerInput());
+    let searchTimeout = null;
+    let bootstrapModal = null;
+
+    function clearElement(element) {
+        if (!element) return;
+        while (element.firstChild) {
+            element.removeChild(element.firstChild);
         }
     }
 
-    handleSearchInput() {
-        clearTimeout(this.searchTimeout);
-        const query = this.searchInput.value.trim();
-        
-        if (query.length < 2) {
-            this.clearElement(this.searchResults);
-            return;
+    function showModal() {
+        if (!modalElement || !window.bootstrap) return;
+        if (!bootstrapModal) {
+            bootstrapModal = window.bootstrap.Modal.getOrCreateInstance(modalElement);
         }
-
-        this.searchTimeout = setTimeout(() => {
-            this.searchGames(query);
-        }, 300);
+        bootstrapModal.show();
     }
 
-    async searchGames(query) {
-        try {
-            const response = await fetch(`${this.searchUrl}?q=${encodeURIComponent(query)}`);
-            const data = await response.json();
-            this.displaySearchResults(data.games);
-        } catch (error) {
-            console.error('Search error:', error);
+    function updateBannerPreview(bannerUrl) {
+        clearElement(bannerPreview);
+        if (!bannerUrl) return;
+
+        const img = document.createElement('img');
+        img.src = bannerUrl;
+        img.alt = 'Banner preview';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'contain';
+        img.className = 'img-thumbnail';
+
+        img.onerror = () => {
+            clearElement(bannerPreview);
+            const p = document.createElement('p');
+            p.className = 'text-muted small';
+            p.appendChild(document.createTextNode('Invalid image URL'));
+            bannerPreview.appendChild(p);
+        };
+
+        bannerPreview.appendChild(img);
+    }
+
+    function populateForm(id, name, saveFileLocation, bannerUrl) {
+        if (nameInput) nameInput.value = name;
+        if (saveFileLocationInput) saveFileLocationInput.value = saveFileLocation;
+        if (bannerInput) bannerInput.value = bannerUrl;
+
+        updateBannerPreview(bannerUrl);
+
+        const card = document.querySelector('.card');
+        if (card && card.scrollIntoView) {
+            card.scrollIntoView({ behavior: 'smooth' });
         }
     }
 
-    displaySearchResults(games) {
+    function displaySearchResults(games) {
         // Clear previous results safely
-        this.clearElement(this.searchResults);
+        clearElement(searchResults);
 
         if (!games || games.length === 0) {
             const p = document.createElement('p');
             p.className = 'text-muted';
             p.appendChild(document.createTextNode('No games found.'));
-            this.searchResults.appendChild(p);
-
-            // Still show the modal so the user sees the message
-            this.showModal();
+            searchResults.appendChild(p);
+            showModal();
             return;
         }
 
@@ -114,131 +125,100 @@ class GameSettings {
             listGroup.appendChild(link);
 
             // Click handler – uses dataset values (not HTML)
-            link.addEventListener('click', (e) => {
+            link.addEventListener('click', function (e) {
                 e.preventDefault();
-                this.populateForm(
-                    link.dataset.gameId || '',
-                    link.dataset.gameName || '',
-                    link.dataset.saveLocation || '',
-                    link.dataset.bannerUrl || ''
+                populateForm(
+                    this.dataset.gameId || '',
+                    this.dataset.gameName || '',
+                    this.dataset.saveLocation || '',
+                    this.dataset.bannerUrl || ''
                 );
 
-                // Close modal after selection
-                if (this.bootstrapModal) {
-                    this.bootstrapModal.hide();
+                if (bootstrapModal) {
+                    bootstrapModal.hide();
                 }
             });
         });
 
-        this.searchResults.appendChild(listGroup);
-        this.showModal();
+        searchResults.appendChild(listGroup);
+        showModal();
     }
 
-    populateForm(id, name, saveFileLocation, bannerUrl) {
-        this.gameIdInput.value = id;
-        this.nameInput.value = name;
-        this.saveFileLocationInput.value = saveFileLocation;
-        this.bannerInput.value = bannerUrl;
-        
-        this.updateBannerPreview(bannerUrl);
-        
-        // Scroll to top of form
-        document.querySelector('.card')?.scrollIntoView({ behavior: 'smooth' });
+    async function searchGames(query) {
+        try {
+            const response = await fetch(`${searchUrl}?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            displaySearchResults(data.games);
+        } catch (error) {
+            console.error('Search error:', error);
+        }
     }
 
-    handleBannerInput() {
-        const bannerUrl = this.bannerInput.value.trim();
-        this.updateBannerPreview(bannerUrl);
-    }
+    function handleSearchInput() {
+        clearTimeout(searchTimeout);
+        const query = searchInput.value.trim();
 
-    updateBannerPreview(bannerUrl) {
-        this.clearElement(this.bannerPreview);
-
-        if (!bannerUrl) {
+        if (query.length < 2) {
+            clearElement(searchResults);
             return;
         }
 
-        const img = document.createElement('img');
-        img.src = bannerUrl;
-        img.alt = 'Banner preview';
-        img.style.width = '100%';
-        img.style.height = '100%';
-        img.style.objectFit = 'contain';
-        img.className = 'img-thumbnail';
-
-        img.onerror = () => {
-            this.clearElement(this.bannerPreview);
-            const p = document.createElement('p');
-            p.className = 'text-muted small';
-            p.appendChild(document.createTextNode('Invalid image URL'));
-            this.bannerPreview.appendChild(p);
-        };
-
-        this.bannerPreview.appendChild(img);
+        searchTimeout = setTimeout(() => {
+            searchGames(query);
+        }, 300);
     }
 
-    clearForm() {
-        this.gameIdInput.value = '';
-        this.nameInput.value = '';
-        this.bannerInput.value = '';
-        this.saveFileLocationInput.value = '';
-        this.clearElement(this.bannerPreview);
-        if (this.searchInput) {
-            this.searchInput.value = '';
-        }
-        this.clearElement(this.searchResults);
-    }
-
-    clearElement(element) {
-        if (!element) return;
-        while (element.firstChild) {
-            element.removeChild(element.firstChild);
-        }
-    }
-
-    showModal() {
-        if (!this.modalElement || !window.bootstrap) {
+    function triggerSearch() {
+        if (!searchInput) return;
+        const query = searchInput.value.trim();
+        if (query.length < 2) {
             return;
         }
-
-        if (!this.bootstrapModal) {
-            this.bootstrapModal = window.bootstrap.Modal.getOrCreateInstance(this.modalElement);
-        }
-        this.bootstrapModal.show();
+        clearTimeout(searchTimeout);
+        searchGames(query);
     }
-}
 
-// Toggle search section visibility
-function toggleSearch() {
-    const searchSection = document.getElementById('search_section');
-    const toggleBtn = document.getElementById('toggle_search_btn');
-    
-    if (searchSection.style.display === 'none') {
-        searchSection.style.display = 'block';
-        toggleBtn.textContent = 'Hide Search';
-    } else {
-        searchSection.style.display = 'none';
-        toggleBtn.textContent = 'Search Game';
-        // Clear search results when hiding
-        const searchResults = document.getElementById('modal_search_results');
-        const searchInput = document.getElementById('search_input');
-        if (searchResults && window.gameSettings) {
-            window.gameSettings.clearElement(searchResults);
-        }
-        if (searchInput) searchInput.value = '';
+    function handleBannerInput() {
+        const bannerUrl = bannerInput.value.trim();
+        updateBannerPreview(bannerUrl);
     }
-}
 
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    window.gameSettings = new GameSettings();
-    
-    // Make clearForm available globally for the button onclick
-    window.clearForm = () => {
-        window.gameSettings.clearForm();
-    };
-    
-    // Make toggleSearch available globally for the button onclick
+    function clearForm() {
+        if (nameInput) nameInput.value = '';
+        if (bannerInput) bannerInput.value = '';
+        if (saveFileLocationInput) saveFileLocationInput.value = '';
+        clearElement(bannerPreview);
+        if (searchInput) {
+            searchInput.value = '';
+        }
+        clearElement(searchResults);
+    }
+
+    function toggleSearch() {
+        const searchSection = document.getElementById('search_section');
+        const toggleBtn = document.getElementById('toggle_search_btn');
+        if (!searchSection || !toggleBtn) return;
+
+        const isHidden = searchSection.style.display === 'none' || !searchSection.style.display;
+
+        if (isHidden) {
+            searchSection.style.display = 'block';
+            toggleBtn.textContent = 'Hide Search';
+        } else {
+            searchSection.style.display = 'none';
+            toggleBtn.textContent = 'Search Game';
+            clearElement(searchResults);
+            if (searchInput) searchInput.value = '';
+        }
+    }
+
+    // Wire up events
+    if (bannerInput) {
+        bannerInput.addEventListener('input', handleBannerInput);
+    }
+
+    // Expose a couple of helpers for inline handlers
+    window.clearForm = clearForm;
     window.toggleSearch = toggleSearch;
+    window.triggerSearch = triggerSearch;
 });
-

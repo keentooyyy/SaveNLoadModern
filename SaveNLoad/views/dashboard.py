@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect
 from django.urls import reverse
 from .custom_decorators import login_required, get_current_user
 from .rawg_api import get_popular_games
-from ..models import SimpleUsers
+from ..models import SimpleUsers, Game
 
 
 def get_playtime_strings():
@@ -46,9 +46,20 @@ def admin_dashboard(request):
             'playtime': playtime
         })
     
+    # Fetch games from database (user-added games)
+    db_games = Game.objects.all().order_by('-created_at')[:10]
+    available_games = []
+    for game in db_games:
+        available_games.append({
+            'title': game.name,
+            'image': game.banner if game.banner else '',
+            'footer': game.save_file_location
+        })
+    
     # Games are already sorted by recency (most recent first)
     context = {
-        'recent_games': games_with_playtime
+        'recent_games': games_with_playtime,
+        'available_games': available_games
     }
     
     return render(request, 'SaveNLoad/admin/dashboard.html', context)

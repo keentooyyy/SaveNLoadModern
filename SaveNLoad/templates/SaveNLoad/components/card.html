@@ -2,17 +2,28 @@
 
 <div class="card {{ card_class|default:'border-0 shadow' }} h-100 game-card">
     {% if image %}
-    <div class="card-img-wrapper position-relative overflow-hidden" style="height: 180px; background-color: #1c222f;">
+    <div class="card-img-wrapper position-relative overflow-hidden" style="height: {{ card_height|default:'180px' }}; background-color: #1c222f;">
         <img src="{{ image }}" class="card-img-top w-100 h-100 game-card-img" alt="{{ title|default:'' }}" style="object-fit: cover;">
-        <div class="position-absolute bottom-0 start-0 end-0 p-2 game-card-overlay">
+        <div class="position-absolute bottom-0 start-0 end-0 p-{{ card_padding|default:'2' }} game-card-overlay">
             {% if title %}
-            <h6 class="card-title text-white fw-bold mb-0" style="font-size: 0.9rem;">{{ title }}</h6>
+            <{{ card_title_tag|default:'h6' }} class="card-title text-white fw-bold mb-{{ card_title_mb|default:'0' }}" style="font-size: {{ card_title_size|default:'0.9rem' }};">{{ title }}</{{ card_title_tag|default:'h6' }}>
             {% endif %}
             {% if footer %}
-            <small class="text-white-50 d-flex align-items-center" style="font-size: 0.75rem;">
-                <i class="fas fa-clock me-1"></i>
+            <small class="text-white-50 d-flex align-items-center" style="font-size: {{ card_footer_size|default:'0.75rem' }};">
+                <i class="fas fa-{{ footer_icon|default:'clock' }} me-1"></i>
                 {{ footer }}
             </small>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
+    <div class="card-body d-flex align-items-center justify-content-center" style="min-height: {{ card_height|default:'180px' }}; background-color: #1c222f;">
+        <div class="text-center">
+            {% if title %}
+            <{{ card_title_tag|default:'h6' }} class="card-title text-white mb-2">{{ title }}</{{ card_title_tag|default:'h6' }}>
+            {% endif %}
+            {% if footer %}
+            <p class="text-white-50 mb-0 small">{{ footer }}</p>
             {% endif %}
         </div>
     </div>

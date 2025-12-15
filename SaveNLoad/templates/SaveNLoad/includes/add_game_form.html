@@ -1,0 +1,85 @@
+<div class="container-fluid px-4 pt-3 pb-4">
+    <div class="card border-0 shadow-sm">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="card-title mb-0">Add Game</h5>
+                <button type="button" class="btn btn-outline-light btn-sm" id="toggle_search_btn" onclick="toggleSearch()">
+                    <i class="fas fa-search me-1"></i>Search Game
+                </button>
+            </div>
+
+            {% if error %}
+                <div class="alert alert-danger" role="alert">
+                    {{ error }}
+                </div>
+            {% endif %}
+
+            <div id="search_section" class="mb-4" style="display: none;">
+                <div class="mb-3">
+                    <label for="search_input" class="form-label">Search by Game Name:</label>
+                    <div class="input-group">
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="search_input"
+                            placeholder="Type game name to search..."
+                            data-search-url="{% url 'admin:search_game' %}">
+                        <button type="button" class="btn btn-primary" id="search_btn" onclick="triggerSearch()">
+                            <i class="fas fa-search me-1"></i>Search
+                        </button>
+                    </div>
+                </div>
+                <hr class="border-secondary">
+            </div>
+
+            <form method="POST">
+                {% csrf_token %}
+                
+                <!-- Banner Image Preview at the top -->
+                <div class="mb-3">
+                    <label class="form-label d-block">Banner Image</label>
+                    <div
+                        id="banner_preview"
+                        class="mt-2 border rounded bg-dark-subtle"
+                        style="height: 260px; max-width: 180px; margin: 0 auto; display: flex; align-items: center; justify-content: center;">
+                        <span class="text-muted small">
+                            
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Banner URL input (drives the image above) -->
+                <div class="mb-3">
+                    <label for="banner" class="form-label">Banner/Image URL</label>
+                    <input
+                        type="url"
+                        class="form-control"
+                        id="banner"
+                        name="banner"
+                        placeholder="https://example.com/image.jpg">
+                    <small class="form-text text-muted">
+                        Updating this URL will refresh the banner image preview above.
+                    </small>
+                </div>
+
+                <!-- Game name below banner -->
+                <div class="mb-3">
+                    <label for="name" class="form-label">Game Name</label>
+                    <input type="text" class="form-control" id="name" name="name" required>
+                </div>
+
+                <!-- Save file location -->
+                <div class="mb-3">
+                    <label for="save_file_location" class="form-label">Save File Location</label>
+                    <input type="text" class="form-control" id="save_file_location" name="save_file_location" required>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">Save Game</button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="clearForm()">Clear</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+

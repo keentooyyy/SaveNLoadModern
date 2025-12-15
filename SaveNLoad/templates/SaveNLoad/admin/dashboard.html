@@ -11,16 +11,10 @@
     <!-- Main Content -->
     <div class="main-content">
         <div class="container-fluid px-0">
-            <div class="d-flex align-items-center shadow-md bg-primary" style="height: 80px;">
-                <div class="d-flex align-items-center gap-3 w-100 px-4">
-                    <span class="text-white d-lg-none p-0 d-flex align-items-center hamburger-btn" style="cursor: pointer;" data-bs-toggle="offcanvas" data-bs-target="#sidebarMobile" aria-controls="sidebarMobile" aria-label="Toggle sidebar" role="button" tabindex="0">
-                        <i class="fas fa-bars fs-3"></i>
-                    </span>
-                    <h6 class="text-white mb-0">Admin Dashboard</h6>
-                </div>
-            </div>
+            {% include 'SaveNLoad/includes/page_header.html' with page_title="Home" %}
             
             {% include 'SaveNLoad/includes/recent.html' %}
+            {% include 'SaveNLoad/includes/available_games.html' %}
         </div>
     </div>
     

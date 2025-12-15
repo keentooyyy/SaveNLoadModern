@@ -16,7 +16,6 @@ def settings_view(request):
         return redirect(reverse('user:dashboard'))
     
     if request.method == 'POST':
-        game_id = request.POST.get('game_id')
         name = request.POST.get('name', '').strip()
         save_file_location = request.POST.get('save_file_location', '').strip()
         banner = request.POST.get('banner', '').strip()
@@ -26,34 +25,21 @@ def settings_view(request):
                 'error': 'Game name and save file location are required.'
             })
         
-        if game_id:
-            # Update existing game
-            try:
-                game = Game.objects.get(id=game_id)
-                game.name = name
-                game.save_file_location = save_file_location
-                game.banner = banner if banner else None
-                game.save()
-            except Game.DoesNotExist:
-                return render(request, 'SaveNLoad/admin/settings.html', {
-                    'error': 'Game not found.'
-                })
-        else:
-            # Create new game
-            game_data = {
-                'name': name,
-                'save_file_location': save_file_location,
-            }
-            if banner:
-                game_data['banner'] = banner
-            
-            # Check if game with same name already exists
-            if Game.objects.filter(name=name).exists():
-                return render(request, 'SaveNLoad/admin/settings.html', {
-                    'error': 'A game with this name already exists.'
-                })
-            
-            Game.objects.create(**game_data)
+        # Check if game with same name already exists
+        if Game.objects.filter(name=name).exists():
+            return render(request, 'SaveNLoad/admin/settings.html', {
+                'error': 'A game with this name already exists.'
+            })
+        
+        # Create new game
+        game_data = {
+            'name': name,
+            'save_file_location': save_file_location,
+        }
+        if banner:
+            game_data['banner'] = banner
+        
+        Game.objects.create(**game_data)
         
         return redirect('admin:settings')
     
