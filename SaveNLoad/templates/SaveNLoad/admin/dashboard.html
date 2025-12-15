@@ -15,6 +15,7 @@
             
             {% include 'SaveNLoad/includes/recent.html' %}
             {% include 'SaveNLoad/includes/available_games.html' %}
+            {% include 'SaveNLoad/includes/manage_game_modal.html' %}
         </div>
     </div>
     
@@ -22,5 +23,9 @@
     <div class="d-lg-none">
         {% include 'SaveNLoad/includes/sidebar.html' with sidebar_id="sidebarMobile" %}
     </div>
+
+    <script>
+        {% include 'SaveNLoad/js/manageGames.js' %}
+    </script>
 {% endblock %}
 

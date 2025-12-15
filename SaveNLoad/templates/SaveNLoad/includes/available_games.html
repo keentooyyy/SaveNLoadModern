@@ -1,11 +1,13 @@
 <!-- Available Games Section -->
-<div class="container-fluid px-4 pt-4 pb-5">
+<div id="availableGamesSection" class="container-fluid px-4 pt-4 pb-5">
     <h4 class="text-white mb-4 fw-bold">Available games</h4>
     <div class="row g-4">
         {% if available_games %}
             {% for game in available_games %}
             <div class="col-12 col-sm-6 col-md-4 col-lg-3">
-                {% include 'SaveNLoad/components/card.html' with title=game.title footer=game.footer image=game.image card_height='320px' card_padding='3' card_title_tag='h5' card_title_mb='1' card_title_size='1.1rem' card_footer_size='0.85rem' footer_icon='folder' %}
+                {% url 'admin:game_detail' game.id as game_detail_url %}
+                {% url 'admin:game_delete' game.id as game_delete_url %}
+                {% include 'SaveNLoad/components/card.html' with title=game.title footer=game.footer image=game.image card_height='320px' card_padding='3' card_title_tag='h5' card_title_mb='1' card_title_size='1.1rem' card_footer_size='0.85rem' footer_icon='folder' game_id=game.id game_detail_url=game_detail_url game_delete_url=game_delete_url %}
             </div>
             {% endfor %}
         {% else %}
@@ -15,5 +17,10 @@
             </div>
         {% endif %}
     </div>
+
+    <!-- Hidden form just to provide CSRF token for JS actions -->
+    <form id="gameCsrfForm" style="display:none;">
+        {% csrf_token %}
+    </form>
 </div>
 

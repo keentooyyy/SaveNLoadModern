@@ -1,0 +1,38 @@
+    <!-- Banner Image Preview at the top -->
+    <div class="mb-3">
+        <label class="form-label d-block">Banner Image</label>
+        <div
+            id="banner_preview"
+            class="mt-2 border rounded bg-dark-subtle"
+            style="height: 260px; max-width: 180px; margin: 0 auto; display: flex; align-items: center; justify-content: center;">
+            <span class="text-muted small"></span>
+        </div>
+    </div>
+
+    <!-- Banner URL input (drives the image above) -->
+    <div class="mb-3">
+        <label for="banner" class="form-label">Banner/Image URL</label>
+        <input
+            type="url"
+            class="form-control"
+            id="banner"
+            name="banner"
+            placeholder="https://example.com/image.jpg">
+        <small class="form-text text-muted">
+            Updating this URL will refresh the banner image preview above.
+        </small>
+    </div>
+
+    <!-- Game name below banner -->
+    <div class="mb-3">
+        <label for="name" class="form-label">Game Name</label>
+        <input type="text" class="form-control" id="name" name="name" required>
+    </div>
+
+    <!-- Save file location -->
+    <div class="mb-3">
+        <label for="save_file_location" class="form-label">Save File Location</label>
+        <input type="text" class="form-control" id="save_file_location" name="save_file_location" required>
+    </div>
+
+

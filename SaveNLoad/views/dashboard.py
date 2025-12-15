@@ -51,9 +51,10 @@ def admin_dashboard(request):
     available_games = []
     for game in db_games:
         available_games.append({
+            'id': game.id,
             'title': game.name,
             'image': game.banner if game.banner else '',
-            'footer': game.save_file_location
+            'footer': game.save_file_location,
         })
     
     # Games are already sorted by recency (most recent first)

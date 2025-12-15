@@ -1,6 +1,11 @@
 {% load static %}
 
-<div class="card {{ card_class|default:'border-0 shadow' }} h-100 game-card">
+<div
+    class="card {{ card_class|default:'border-0 shadow' }} h-100 game-card"
+    {% if game_id %}data-game-id="{{ game_id }}"{% endif %}
+    {% if game_detail_url %} data-game-detail-url="{{ game_detail_url }}"{% endif %}
+    {% if game_delete_url %} data-game-delete-url="{{ game_delete_url }}"{% endif %}
+>
     {% if image %}
     <div class="card-img-wrapper position-relative overflow-hidden" style="height: {{ card_height|default:'180px' }}; background-color: #1c222f;">
         <img src="{{ image }}" class="card-img-top w-100 h-100 game-card-img" alt="{{ title|default:'' }}" style="object-fit: cover;">
