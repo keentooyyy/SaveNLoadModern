@@ -2,14 +2,14 @@
 
 <div class="card {{ card_class|default:'border-0 shadow' }} h-100 game-card">
     {% if image %}
-    <div class="card-img-wrapper position-relative overflow-hidden" style="height: 300px; background-color: #1c222f;">
+    <div class="card-img-wrapper position-relative overflow-hidden" style="height: 180px; background-color: #1c222f;">
         <img src="{{ image }}" class="card-img-top w-100 h-100 game-card-img" alt="{{ title|default:'' }}" style="object-fit: cover;">
-        <div class="position-absolute bottom-0 start-0 end-0 p-3 game-card-overlay">
+        <div class="position-absolute bottom-0 start-0 end-0 p-2 game-card-overlay">
             {% if title %}
-            <h5 class="card-title text-white fw-bold mb-1">{{ title }}</h5>
+            <h6 class="card-title text-white fw-bold mb-0" style="font-size: 0.9rem;">{{ title }}</h6>
             {% endif %}
             {% if footer %}
-            <small class="text-white-50 d-flex align-items-center">
+            <small class="text-white-50 d-flex align-items-center" style="font-size: 0.75rem;">
                 <i class="fas fa-clock me-1"></i>
                 {{ footer }}
             </small>
