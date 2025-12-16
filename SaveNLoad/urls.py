@@ -8,5 +8,6 @@ urlpatterns = [
     path('register/', auth.register, name='register'),
     path('forgot-password/', auth.forgot_password, name='forgot_password'),
     path('logout/', auth.logout, name='logout'),
+    path('worker-required/', auth.worker_required, name='worker_required'),
 ]
 

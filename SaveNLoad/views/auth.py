@@ -29,30 +29,24 @@ def login(request):
     if request.method == 'POST':
         # Sanitize and validate inputs
         username = sanitize_username(request.POST.get('username'))
-        password = request.POST.get('password')  # Password is hashed, no sanitization needed
-        remember_me = request.POST.get('rememberMe')
+        password = request.POST.get('password')
+        remember_me = request.POST.get('rememberMe') == 'on'
+        
+        # Validation with field-specific errors
+        field_errors = {}
+        
+        if not username:
+            field_errors['username'] = 'Username is required.'
+        
+        if not password:
+            field_errors['password'] = 'Password is required.'
         
         # Only handle AJAX requests
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            # Validation with field-specific errors
-            field_errors = {}
-            
-            if not username:
-                field_errors['username'] = 'Username is required.'
-            elif not validate_username_format(username):
-                field_errors['username'] = 'Username must be 3-150 characters and contain only letters, numbers, underscores, and hyphens.'
-            
-            if not password:
-                field_errors['password'] = 'Password is required.'
-            else:
-                is_valid, error_msg = validate_password_strength(password)
-                if not is_valid:
-                    field_errors['password'] = error_msg
-            
             if field_errors:
                 return JsonResponse({
                     'success': False,
-                    'message': 'Please fix the errors below.',
+                    'message': 'Please fill in all required fields.',
                     'field_errors': field_errors
                 }, status=400)
             
@@ -202,11 +196,34 @@ def forgot_password(request):
         else:
             return redirect(reverse('user:dashboard'))
     
-    # TODO: Implement password reset functionality
     return render(request, 'SaveNLoad/forgot_password.html')
 
 
+@login_required
 def logout(request):
-    """Logout user"""
+    """Logout and clear session"""
     request.session.flush()
     return redirect(reverse('SaveNLoad:login'))
+
+
+@login_required
+def worker_required(request):
+    """Page shown when client worker is not connected"""
+    from SaveNLoad.models.client_worker import ClientWorker
+    is_connected = ClientWorker.is_worker_connected()
+    
+    if is_connected:
+        # Worker is connected, redirect to dashboard
+        user = get_current_user(request)
+        if user and user.is_admin():
+            return redirect(reverse('admin:dashboard'))
+        else:
+            return redirect(reverse('user:dashboard'))
+    
+    # Get all active workers for display
+    all_workers = ClientWorker.get_active_workers()
+    
+    return render(request, 'SaveNLoad/worker_required.html', {
+        'all_workers': all_workers,
+        'total_workers': len(all_workers)
+    })

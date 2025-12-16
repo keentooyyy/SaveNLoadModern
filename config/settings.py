@@ -134,6 +134,13 @@ STATICFILES_DIRS = [
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# FTP Configuration for save file management
+FTP_HOST = os.getenv('FTP_HOST')
+FTP_PORT = int(os.getenv('FTP_PORT', '21')) if os.getenv('FTP_PORT') else 21
+FTP_USERNAME = os.getenv('FTP_USERNAME')
+FTP_PASSWORD = os.getenv('FTP_PASSWORD')
+FTP_TIMEOUT = int(os.getenv('FTP_TIMEOUT', '30')) if os.getenv('FTP_TIMEOUT') else 30
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 

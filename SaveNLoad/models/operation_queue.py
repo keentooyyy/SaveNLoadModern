@@ -1,0 +1,107 @@
+"""
+Operation Queue model for queuing save/load operations for client workers
+"""
+from django.db import models
+from django.utils import timezone
+from SaveNLoad.models.user import SimpleUsers
+from SaveNLoad.models.game import Game
+from SaveNLoad.models.client_worker import ClientWorker
+
+
+class OperationStatus:
+    """Operation status constants"""
+    PENDING = 'pending'
+    IN_PROGRESS = 'in_progress'
+    COMPLETED = 'completed'
+    FAILED = 'failed'
+    
+    CHOICES = [
+        (PENDING, 'Pending'),
+        (IN_PROGRESS, 'In Progress'),
+        (COMPLETED, 'Completed'),
+        (FAILED, 'Failed'),
+    ]
+
+
+class OperationType:
+    """Operation type constants"""
+    SAVE = 'save'
+    LOAD = 'load'
+    
+    CHOICES = [
+        (SAVE, 'Save'),
+        (LOAD, 'Load'),
+    ]
+
+
+class OperationQueue(models.Model):
+    """Queue of operations waiting to be processed by client workers"""
+    
+    operation_type = models.CharField(max_length=10, choices=OperationType.CHOICES)
+    status = models.CharField(max_length=20, choices=OperationStatus.CHOICES, default=OperationStatus.PENDING)
+    user = models.ForeignKey(SimpleUsers, on_delete=models.CASCADE)
+    game = models.ForeignKey(Game, on_delete=models.CASCADE)
+    client_worker = models.ForeignKey(ClientWorker, on_delete=models.SET_NULL, null=True, blank=True,
+                                     help_text="Client worker assigned to this operation")
+    local_save_path = models.CharField(max_length=500, help_text="Local save file path")
+    save_folder_number = models.IntegerField(null=True, blank=True, help_text="Optional save folder number")
+    result_data = models.JSONField(null=True, blank=True, help_text="Operation result data")
+    error_message = models.TextField(null=True, blank=True, help_text="Error message if operation failed")
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'operation_queue'
+        verbose_name = 'Operation Queue'
+        verbose_name_plural = 'Operation Queue'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.operation_type.upper()} - {self.game.name} ({self.status})"
+    
+    def assign_to_worker(self, worker: ClientWorker):
+        """Assign this operation to a client worker"""
+        self.client_worker = worker
+        self.status = OperationStatus.IN_PROGRESS
+        self.started_at = timezone.now()
+        self.save()
+    
+    def mark_completed(self, result_data=None):
+        """Mark operation as completed"""
+        self.status = OperationStatus.COMPLETED
+        self.completed_at = timezone.now()
+        if result_data:
+            self.result_data = result_data
+        self.save()
+    
+    def mark_failed(self, error_message):
+        """Mark operation as failed"""
+        self.status = OperationStatus.FAILED
+        self.completed_at = timezone.now()
+        self.error_message = error_message
+        self.save()
+    
+    @classmethod
+    def get_pending_operations_for_worker(cls, client_worker: ClientWorker):
+        """Get pending operations for a specific client worker"""
+        return cls.objects.filter(
+            client_worker=client_worker,
+            status=OperationStatus.PENDING
+        ).order_by('created_at')
+    
+    @classmethod
+    def create_operation(cls, operation_type: str, user: SimpleUsers, game: Game, 
+                        local_save_path: str, save_folder_number=None, client_worker=None):
+        """Create a new operation in the queue"""
+        operation = cls.objects.create(
+            operation_type=operation_type,
+            user=user,
+            game=game,
+            local_save_path=local_save_path,
+            save_folder_number=save_folder_number,
+            client_worker=client_worker,
+            status=OperationStatus.PENDING
+        )
+        return operation
+

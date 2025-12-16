@@ -22,6 +22,7 @@ urlpatterns = [
     path('', include('SaveNLoad.urls')),
     path('admin/', include('SaveNLoad.url_configs.admin.urls')),
     path('user/', include('SaveNLoad.url_configs.user.urls')),
+    path('api/client/', include('SaveNLoad.url_configs.client_worker.urls')),
 ]
 
 # Serve media files in development

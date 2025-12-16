@@ -24,10 +24,16 @@ def get_playtime_strings():
 @login_required
 def admin_dashboard(request):
     """Admin dashboard"""
+    from SaveNLoad.models.client_worker import ClientWorker
+    
     user = get_current_user(request)
     if not user or not user.is_admin():
         # Redirect non-admin users to their dashboard
         return redirect(reverse('user:dashboard'))
+    
+    # Check if client worker is connected
+    if not ClientWorker.is_worker_connected():
+        return redirect(reverse('SaveNLoad:worker_required'))
     
     # Fetch real games from RAWG API
     games = get_popular_games(limit=10)

@@ -14,21 +14,41 @@
             <{{ card_title_tag|default:'h6' }} class="card-title text-white fw-bold mb-{{ card_title_mb|default:'0' }}" style="font-size: {{ card_title_size|default:'0.9rem' }};">{{ title }}</{{ card_title_tag|default:'h6' }}>
             {% endif %}
             {% if footer %}
-            <small class="text-white-50 d-flex align-items-center" style="font-size: {{ card_footer_size|default:'0.75rem' }};">
+            <small class="text-white-50 d-flex align-items-center mb-2" style="font-size: {{ card_footer_size|default:'0.75rem' }};">
                 <i class="fas fa-{{ footer_icon|default:'clock' }} me-1"></i>
                 {{ footer }}
             </small>
+            {% endif %}
+            {% if game_id %}
+            <div class="d-flex gap-2 mt-2">
+                <button class="btn btn-sm btn-success save-game-btn" data-game-id="{{ game_id }}" style="flex: 1;" title="Save to FTP">
+                    <i class="fas fa-upload me-1"></i> Save
+                </button>
+                <button class="btn btn-sm btn-primary load-game-btn" data-game-id="{{ game_id }}" style="flex: 1;" title="Load from FTP">
+                    <i class="fas fa-download me-1"></i> Load
+                </button>
+            </div>
             {% endif %}
         </div>
     </div>
     {% else %}
     <div class="card-body d-flex align-items-center justify-content-center" style="min-height: {{ card_height|default:'180px' }}; background-color: #1c222f;">
-        <div class="text-center">
+        <div class="text-center w-100">
             {% if title %}
             <{{ card_title_tag|default:'h6' }} class="card-title text-white mb-2">{{ title }}</{{ card_title_tag|default:'h6' }}>
             {% endif %}
             {% if footer %}
-            <p class="text-white-50 mb-0 small">{{ footer }}</p>
+            <p class="text-white-50 mb-3 small">{{ footer }}</p>
+            {% endif %}
+            {% if game_id %}
+            <div class="d-flex gap-2 justify-content-center">
+                <button class="btn btn-sm btn-success save-game-btn" data-game-id="{{ game_id }}" title="Save to FTP">
+                    <i class="fas fa-upload me-1"></i> Save
+                </button>
+                <button class="btn btn-sm btn-primary load-game-btn" data-game-id="{{ game_id }}" title="Load from FTP">
+                    <i class="fas fa-download me-1"></i> Load
+                </button>
+            </div>
             {% endif %}
         </div>
     </div>

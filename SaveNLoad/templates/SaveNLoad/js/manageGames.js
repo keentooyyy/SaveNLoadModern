@@ -143,6 +143,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Click handler on available games grid
     section.addEventListener('click', function (e) {
+        // Don't open modal if clicking save/load buttons
+        if (e.target.closest('.save-game-btn') || e.target.closest('.load-game-btn')) {
+            return;
+        }
+
         const card = e.target.closest('.game-card[data-game-id]');
         if (!card) return;
 
