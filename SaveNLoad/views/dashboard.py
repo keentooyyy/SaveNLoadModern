@@ -111,7 +111,8 @@ def admin_dashboard(request):
     
     context = {
         'recent_games': recent_games,
-        'available_games': available_games
+        'available_games': available_games,
+        'user': user
     }
     
     return render(request, 'SaveNLoad/admin/dashboard.html', context)
@@ -183,7 +184,8 @@ def user_dashboard(request):
     context = {
         'recent_games': recent_games,
         'available_games': available_games,
-        'is_user': True  # Flag to indicate this is a user view, not admin
+        'is_user': True,  # Flag to indicate this is a user view, not admin
+        'user': user
     }
     
     return render(request, 'SaveNLoad/user/dashboard.html', context)

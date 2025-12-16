@@ -1,9 +1,16 @@
 <div class="d-flex align-items-center shadow-md bg-primary" style="height: 80px;">
-    <div class="d-flex align-items-center gap-3 w-100 px-4">
-        <span class="text-white d-lg-none p-0 d-flex align-items-center hamburger-btn" style="cursor: pointer;" data-bs-toggle="offcanvas" data-bs-target="#sidebarMobile" aria-controls="sidebarMobile" aria-label="Toggle sidebar" role="button" tabindex="0">
-            <i class="fas fa-bars fs-3"></i>
-        </span>
-        <h6 class="text-white mb-0">{{ page_title|default:"Page" }}</h6>
+    <div class="d-flex align-items-center justify-content-between gap-3 w-100 px-4">
+        <div class="d-flex align-items-center gap-3">
+            <span class="text-white d-lg-none p-0 d-flex align-items-center hamburger-btn" style="cursor: pointer;" data-bs-toggle="offcanvas" data-bs-target="#sidebarMobile" aria-controls="sidebarMobile" aria-label="Toggle sidebar" role="button" tabindex="0">
+                <i class="fas fa-bars fs-3"></i>
+            </span>
+            <h6 class="text-white mb-0">{{ page_title|default:"Page" }}</h6>
+        </div>
+        {% if user %}
+        <div class="text-white" style="font-size: 1.1rem; font-weight: 500;">
+            Welcome, {{ user.username }}
+        </div>
+        {% endif %}
     </div>
 </div>
 
