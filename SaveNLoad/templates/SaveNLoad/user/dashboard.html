@@ -38,6 +38,8 @@
         // Flag to indicate this is a user view
         window.IS_USER_VIEW = true;
         window.USER_SEARCH_GAMES_URL = '{% url "user:search_available_games" %}';
+        window.BACKUP_ALL_SAVES_URL_PATTERN = '{% url "user:backup_all_saves" 0 %}';
+        // Note: Users don't have game_detail or game_delete URLs
     </script>
     <script>
         {% include 'SaveNLoad/js/workerCheck.js' %}

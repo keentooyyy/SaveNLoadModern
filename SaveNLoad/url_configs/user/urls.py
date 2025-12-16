@@ -1,5 +1,5 @@
 from django.urls import path
-from SaveNLoad.views import dashboard, settings
+from SaveNLoad.views import dashboard, settings, save_load_api
 
 app_name = 'user'
 
@@ -8,5 +8,6 @@ urlpatterns = [
     path('games/search/', dashboard.search_available_games, name='search_available_games'),
     path('settings/', settings.user_settings_view, name='settings'),
     path('account/change-password/', settings.change_password, name='change_password'),
+    path('games/<int:game_id>/backup-all-saves/', save_load_api.backup_all_saves, name='backup_all_saves'),
 ]
 

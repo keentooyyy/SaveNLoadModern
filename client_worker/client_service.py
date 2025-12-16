@@ -7,26 +7,11 @@ import sys
 import json
 import time
 import requests
-import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 from ftp_client import FTPClient
-
-
-# Setup logging
-log_dir = Path.home() / '.savenload' / 'logs'
-log_dir.mkdir(parents=True, exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_dir / 'client_worker.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
@@ -76,7 +61,7 @@ class ClientWorkerService:
             password=ftp_password
         )
         
-        logger.info("Client Worker Service initialized")
+        print("INFO: Client Worker Service initialized")
     
     def check_permissions(self) -> bool:
         """Check if we have necessary permissions to access files"""
@@ -87,14 +72,14 @@ class ClientWorkerService:
                 test_path.stat()  # This will raise if no permission
             return True
         except PermissionError:
-            logger.warning("Insufficient permissions to access files")
+            print("WARNING: Insufficient permissions to access files")
             return False
     
     
     def save_game(self, game_id: int, local_save_path: str, 
                  username: str, game_name: str, save_folder_number: int) -> Dict[str, Any]:
         """Save game - backup from local PC to FTP"""
-        logger.info(f"Saving game {game_id} from {local_save_path} to save_folder {save_folder_number}")
+        print(f"INFO: Saving game {game_id} from {local_save_path} to save_folder {save_folder_number}")
         
         if not os.path.exists(local_save_path):
             return {
@@ -128,7 +113,7 @@ class ClientWorkerService:
                 
                 # Create empty directories first
                 if dir_list:
-                    logger.info(f"Found {len(dir_list)} directory(ies) to create")
+                    print(f"INFO: Found {len(dir_list)} directory(ies) to create")
                     for remote_dir_path in sorted(dir_list):  # Sort to create parent dirs first
                         try:
                             self.ftp_client.create_directory(
@@ -138,14 +123,14 @@ class ClientWorkerService:
                                 remote_dir_path=remote_dir_path
                             )
                         except Exception as e:
-                            logger.warning(f"Failed to create directory {remote_dir_path}: {e}")
+                            print(f"WARNING: Failed to create directory {remote_dir_path}: {e}")
                             # Continue anyway - directory might already exist or be created by file upload
                 
                 file_count = len(file_list)
-                logger.info(f"Found {file_count} file(s) in {local_save_path}")
+                print(f"INFO: Found {file_count} file(s) in {local_save_path}")
                 
                 if file_count == 0:
-                    logger.warning(f"No files found in directory: {local_save_path}")
+                    print(f"WARNING: No files found in directory: {local_save_path}")
                     return {
                         'success': False,
                         'error': f'No files found in directory: {local_save_path}'
@@ -153,7 +138,7 @@ class ClientWorkerService:
                 
                 # Process files in parallel batches (max 50 at a time)
                 MAX_WORKERS = min(50, file_count)
-                logger.info(f"Processing {file_count} file(s) with {MAX_WORKERS} parallel workers")
+                print(f"INFO: Processing {file_count} file(s) with {MAX_WORKERS} parallel workers")
                 
                 def upload_file(file_info: Tuple[str, str]) -> Tuple[bool, str, str]:
                     """Upload a single file - returns (success, remote_filename, message)"""
@@ -168,7 +153,7 @@ class ClientWorkerService:
                         )
                         return (success, remote_filename, message)
                     except Exception as e:
-                        logger.error(f"Exception uploading {remote_filename}: {e}")
+                        print(f"ERROR: Exception uploading {remote_filename}: {e}")
                         return (False, remote_filename, str(e))
                 
                 # Process files in parallel
@@ -182,13 +167,13 @@ class ClientWorkerService:
                             success, remote_filename, message = future.result()
                             if success:
                                 uploaded_files.append(remote_filename)
-                                logger.info(f"Uploaded: {remote_filename}")
+                                print(f"INFO: Uploaded: {remote_filename}")
                             else:
                                 failed_files.append({'file': remote_filename, 'error': message})
-                                logger.error(f"Failed to upload {remote_filename}: {message}")
+                                print(f"ERROR: Failed to upload {remote_filename}: {message}")
                         except Exception as e:
                             failed_files.append({'file': remote_filename, 'error': str(e)})
-                            logger.error(f"Exception processing {remote_filename}: {e}")
+                            print(f"ERROR: Exception processing {remote_filename}: {e}")
                 
                 if failed_files:
                     return {
@@ -212,20 +197,20 @@ class ClientWorkerService:
                 )
                 
                 if success:
-                    logger.info(f"Successfully saved: {message}")
+                    print(f"INFO: Successfully saved: {message}")
                     return {'success': True, 'message': message}
                 else:
-                    logger.error(f"Save failed: {message}")
+                    print(f"ERROR: Save failed: {message}")
                     return {'success': False, 'error': message}
                     
         except Exception as e:
-            logger.error(f"Save operation failed: {e}")
+            print(f"ERROR: Save operation failed: {e}")
             return {'success': False, 'error': f'Save operation failed: {str(e)}'}
     
     def load_game(self, game_id: int, local_save_path: str,
                  username: str, game_name: str, save_folder_number: int) -> Dict[str, Any]:
         """Load game - download from FTP to local PC"""
-        logger.info(f"Loading game {game_id} to {local_save_path} from save_folder {save_folder_number}")
+        print(f"INFO: Loading game {game_id} to {local_save_path} from save_folder {save_folder_number}")
         
         try:
             success, files, directories, message = self.ftp_client.list_saves(
@@ -234,17 +219,17 @@ class ClientWorkerService:
                 folder_number=save_folder_number
             )
             
-            logger.info(f"List saves result: success={success}, files_count={len(files) if files else 0}, dirs_count={len(directories) if directories else 0}, message={message}")
+            print(f"INFO: List saves result: success={success}, files_count={len(files) if files else 0}, dirs_count={len(directories) if directories else 0}, message={message}")
             
             if not success:
-                logger.error(f"Failed to list saves: {message}")
+                print(f"ERROR: Failed to list saves: {message}")
                 return {
                     'success': False,
                     'error': f'Failed to list saves: {message}'
                 }
             
             if not files and not directories:
-                logger.warning(f"No save files or directories found: {message}")
+                print(f"WARNING: No save files or directories found: {message}")
                 return {
                     'success': False,
                     'error': f'No save files or directories found: {message}'
@@ -259,14 +244,14 @@ class ClientWorkerService:
             if os.path.isfile(local_save_path):
                 # If it's a file, use its parent directory instead
                 local_save_path = os.path.dirname(local_save_path)
-                logger.info(f"Path was a file, using parent directory: {local_save_path}")
+                print(f"INFO: Path was a file, using parent directory: {local_save_path}")
             
             # Create the directory and all parent directories if they don't exist
             try:
                 os.makedirs(local_save_path, exist_ok=True)
-                logger.info(f"Ensured directory exists (created if needed): {local_save_path}")
+                print(f"INFO: Ensured directory exists (created if needed): {local_save_path}")
             except OSError as e:
-                logger.error(f"Failed to create directory {local_save_path}: {e}")
+                print(f"ERROR: Failed to create directory {local_save_path}: {e}")
                 return {
                     'success': False,
                     'error': f'Failed to create directory: {local_save_path} - {str(e)}'
@@ -281,16 +266,16 @@ class ClientWorkerService:
             
             # Create all directories first (including empty ones)
             if directories:
-                logger.info(f"Creating {len(directories)} directory(ies)")
+                print(f"INFO: Creating {len(directories)} directory(ies)")
                 for remote_dir_path in sorted(directories):  # Sort to create parent dirs first
                     # Normalize path separators
                     remote_dir_normalized = remote_dir_path.replace('\\', '/')
                     # Create local directory structure
                     local_dir = os.path.join(local_save_path, *remote_dir_normalized.split('/'))
                     os.makedirs(local_dir, exist_ok=True)
-                    logger.debug(f"Created directory: {local_dir}")
+                    print(f"DEBUG: Created directory: {local_dir}")
             
-            logger.info(f"Downloading {len(files)} file(s) to directory: {local_save_path}")
+            print(f"INFO: Downloading {len(files)} file(s) to directory: {local_save_path}")
             
             # Prepare file list
             file_list = []
@@ -311,7 +296,7 @@ class ClientWorkerService:
             
             # Process files in parallel batches (max 50 at a time)
             MAX_WORKERS = min(50, len(file_list))
-            logger.info(f"Processing {len(file_list)} file(s) with {MAX_WORKERS} parallel workers")
+            print(f"INFO: Processing {len(file_list)} file(s) with {MAX_WORKERS} parallel workers")
             
             def download_file(file_info: Tuple[str, str]) -> Tuple[bool, str, str]:
                 """Download a single file - returns (success, remote_filename, message)"""
@@ -326,7 +311,7 @@ class ClientWorkerService:
                     )
                     return (success, remote_filename, message)
                 except Exception as e:
-                    logger.error(f"Exception downloading {remote_filename}: {e}")
+                    print(f"ERROR: Exception downloading {remote_filename}: {e}")
                     return (False, remote_filename, str(e))
             
             # Process files in parallel
@@ -340,13 +325,13 @@ class ClientWorkerService:
                         success, remote_filename, message = future.result()
                         if success:
                             downloaded_files.append(remote_filename)
-                            logger.info(f"Downloaded: {remote_filename}")
+                            print(f"INFO: Downloaded: {remote_filename}")
                         else:
                             failed_files.append({'file': remote_filename, 'error': message})
-                            logger.error(f"Failed to download {remote_filename}: {message}")
+                            print(f"ERROR: Failed to download {remote_filename}: {message}")
                     except Exception as e:
                         failed_files.append({'file': remote_filename, 'error': str(e)})
-                        logger.error(f"Exception processing {remote_filename}: {e}")
+                        print(f"ERROR: Exception processing {remote_filename}: {e}")
             
             if failed_files:
                 return {
@@ -356,7 +341,7 @@ class ClientWorkerService:
                     'failed_files': failed_files
                 }
             
-            logger.info(f"Successfully loaded {len(downloaded_files)} file(s)")
+            print(f"INFO: Successfully loaded {len(downloaded_files)} file(s)")
             return {
                 'success': True,
                 'message': f'Successfully downloaded {len(downloaded_files)} file(s)',
@@ -364,7 +349,7 @@ class ClientWorkerService:
             }
                     
         except Exception as e:
-            logger.error(f"Load operation failed: {e}")
+            print(f"ERROR: Load operation failed: {e}")
             return {'success': False, 'error': f'Load operation failed: {str(e)}'}
     
     def register_with_server(self, client_id: str) -> bool:
@@ -375,13 +360,13 @@ class ClientWorkerService:
                 json={'client_id': client_id}
             )
             if response.status_code == 200:
-                logger.info(f"Successfully registered with server as {client_id}")
+                print(f"INFO: Successfully registered with server as {client_id}")
                 return True
             else:
-                logger.error(f"Registration failed: {response.status_code} - {response.text}")
+                print(f"ERROR: Registration failed: {response.status_code} - {response.text}")
                 return False
         except Exception as e:
-            logger.error(f"Failed to register with server: {e}")
+            print(f"ERROR: Failed to register with server: {e}")
             return False
     
     def send_heartbeat(self, client_id: str) -> bool:
@@ -393,7 +378,7 @@ class ClientWorkerService:
             )
             return response.status_code == 200
         except Exception as e:
-            logger.error(f"Failed to send heartbeat: {e}")
+            print(f"ERROR: Failed to send heartbeat: {e}")
             return False
     
     def unregister_from_server(self, client_id: str) -> bool:
@@ -404,22 +389,22 @@ class ClientWorkerService:
                 json={'client_id': client_id}
             )
             if response.status_code == 200:
-                logger.info(f"Successfully unregistered from server: {client_id}")
+                print(f"INFO: Successfully unregistered from server: {client_id}")
                 return True
             else:
-                logger.warning(f"Unregistration failed: {response.status_code} - {response.text}")
+                print(f"WARNING: Unregistration failed: {response.status_code} - {response.text}")
                 return False
         except Exception as e:
-            logger.error(f"Failed to unregister from server: {e}")
+            print(f"ERROR: Failed to unregister from server: {e}")
             return False
     
     def run(self):
         """Run the service (polling mode)"""
-        logger.info("Starting Client Worker Service...")
+        print("INFO: Starting Client Worker Service...")
         
         # Check permissions
         if not self.check_permissions():
-            logger.warning("Insufficient permissions. You may need to run with elevated privileges.")
+            print("WARNING: Insufficient permissions. You may need to run with elevated privileges.")
         
         self.running = True
         
@@ -461,14 +446,14 @@ class ClientWorkerService:
         
         # Register with server
         if not self.register_with_server(client_id):
-            logger.error("Failed to register with server. Exiting.")
+            print("ERROR: Failed to register with server. Exiting.")
             return
         
         # Store client_id
         self._current_client_id = client_id
         
-        logger.info(f"Client Worker Service running (ID: {client_id})")
-        logger.info(f"Polling server every {self.poll_interval} seconds...")
+        print(f"INFO: Client Worker Service running (ID: {client_id})")
+        print(f"INFO: Polling server every {self.poll_interval} seconds...")
         
         try:
             while self.running:
@@ -486,18 +471,18 @@ class ClientWorkerService:
                         for op in operations:
                             self._process_operation(op)
                 except Exception as e:
-                    logger.error(f"Error polling server: {e}")
+                    print(f"ERROR: Error polling server: {e}")
                 
                 time.sleep(self.poll_interval)
         except KeyboardInterrupt:
-            logger.info("Shutting down Client Worker Service...")
+            print("INFO: Shutting down Client Worker Service...")
             self.running = False
         finally:
             # Unregister on shutdown
             try:
                 self.unregister_from_server(client_id)
             except Exception as e:
-                logger.error(f"Error unregistering on shutdown: {e}")
+                print(f"ERROR: Error unregistering on shutdown: {e}")
     
     def _process_operation(self, operation: Dict[str, Any]):
         """Process a pending operation from the server"""
@@ -509,11 +494,11 @@ class ClientWorkerService:
         game_name = operation.get('game_name')
         save_folder_number = operation.get('save_folder_number')
         
-        logger.info(f"Processing operation {operation_id}: {op_type} for game {game_id}")
-        logger.info(f"Operation details: username={username}, game_name={game_name}, local_path={local_path}, save_folder={save_folder_number}")
+        print(f"INFO: Processing operation {operation_id}: {op_type} for game {game_id}")
+        print(f"INFO: Operation details: username={username}, game_name={game_name}, local_path={local_path}, save_folder={save_folder_number}")
         
         if save_folder_number is None:
-            logger.error(f"Operation {operation_id} missing save_folder_number")
+            print(f"ERROR: Operation {operation_id} missing save_folder_number")
             return
         
         if op_type == 'save':
@@ -521,14 +506,14 @@ class ClientWorkerService:
         elif op_type == 'load':
             result = self.load_game(game_id, local_path, username, game_name, save_folder_number)
         else:
-            logger.error(f"Unknown operation type: {op_type}")
+            print(f"ERROR: Unknown operation type: {op_type}")
             return
         
         # Log the result
         if result.get('success'):
-            logger.info(f"Operation {operation_id} succeeded: {result.get('message', 'No message')}")
+            print(f"INFO: Operation {operation_id} succeeded: {result.get('message', 'No message')}")
         else:
-            logger.error(f"Operation {operation_id} failed: {result.get('error', result.get('message', 'Unknown error'))}")
+            print(f"ERROR: Operation {operation_id} failed: {result.get('error', result.get('message', 'Unknown error'))}")
         
         # Report result back to server
         try:
@@ -537,11 +522,11 @@ class ClientWorkerService:
                 json=result
             )
             if response.status_code == 200:
-                logger.info(f"Operation {operation_id} result reported to server successfully")
+                print(f"INFO: Operation {operation_id} result reported to server successfully")
             else:
-                logger.error(f"Failed to report operation result: {response.status_code} - {response.text}")
+                print(f"ERROR: Failed to report operation result: {response.status_code} - {response.text}")
         except Exception as e:
-            logger.error(f"Failed to report operation result: {e}")
+            print(f"ERROR: Failed to report operation result: {e}")
     
 
 def main():
@@ -559,7 +544,7 @@ def main():
     args = parser.parse_args()
     
     if not args.server:
-        logger.error("Server URL is required. Set SAVENLOAD_SERVER_URL environment variable or use --server argument.")
+        print("ERROR: Server URL is required. Set SAVENLOAD_SERVER_URL environment variable or use --server argument.")
         parser.print_help()
         sys.exit(1)
     
@@ -567,7 +552,7 @@ def main():
         service = ClientWorkerService(args.server, args.poll_interval)
         service.run()
     except Exception as e:
-        logger.error(f"Service failed: {e}")
+        print(f"ERROR: Service failed: {e}")
         sys.exit(1)
 
 

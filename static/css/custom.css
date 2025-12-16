@@ -353,9 +353,9 @@ body {
 .add-game-header.active .add-game-chevron,
 .account-settings-header.active .account-settings-icon,
 .account-settings-header.active .account-settings-title,
-    .account-settings-header.active .account-settings-chevron {
-        color: #5A8DEE !important;
-    }
+.account-settings-header.active .account-settings-chevron {
+    color: #5A8DEE !important;
+}
 
     /* Recent game card clickable styling */
     .recent-game-card {

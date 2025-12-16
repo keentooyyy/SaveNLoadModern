@@ -301,7 +301,9 @@ document.addEventListener('DOMContentLoaded', function () {
         addGameForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const csrfToken = document.querySelector('[name="csrfmiddlewaretoken"]')?.value;
+            const csrfInput = document.querySelector('#addGameForm input[name="csrfmiddlewaretoken"]') ||
+                document.querySelector('[name="csrfmiddlewaretoken"]');
+            const csrfToken = csrfInput ? csrfInput.value : null;
             if (!csrfToken) {
                 showToast('Error: CSRF token not found', 'error');
                 return;

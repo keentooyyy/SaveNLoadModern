@@ -5,9 +5,20 @@ document.addEventListener('DOMContentLoaded', function () {
     const isUserView = typeof window.IS_USER_VIEW !== 'undefined' && window.IS_USER_VIEW;
     
     // Get the search URL based on user type
-    const searchUrl = isUserView 
-        ? (typeof window.USER_SEARCH_GAMES_URL !== 'undefined' ? window.USER_SEARCH_GAMES_URL : '/user/games/search/')
-        : (typeof window.ADMIN_SEARCH_GAMES_URL !== 'undefined' ? window.ADMIN_SEARCH_GAMES_URL : '/admin/games/search/');
+    let searchUrl;
+    if (isUserView) {
+        if (!window.USER_SEARCH_GAMES_URL) {
+            console.error('USER_SEARCH_GAMES_URL not defined');
+            return;
+        }
+        searchUrl = window.USER_SEARCH_GAMES_URL;
+    } else {
+        if (!window.ADMIN_SEARCH_GAMES_URL) {
+            console.error('ADMIN_SEARCH_GAMES_URL not defined');
+            return;
+        }
+        searchUrl = window.ADMIN_SEARCH_GAMES_URL;
+    }
     
     let searchTimeout = null;
     let isLoading = false;
@@ -105,9 +116,13 @@ document.addEventListener('DOMContentLoaded', function () {
             let gameDeleteUrl = '';
             
             if (!isUserView) {
-                // Admin view - construct URLs
-                gameDetailUrl = `/admin/games/${game.id}/`;
-                gameDeleteUrl = `/admin/games/${game.id}/delete/`;
+                // Admin view - construct URLs using Django URL patterns
+                if (window.GAME_DETAIL_URL_PATTERN) {
+                    gameDetailUrl = window.GAME_DETAIL_URL_PATTERN.replace('0', game.id);
+                }
+                if (window.GAME_DELETE_URL_PATTERN) {
+                    gameDeleteUrl = window.GAME_DELETE_URL_PATTERN.replace('0', game.id);
+                }
             }
             
             // Create card element safely

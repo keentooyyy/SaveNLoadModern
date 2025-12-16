@@ -1,3 +1,81 @@
+// Store references for openGameEditModal function
+let modalInstance = null;
+let currentDetailUrlRef = null;
+let currentDeleteUrlRef = null;
+let formRef = null;
+let bannerPreviewRef = null;
+let loadGameRef = null;
+let loadSaveFoldersRef = null;
+
+// Expose function to open modal programmatically
+// This function is available immediately, but will only work after DOMContentLoaded
+window.openGameEditModal = function(gameId, hideSavesTab = false) {
+    if (!modalInstance) {
+        console.error('Modal not initialized yet. Please wait for page to load.');
+        return;
+    }
+    
+    // Construct detail URL using Django URL pattern
+    if (window.GAME_DETAIL_URL_PATTERN) {
+        currentDetailUrlRef = window.GAME_DETAIL_URL_PATTERN.replace('0', gameId);
+    } else {
+        console.error('GAME_DETAIL_URL_PATTERN not defined');
+        return;
+    }
+    if (window.GAME_DELETE_URL_PATTERN) {
+        currentDeleteUrlRef = window.GAME_DELETE_URL_PATTERN.replace('0', gameId);
+    }
+    
+    // Reset form state
+    if (formRef) {
+        formRef.reset();
+    }
+    if (bannerPreviewRef) {
+        clearElement(bannerPreviewRef);
+    }
+    
+    // Update modal title
+    const modalTitle = document.getElementById('gameManageModalLabel');
+    if (modalTitle) {
+        modalTitle.textContent = 'Edit Game';
+    }
+    
+    // Hide/show saves tab
+    const savesTabContainer = document.getElementById('saves-tab-container');
+    if (savesTabContainer) {
+        if (hideSavesTab) {
+            savesTabContainer.style.display = 'none';
+        } else {
+            savesTabContainer.style.display = '';
+        }
+    }
+    
+    // Load game details (don't load save folders if hiding saves tab)
+    if (hideSavesTab) {
+        if (loadGameRef) {
+            loadGameRef(currentDetailUrlRef, true).then(function () {
+                modalInstance.show();
+            });
+        }
+    } else {
+        if (loadGameRef && loadSaveFoldersRef) {
+            Promise.all([
+                loadGameRef(currentDetailUrlRef, false),
+                loadSaveFoldersRef(gameId)
+            ]).then(function () {
+                modalInstance.show();
+            });
+        }
+    }
+};
+
+function clearElement(element) {
+    if (!element) return;
+    while (element.firstChild) {
+        element.removeChild(element.firstChild);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     const section = document.getElementById('availableGamesSection');
     const modalElement = document.getElementById('gameManageModal');
@@ -7,28 +85,25 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const modal = window.bootstrap.Modal.getOrCreateInstance(modalElement);
+    modalInstance = modal; // Store reference
 
     const form = document.getElementById('gameManageForm');
+    formRef = form; // Store reference
     const idInput = document.getElementById('manage_game_id');
-    const nameInput = document.getElementById('name');
-    const bannerInput = document.getElementById('banner');
-    const saveFileLocationInput = document.getElementById('save_file_location');
-    const bannerPreview = document.getElementById('banner_preview');
+    const nameInput = document.getElementById('manage_name');
+    const bannerInput = document.getElementById('manage_banner');
+    const saveFileLocationInput = document.getElementById('manage_save_file_location');
+    const bannerPreview = document.getElementById('manage_banner_preview');
+    bannerPreviewRef = bannerPreview; // Store reference
 
-    const csrfInput = document.querySelector('#gameCsrfForm input[name=\"csrfmiddlewaretoken\"]') ||
-        document.querySelector('#gameManageForm input[name=\"csrfmiddlewaretoken\"]');
+    const csrfInput = document.querySelector('#gameManageForm input[name=\"csrfmiddlewaretoken\"]') ||
+        document.querySelector('#gameCsrfForm input[name=\"csrfmiddlewaretoken\"]');
     const csrfToken = csrfInput ? csrfInput.value : null;
 
     let currentCard = null;
-    let currentDetailUrl = null;
-    let currentDeleteUrl = null;
-
-    function clearElement(element) {
-        if (!element) return;
-        while (element.firstChild) {
-            element.removeChild(element.firstChild);
-        }
-    }
+    // Use the refs directly so they stay in sync
+    currentDetailUrlRef = null;
+    currentDeleteUrlRef = null;
 
     function isValidImageUrl(url) {
         if (!url || typeof url !== 'string') return false;
@@ -95,7 +170,7 @@ document.addEventListener('DOMContentLoaded', function () {
         bannerPreview.appendChild(img);
     }
 
-    async function loadGame(detailUrl) {
+    const loadGame = async function(detailUrl, hideSavesTab = false) {
         try {
             const response = await fetch(detailUrl, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -111,13 +186,24 @@ document.addEventListener('DOMContentLoaded', function () {
             bannerInput.value = data.banner || '';
             saveFileLocationInput.value = data.save_file_location || '';
             updateBannerPreview(data.banner || '');
+            
+            // Hide/show saves tab based on flag
+            const savesTabContainer = document.getElementById('saves-tab-container');
+            if (savesTabContainer) {
+                if (hideSavesTab) {
+                    savesTabContainer.style.display = 'none';
+                } else {
+                    savesTabContainer.style.display = '';
+                }
+            }
         } catch (e) {
             console.error('Error loading game:', e);
         }
-    }
+    };
+    loadGameRef = loadGame; // Store reference
 
     async function saveGame() {
-        if (!currentDetailUrl) return;
+        if (!currentDetailUrlRef) return;
         if (!csrfToken) {
             console.error('CSRF token not found');
             return;
@@ -130,7 +216,7 @@ document.addEventListener('DOMContentLoaded', function () {
         };
 
         try {
-            const response = await fetch(currentDetailUrl, {
+            const response = await fetch(currentDetailUrlRef, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -153,7 +239,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function deleteGame() {
-        if (!currentDeleteUrl) return;
+        if (!currentDeleteUrlRef) return;
         if (!csrfToken) {
             console.error('CSRF token not found');
             return;
@@ -164,7 +250,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         try {
-            const response = await fetch(currentDeleteUrl, {
+            const response = await fetch(currentDeleteUrlRef, {
                 method: 'POST',
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
@@ -229,7 +315,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return wrapper;
     }
 
-    async function loadSaveFolders(gameId) {
+    const loadSaveFolders = async function(gameId) {
         const container = document.getElementById('savesListContainer');
         if (!container) return;
 
@@ -255,6 +341,22 @@ document.addEventListener('DOMContentLoaded', function () {
                 container.appendChild(createErrorMessage('No saves available'));
                 return;
             }
+
+            // Add backup button at the top
+            const backupButtonContainer = document.createElement('div');
+            backupButtonContainer.className = 'mb-3 d-flex justify-content-end';
+            
+            const backupButton = document.createElement('button');
+            backupButton.className = 'btn btn-secondary text-white';
+            backupButton.type = 'button';
+            const backupIcon = document.createElement('i');
+            backupIcon.className = 'fas fa-download me-2';
+            backupButton.appendChild(backupIcon);
+            backupButton.appendChild(document.createTextNode('Backup All Saves'));
+            backupButton.addEventListener('click', function() {
+                backupAllSaves(gameId);
+            });
+            backupButtonContainer.appendChild(backupButton);
 
             const listGroup = document.createElement('div');
             listGroup.className = 'list-group';
@@ -323,13 +425,15 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             clearElement(container);
+            container.appendChild(backupButtonContainer);
             container.appendChild(listGroup);
         } catch (error) {
             console.error('Error loading save folders:', error);
             clearElement(container);
             container.appendChild(createErrorMessage('Error loading saves'));
         }
-    }
+    };
+    loadSaveFoldersRef = loadSaveFolders; // Store reference
 
     async function deleteSaveFolder(gameId, saveFolderNumber) {
         const csrfInput = document.querySelector('#gameCsrfForm input[name="csrfmiddlewaretoken"]') ||
@@ -480,14 +584,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const gameId = card.dataset.gameId;
         currentCard = card;
-        currentDetailUrl = card.dataset.gameDetailUrl || '';
-        currentDeleteUrl = card.dataset.gameDeleteUrl || '';
+        currentDetailUrlRef = card.dataset.gameDetailUrl || '';
+        currentDeleteUrlRef = card.dataset.gameDeleteUrl || '';
 
         const isUserView = window.IS_USER_VIEW || false;
         
         // For users, we don't need detail URL - they can only view saves
         // For admins, detail URL is required
-        if (!isUserView && !currentDetailUrl) {
+        if (!isUserView && !currentDetailUrlRef) {
             console.error('No detail URL on card');
             return;
         }
@@ -521,8 +625,13 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         } else {
             // Load game details and save folders for admin
+            // Show saves tab for normal game cards
+            const savesTabContainer = document.getElementById('saves-tab-container');
+            if (savesTabContainer) {
+                savesTabContainer.style.display = '';
+            }
             Promise.all([
-                loadGame(currentDetailUrl),
+                loadGame(currentDetailUrlRef, false),
                 loadSaveFolders(gameId)
             ]).then(function () {
                 modal.show();
@@ -571,6 +680,95 @@ document.addEventListener('DOMContentLoaded', function () {
             editTab.classList.remove('active', 'text-white');
             editTab.classList.add('text-white-50');
         });
+    }
+
+    /**
+     * Backup all saves for a game
+     */
+    async function backupAllSaves(gameId) {
+        if (!window.BACKUP_ALL_SAVES_URL_PATTERN) {
+            console.error('BACKUP_ALL_SAVES_URL_PATTERN not defined');
+            return;
+        }
+        
+        const url = window.BACKUP_ALL_SAVES_URL_PATTERN.replace('0', gameId);
+        
+        // Show loading toast
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+            toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
+            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            
+            const messageText = document.createTextNode(message);
+            toast.appendChild(messageText);
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.className = 'btn-close';
+            closeBtn.setAttribute('data-bs-dismiss', 'alert');
+            closeBtn.setAttribute('aria-label', 'Close');
+            toast.appendChild(closeBtn);
+            
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 5000);
+        }
+        
+        try {
+            showToast('Creating backup... Please wait.', 'info');
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                showToast(errorData.error || 'Failed to create backup', 'error');
+                return;
+            }
+            
+            // Check if response is a zip file
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/zip')) {
+                // Get filename from Content-Disposition header
+                const contentDisposition = response.headers.get('content-disposition');
+                let filename = 'saves_backup.zip';
+                if (contentDisposition) {
+                    const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+                    if (filenameMatch) {
+                        filename = filenameMatch[1];
+                    }
+                }
+                
+                // Download the zip file
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(downloadUrl);
+                
+                showToast('Backup downloaded successfully!', 'success');
+            } else {
+                // Not a zip file, might be an error JSON
+                const data = await response.json();
+                showToast(data.error || 'Failed to create backup', 'error');
+            }
+        } catch (error) {
+            console.error('Error creating backup:', error);
+            showToast('Error: Failed to create backup. Please try again.', 'error');
+        }
     }
 });
 

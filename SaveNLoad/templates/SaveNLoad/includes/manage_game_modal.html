@@ -14,7 +14,7 @@
                             <span>Edit</span>
                         </button>
                     </li>
-                    <li class="nav-item" role="presentation">
+                    <li class="nav-item" role="presentation" id="saves-tab-container">
                         <button class="nav-link text-white-50 d-flex align-items-center" id="saves-tab" data-bs-toggle="tab" data-bs-target="#saves-pane" type="button" role="tab">
                             <i class="fas fa-folder me-2"></i>
                             <span>Available Saves</span>
@@ -26,7 +26,7 @@
                         <form id="gameManageForm">
                             {% csrf_token %}
                             <input type="hidden" id="manage_game_id" name="game_id">
-                            {% include 'SaveNLoad/includes/game_form_fields.html' %}
+                            {% include 'SaveNLoad/includes/game_form_fields_modal.html' %}
                         </form>
                     </div>
                     <div class="tab-pane fade" id="saves-pane" role="tabpanel">
