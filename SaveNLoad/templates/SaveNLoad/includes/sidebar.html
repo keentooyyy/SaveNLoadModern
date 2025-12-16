@@ -43,15 +43,23 @@
         <!-- Top Section -->
         <ul class="list-unstyled mb-0">
             <li class="nav-item mb-2">
-                {% url 'admin:dashboard' as admin_dashboard_url %}
-                <a href="{{ admin_dashboard_url }}" class="nav-link d-flex align-items-center text-white text-decoration-none px-3 py-2 {% if request.path == admin_dashboard_url %}active{% endif %}">
+                {% if is_user %}
+                    {% url 'user:dashboard' as dashboard_url %}
+                {% else %}
+                    {% url 'admin:dashboard' as dashboard_url %}
+                {% endif %}
+                <a href="{{ dashboard_url }}" class="nav-link d-flex align-items-center text-white text-decoration-none px-3 py-2 {% if request.path == dashboard_url %}active{% endif %}">
                     <i class="fas fa-home me-2"></i>
                     <span class="flex-grow-1">Home</span>
                 </a>
             </li>
             <li class="nav-item mb-2">
-                {% url 'admin:settings' as admin_settings_url %}
-                <a href="{{ admin_settings_url }}" class="nav-link d-flex align-items-center text-white text-decoration-none px-3 py-2 {% if request.path == admin_settings_url %}active{% endif %}">
+                {% if is_user %}
+                    {% url 'user:settings' as settings_url %}
+                {% else %}
+                    {% url 'admin:settings' as settings_url %}
+                {% endif %}
+                <a href="{{ settings_url }}" class="nav-link d-flex align-items-center text-white text-decoration-none px-3 py-2 {% if request.path == settings_url %}active{% endif %}">
                     <i class="fas fa-cog me-2"></i>
                     <span class="flex-grow-1">Settings</span>
                 </a>

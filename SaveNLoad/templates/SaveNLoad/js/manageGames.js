@@ -483,35 +483,65 @@ document.addEventListener('DOMContentLoaded', function () {
         currentDetailUrl = card.dataset.gameDetailUrl || '';
         currentDeleteUrl = card.dataset.gameDeleteUrl || '';
 
-        if (!currentDetailUrl) {
+        const isUserView = window.IS_USER_VIEW || false;
+        
+        // For users, we don't need detail URL - they can only view saves
+        // For admins, detail URL is required
+        if (!isUserView && !currentDetailUrl) {
             console.error('No detail URL on card');
             return;
         }
 
-        // Reset form state
-        form.reset();
-        clearElement(bannerPreview);
+        // Reset form state (only if form exists - users don't have edit form)
+        if (form) {
+            form.reset();
+        }
+        if (bannerPreview) {
+            clearElement(bannerPreview);
+        }
 
-        // Load game details and save folders
-        Promise.all([
-            loadGame(currentDetailUrl),
-            loadSaveFolders(gameId)
-        ]).then(function () {
-            modal.show();
-        });
+        // Get game title from card for modal title
+        const cardTitle = card.querySelector('.card-title');
+        const gameTitle = cardTitle ? cardTitle.textContent.trim() : 'Game';
+
+        // Update modal title
+        const modalTitle = document.getElementById('gameManageModalLabel');
+        if (modalTitle) {
+            if (isUserView) {
+                modalTitle.textContent = gameTitle + ' - Saves';
+            } else {
+                modalTitle.textContent = 'Edit Game';
+            }
+        }
+
+        // For users, only load save folders (no edit form, no game details)
+        if (isUserView) {
+            loadSaveFolders(gameId).then(function () {
+                modal.show();
+            });
+        } else {
+            // Load game details and save folders for admin
+            Promise.all([
+                loadGame(currentDetailUrl),
+                loadSaveFolders(gameId)
+            ]).then(function () {
+                modal.show();
+            });
+        }
     });
 
-    // Wire buttons
+    // Wire buttons (only for admin view)
+    const isUserView = window.IS_USER_VIEW || false;
     const saveBtn = document.getElementById('saveGameBtn');
     const deleteBtn = document.getElementById('deleteGameBtn');
 
-    if (saveBtn) {
+    if (saveBtn && !isUserView) {
         saveBtn.addEventListener('click', function () {
             saveGame();
         });
     }
 
-    if (deleteBtn) {
+    if (deleteBtn && !isUserView) {
         deleteBtn.addEventListener('click', function () {
             deleteGame();
         });

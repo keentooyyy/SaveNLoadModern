@@ -30,6 +30,13 @@ def settings_view(request):
 
 @login_required
 @client_worker_required
+def user_settings_view(request):
+    """Settings page for users (without add game functionality)"""
+    return render(request, 'SaveNLoad/user/settings.html', {'is_user': True})
+
+
+@login_required
+@client_worker_required
 @require_http_methods(["POST"])
 def create_game(request):
     """Create a new game (AJAX endpoint - Admin only)"""
