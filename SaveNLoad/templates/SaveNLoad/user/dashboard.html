@@ -37,11 +37,13 @@
         window.DELETE_SAVE_FOLDER_URL_PATTERN = '{% url "admin:delete_save_folder" 0 0 %}';
         // Flag to indicate this is a user view
         window.IS_USER_VIEW = true;
+        window.USER_SEARCH_GAMES_URL = '{% url "user:search_available_games" %}';
     </script>
     <script>
         {% include 'SaveNLoad/js/workerCheck.js' %}
         {% include 'SaveNLoad/js/manageGames.js' %}
         {% include 'SaveNLoad/js/saveLoad.js' %}
+        {% include 'SaveNLoad/js/availableGames.js' %}
     </script>
 {% endblock %}
 

@@ -14,7 +14,7 @@
     <div id="cardsScrollContainer" class="d-flex gap-2 overflow-x-auto pb-2 cards-scroll-container" style="scrollbar-width: thin;">
         {% if recent_games %}
             {% for game in recent_games %}
-            <div class="flex-shrink-0" style="width: 260px;">
+            <div class="flex-shrink-0 recent-game-card" style="width: 260px; cursor: pointer;" data-game-title="{{ game.title }}">
                 {% include 'SaveNLoad/components/card.html' with title=game.title footer=game.playtime image=game.image %}
             </div>
             {% endfor %}

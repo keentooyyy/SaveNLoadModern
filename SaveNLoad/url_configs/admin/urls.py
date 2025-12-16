@@ -5,6 +5,7 @@ app_name = 'admin'
 
 urlpatterns = [
     path('dashboard/', dashboard.admin_dashboard, name='dashboard'),
+    path('games/search/', dashboard.search_available_games, name='search_available_games'),
     path('settings/', settings.settings_view, name='settings'),
     path('settings/search/', settings.search_game, name='search_game'),
     path('games/create/', settings.create_game, name='create_game'),
@@ -16,5 +17,6 @@ urlpatterns = [
     path('games/<int:game_id>/save-folders/', save_load_api.list_save_folders, name='list_save_folders'),
     path('games/<int:game_id>/save-folders/<int:folder_number>/delete/', save_load_api.delete_save_folder, name='delete_save_folder'),
     path('operations/<int:operation_id>/status/', save_load_api.check_operation_status, name='check_operation_status'),
+    path('account/change-password/', settings.change_password, name='change_password'),
 ]
 

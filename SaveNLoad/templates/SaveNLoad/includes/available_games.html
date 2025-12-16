@@ -1,10 +1,31 @@
 <!-- Available Games Section -->
 <div id="availableGamesSection" class="container-fluid px-4 pt-4 pb-5">
-    <h4 class="text-white mb-4 fw-bold">Available games</h4>
-    <div class="row g-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="text-white mb-0 fw-bold">Available games</h4>
+        <div class="d-flex gap-2 align-items-center">
+            <!-- Search Input -->
+            <div class="position-relative" style="min-width: 350px;">
+                <input 
+                    type="text" 
+                    id="gameSearchInput" 
+                    class="form-control bg-primary border-secondary text-white" 
+                    placeholder="Search games..."
+                    autocomplete="off">
+                <i class="fas fa-search position-absolute text-white-50" style="right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none;"></i>
+            </div>
+            <!-- Sort Dropdown -->
+            <select id="gameSortSelect" class="form-select bg-primary border-secondary text-white" style="width: auto; min-width: 180px;">
+                <option value="name_asc">Sort: Name (A-Z)</option>
+                <option value="name_desc">Sort: Name (Z-A)</option>
+                <option value="last_saved_desc">Sort: Last Saved (Recent)</option>
+                <option value="last_saved_asc">Sort: Last Saved (Oldest)</option>
+            </select>
+        </div>
+    </div>
+    <div id="availableGamesContainer" class="row g-4">
         {% if available_games %}
             {% for game in available_games %}
-            <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+            <div class="col-12 col-sm-6 col-md-4 col-lg-3 game-item" data-game-id="{{ game.id }}" data-game-title="{{ game.title|lower }}">
                 {% if not is_user %}
                     {% url 'admin:game_detail' game.id as game_detail_url %}
                     {% url 'admin:game_delete' game.id as game_delete_url %}

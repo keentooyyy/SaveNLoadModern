@@ -6,6 +6,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from SaveNLoad.models.client_worker import ClientWorker
+from SaveNLoad.models import SimpleUsers, Game
 from SaveNLoad.views.api_helpers import (
     parse_json_body,
     get_client_worker_by_id_or_error,
@@ -177,6 +178,8 @@ def get_pending_operations(request, client_id):
         return json_response_error('Client worker not found', status=404)
 
 
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def complete_operation(request, operation_id):
@@ -206,4 +209,6 @@ def complete_operation(request, operation_id):
     except Exception as e:
         logger.error(f"Failed to complete operation: {e}")
         return json_response_error(str(e), status=500)
+
+
 

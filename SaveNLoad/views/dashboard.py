@@ -2,9 +2,11 @@ from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.db.models import Max
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
 from datetime import timedelta
 from SaveNLoad.views.custom_decorators import login_required, get_current_user, client_worker_required
-from SaveNLoad.views.api_helpers import check_admin_or_error
+from SaveNLoad.views.api_helpers import check_admin_or_error, json_response_success
 from SaveNLoad.views.rawg_api import get_popular_games
 from SaveNLoad.models import SimpleUsers, Game
 from SaveNLoad.models.operation_queue import OperationQueue, OperationType, OperationStatus
@@ -185,4 +187,73 @@ def user_dashboard(request):
     }
     
     return render(request, 'SaveNLoad/user/dashboard.html', context)
+
+
+@login_required
+@require_http_methods(["GET"])
+def search_available_games(request):
+    """AJAX endpoint to search and sort available games"""
+    user = get_current_user(request)
+    if not user:
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+    
+    # Get query parameters
+    search_query = request.GET.get('q', '').strip()
+    sort_by = request.GET.get('sort', 'name_asc')  # Default: name ascending
+    
+    # Fetch all games
+    db_games = Game.objects.all()
+    
+    # Apply search filter if provided
+    if search_query:
+        db_games = db_games.filter(name__icontains=search_query)
+    
+    # Get last_played for all games for this user
+    all_user_operations = OperationQueue.objects.filter(
+        user=user,
+        operation_type=OperationType.SAVE,
+        status=OperationStatus.COMPLETED,
+        completed_at__isnull=False
+    ).values('game').annotate(
+        last_played=Max('completed_at')
+    )
+    
+    game_last_played_all = {op['game']: op['last_played'] for op in all_user_operations}
+    
+    # Build games list with last_played data
+    games_list = []
+    for game in db_games:
+        last_played = game_last_played_all.get(game.id)
+        games_list.append({
+            'id': game.id,
+            'title': game.name,
+            'image': game.banner if game.banner else '',
+            'footer': format_last_played(last_played),
+            'last_played_timestamp': last_played.isoformat() if last_played else None,
+        })
+    
+    # Apply sorting
+    if sort_by == 'name_asc':
+        games_list.sort(key=lambda x: x['title'].lower())
+    elif sort_by == 'name_desc':
+        games_list.sort(key=lambda x: x['title'].lower(), reverse=True)
+    elif sort_by == 'last_saved_desc':
+        # Most recent first (games with saves first, then games without saves)
+        games_list.sort(key=lambda x: (
+            x['last_played_timestamp'] is None,  # Games without saves go to end
+            x['last_played_timestamp'] or ''  # Then sort by timestamp (most recent first)
+        ), reverse=True)
+    elif sort_by == 'last_saved_asc':
+        # Oldest first (games with saves first, then games without saves)
+        # Convert timestamp to comparable value - None goes to end
+        games_list.sort(key=lambda x: (
+            x['last_played_timestamp'] is None,  # Games without saves go to end
+            x['last_played_timestamp'] if x['last_played_timestamp'] else '9999-12-31'  # Oldest first (ascending)
+        ))
+    
+    return JsonResponse({
+        'success': True,
+        'games': games_list,
+        'count': len(games_list)
+    })
 

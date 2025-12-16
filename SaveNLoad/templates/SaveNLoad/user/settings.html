@@ -14,6 +14,7 @@
         <div class="container-fluid px-0">
             {% include 'SaveNLoad/includes/page_header.html' with page_title="Settings" %}
 
+            {% include 'SaveNLoad/includes/account_settings.html' %}
         </div>
     </div>
     
@@ -28,9 +29,11 @@
         // Inject Django URLs for worker check
         window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
         window.WORKER_REQUIRED_URL = '{% url "SaveNLoad:worker_required" %}';
+        window.CHANGE_PASSWORD_URL = '{% url "user:change_password" %}';
     </script>
     <script>
         {% include 'SaveNLoad/js/workerCheck.js' %}
+        {% include 'SaveNLoad/js/accountSettings.js' %}
     </script>
 {% endblock %}
 

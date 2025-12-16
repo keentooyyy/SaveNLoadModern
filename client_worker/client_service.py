@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 from ftp_client import FTPClient
 
+
 # Setup logging
 log_dir = Path.home() / '.savenload' / 'logs'
 log_dir.mkdir(parents=True, exist_ok=True)
@@ -57,6 +58,7 @@ class ClientWorkerService:
         self.poll_interval = poll_interval
         self.session = requests.Session()
         self.running = False
+        
         
         # Setup FTP client
         ftp_host = os.getenv('FTP_HOST')
@@ -462,6 +464,9 @@ class ClientWorkerService:
             logger.error("Failed to register with server. Exiting.")
             return
         
+        # Store client_id
+        self._current_client_id = client_id
+        
         logger.info(f"Client Worker Service running (ID: {client_id})")
         logger.info(f"Polling server every {self.poll_interval} seconds...")
         
@@ -537,7 +542,7 @@ class ClientWorkerService:
                 logger.error(f"Failed to report operation result: {response.status_code} - {response.text}")
         except Exception as e:
             logger.error(f"Failed to report operation result: {e}")
-
+    
 
 def main():
     """Main entry point"""

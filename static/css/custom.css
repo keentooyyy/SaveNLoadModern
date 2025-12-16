@@ -332,3 +332,41 @@ body {
     }
 }
 
+/* Accordion header styles for Add Game and Account Settings */
+.add-game-header,
+.account-settings-header {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.add-game-header .add-game-icon,
+.add-game-header .add-game-title,
+.add-game-header .add-game-chevron,
+.account-settings-header .account-settings-icon,
+.account-settings-header .account-settings-title,
+.account-settings-header .account-settings-chevron {
+    transition: all 0.3s ease;
+}
+
+.add-game-header.active .add-game-icon,
+.add-game-header.active .add-game-title,
+.add-game-header.active .add-game-chevron,
+.account-settings-header.active .account-settings-icon,
+.account-settings-header.active .account-settings-title,
+    .account-settings-header.active .account-settings-chevron {
+        color: #5A8DEE !important;
+    }
+
+    /* Recent game card clickable styling */
+    .recent-game-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .recent-game-card:hover {
+        transform: translateY(-2px);
+    }
+
+    .recent-game-card:hover .card {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+    }
+

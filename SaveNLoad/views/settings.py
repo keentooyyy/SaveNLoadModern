@@ -25,14 +25,20 @@ def settings_view(request):
         # Redirect non-admin users to their dashboard
         return redirect(reverse('user:dashboard'))
     
-    return render(request, 'SaveNLoad/admin/settings.html')
+    context = {
+    }
+    return render(request, 'SaveNLoad/admin/settings.html', context)
 
 
 @login_required
 @client_worker_required
 def user_settings_view(request):
     """Settings page for users (without add game functionality)"""
-    return render(request, 'SaveNLoad/user/settings.html', {'is_user': True})
+    user = get_current_user(request)
+    context = {
+        'is_user': True,
+    }
+    return render(request, 'SaveNLoad/user/settings.html', context)
 
 
 @login_required
@@ -194,4 +200,55 @@ def delete_game(request, game_id):
 
     game.delete()
     return json_response_success()
+
+
+@login_required
+@require_http_methods(["POST"])
+def change_password(request):
+    """Change user password"""
+    user = get_current_user(request)
+    if not user:
+        return json_response_error('Unauthorized', status=403)
+    
+    data, error_response = parse_json_body(request)
+    if error_response:
+        return error_response
+    
+    current_password = data.get('current_password', '').strip()
+    new_password = data.get('new_password', '').strip()
+    confirm_password = data.get('confirm_password', '').strip()
+    
+    # Validate inputs
+    if not current_password:
+        return json_response_error('Current password is required.', status=400)
+    
+    if not new_password:
+        return json_response_error('New password is required.', status=400)
+    
+    if not confirm_password:
+        return json_response_error('Please confirm your new password.', status=400)
+    
+    # Check current password
+    if not user.check_password(current_password):
+        return json_response_error('Current password is incorrect.', status=400)
+    
+    # Validate new password matches confirmation
+    if new_password != confirm_password:
+        return json_response_error('New passwords do not match.', status=400)
+    
+    # Validate password strength
+    from SaveNLoad.views.input_sanitizer import validate_password_strength
+    is_valid, error_msg = validate_password_strength(new_password)
+    if not is_valid:
+        return json_response_error(error_msg, status=400)
+    
+    # Check if new password is different from current
+    if user.check_password(new_password):
+        return json_response_error('New password must be different from current password.', status=400)
+    
+    # Update password
+    user.set_password(new_password)
+    user.save()
+    
+    return json_response_success(message='Password changed successfully!')
 

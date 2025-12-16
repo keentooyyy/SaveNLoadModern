@@ -15,6 +15,7 @@
             {% include 'SaveNLoad/includes/page_header.html' with page_title="Settings" %}
 
             {% include 'SaveNLoad/includes/add_game_form.html' %}
+            {% include 'SaveNLoad/includes/account_settings.html' %}
             {% include 'SaveNLoad/includes/game_search_modal.html' %}
         </div>
     </div>
@@ -31,11 +32,13 @@
         window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
         window.WORKER_REQUIRED_URL = '{% url "SaveNLoad:worker_required" %}';
         window.CREATE_GAME_URL = '{% url "admin:create_game" %}';
+        window.CHANGE_PASSWORD_URL = '{% url "admin:change_password" %}';
     </script>
     <script>
         {% include 'SaveNLoad/js/workerCheck.js' %}
         {% include 'SaveNLoad/js/settings.js' %}
         {% include 'SaveNLoad/js/addGameForm.js' %}
+        {% include 'SaveNLoad/js/accountSettings.js' %}
     </script>
 {% endblock %}
 

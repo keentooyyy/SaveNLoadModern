@@ -264,15 +264,25 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Show toast notification
+    // Show toast notification (XSS-safe)
     function showToast(message, type = 'info') {
         const toast = document.createElement('div');
         toast.className = `alert alert-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} alert-dismissible fade show position-fixed`;
         toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-        toast.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        `;
+        
+        // Use textContent for message to prevent XSS
+        const messageSpan = document.createElement('span');
+        messageSpan.textContent = message;
+        toast.appendChild(messageSpan);
+        
+        // Create close button safely
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'btn-close';
+        closeBtn.setAttribute('data-bs-dismiss', 'alert');
+        closeBtn.setAttribute('aria-label', 'Close');
+        toast.appendChild(closeBtn);
+        
         document.body.appendChild(toast);
 
         // Auto remove after 5 seconds
@@ -307,9 +317,15 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             
             // Disable button and show loading state
-            const originalHtml = saveGameBtn.innerHTML;
+            const originalContent = Array.from(saveGameBtn.childNodes);
             saveGameBtn.disabled = true;
-            saveGameBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+            // Clear and set loading state safely
+            saveGameBtn.textContent = '';
+            const spinnerIcon = document.createElement('i');
+            spinnerIcon.className = 'fas fa-spinner fa-spin me-1';
+            const loadingText = document.createTextNode('Saving...');
+            saveGameBtn.appendChild(spinnerIcon);
+            saveGameBtn.appendChild(loadingText);
             
             try {
                 const response = await fetch(window.CREATE_GAME_URL, {
@@ -343,9 +359,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 console.error('Error creating game:', error);
                 showToast('Error: Failed to create game. Please try again.', 'error');
             } finally {
-                // Restore button
+                // Restore button safely
                 saveGameBtn.disabled = false;
-                saveGameBtn.innerHTML = originalHtml;
+                saveGameBtn.textContent = '';
+                originalContent.forEach(node => {
+                    saveGameBtn.appendChild(node.cloneNode(true));
+                });
             }
         });
     }
