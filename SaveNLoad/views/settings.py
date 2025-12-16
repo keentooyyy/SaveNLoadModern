@@ -20,7 +20,8 @@ import json
 def settings_view(request):
     """Settings page for managing games (Admin only)"""
     user = get_current_user(request)
-    if not user or not user.is_admin():
+    error_response = check_admin_or_error(user)
+    if error_response:
         # Redirect non-admin users to their dashboard
         return redirect(reverse('user:dashboard'))
     

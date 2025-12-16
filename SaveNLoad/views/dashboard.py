@@ -3,6 +3,7 @@ from django.urls import reverse
 from django.utils import timezone
 from datetime import timedelta
 from SaveNLoad.views.custom_decorators import login_required, get_current_user, client_worker_required
+from SaveNLoad.views.api_helpers import check_admin_or_error
 from SaveNLoad.views.rawg_api import get_popular_games
 from SaveNLoad.models import SimpleUsers, Game
 
@@ -42,7 +43,8 @@ def format_last_played(last_played):
 def admin_dashboard(request):
     """Admin dashboard"""
     user = get_current_user(request)
-    if not user or not user.is_admin():
+    error_response = check_admin_or_error(user)
+    if error_response:
         # Redirect non-admin users to their dashboard
         return redirect(reverse('user:dashboard'))
     

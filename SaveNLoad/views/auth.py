@@ -6,6 +6,12 @@ from django.utils.html import escape
 
 from SaveNLoad.models import SimpleUsers, UserRole
 from SaveNLoad.views.custom_decorators import login_required, get_current_user
+from SaveNLoad.views.api_helpers import (
+    check_worker_connected_or_redirect,
+    redirect_if_logged_in,
+    json_response_with_redirect,
+    json_response_field_errors
+)
 from SaveNLoad.views.input_sanitizer import (
     sanitize_username,
     sanitize_email,
@@ -19,17 +25,14 @@ from SaveNLoad.views.input_sanitizer import (
 def login(request):
     """Login page and authentication - CSRF protected"""
     # Check if client worker is connected
-    from SaveNLoad.models.client_worker import ClientWorker
-    if not ClientWorker.is_worker_connected():
-        return redirect(reverse('SaveNLoad:worker_required'))
+    redirect_response = check_worker_connected_or_redirect()
+    if redirect_response:
+        return redirect_response
     
     # Check if already logged in
-    user = get_current_user(request)
-    if user:
-        if user.is_admin():
-            return redirect(reverse('admin:dashboard'))
-        else:
-            return redirect(reverse('user:dashboard'))
+    redirect_response = redirect_if_logged_in(request)
+    if redirect_response:
+        return redirect_response
     
     if request.method == 'POST':
         # Sanitize and validate inputs
@@ -49,11 +52,10 @@ def login(request):
         # Only handle AJAX requests
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             if field_errors:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Please fill in all required fields.',
-                    'field_errors': field_errors
-                }, status=400)
+                return json_response_field_errors(
+                    field_errors,
+                    message='Please fill in all required fields.'
+                )
             
             # Custom authentication - check user exists and password matches
             # Using Django ORM .get() prevents SQL injection
@@ -79,28 +81,24 @@ def login(request):
                     
                     # Escape username to prevent XSS in response
                     safe_username = escape(user.username)
-                    response = JsonResponse({
-                        'success': True,
-                        'message': f'Welcome back, {safe_username}!'
-                    })
-                    response['X-Redirect-URL'] = redirect_url
-                    return response
+                    return json_response_with_redirect(
+                        message=f'Welcome back, {safe_username}!',
+                        redirect_url=redirect_url
+                    )
                 else:
                     field_errors['username'] = 'Invalid username or password.'
                     field_errors['password'] = 'Invalid username or password.'
-                    return JsonResponse({
-                        'success': False,
-                        'message': 'Invalid username or password.',
-                        'field_errors': field_errors
-                    }, status=400)
+                    return json_response_field_errors(
+                        field_errors,
+                        message='Invalid username or password.'
+                    )
             except SimpleUsers.DoesNotExist:
                 field_errors['username'] = 'Invalid username or password.'
                 field_errors['password'] = 'Invalid username or password.'
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Invalid username or password.',
-                    'field_errors': field_errors
-                }, status=400)
+                return json_response_field_errors(
+                    field_errors,
+                    message='Invalid username or password.'
+                )
     
     return render(request, 'SaveNLoad/login.html')
 
@@ -110,17 +108,14 @@ def login(request):
 def register(request):
     """Registration page and user creation - CSRF protected"""
     # Check if client worker is connected
-    from SaveNLoad.models.client_worker import ClientWorker
-    if not ClientWorker.is_worker_connected():
-        return redirect(reverse('SaveNLoad:worker_required'))
+    redirect_response = check_worker_connected_or_redirect()
+    if redirect_response:
+        return redirect_response
     
     # Check if already logged in
-    user = get_current_user(request)
-    if user:
-        if user.is_admin():
-            return redirect(reverse('admin:dashboard'))
-        else:
-            return redirect(reverse('user:dashboard'))
+    redirect_response = redirect_if_logged_in(request)
+    if redirect_response:
+        return redirect_response
     
     if request.method == 'POST':
         # Sanitize and validate inputs
@@ -160,11 +155,7 @@ def register(request):
         # Only handle AJAX requests
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             if field_errors or general_errors:
-                return JsonResponse({
-                    'success': False,
-                    'field_errors': field_errors,
-                    'errors': general_errors
-                }, status=400)
+                return json_response_field_errors(field_errors, general_errors)
             else:
                 # Create user
                 try:
@@ -178,18 +169,16 @@ def register(request):
                     
                     # Server-side redirect for AJAX (via custom header)
                     redirect_url = reverse('SaveNLoad:login')
-                    response = JsonResponse({
-                        'success': True,
-                        'message': 'Account created successfully! Please login.'
-                    })
-                    response['X-Redirect-URL'] = redirect_url
-                    return response
+                    return json_response_with_redirect(
+                        message='Account created successfully! Please login.',
+                        redirect_url=redirect_url
+                    )
                 except Exception as e:
                     # Don't expose internal error details to prevent information leakage
-                    return JsonResponse({
-                        'success': False,
-                        'message': 'An error occurred while creating your account. Please try again.'
-                    }, status=400)
+                    return json_response_error(
+                        'An error occurred while creating your account. Please try again.',
+                        status=400
+                    )
     
     return render(request, 'SaveNLoad/register.html')
 
@@ -199,12 +188,9 @@ def register(request):
 def forgot_password(request):
     """Forgot password page - CSRF protected"""
     # Check if already logged in
-    user = get_current_user(request)
-    if user:
-        if user.is_admin():
-            return redirect(reverse('admin:dashboard'))
-        else:
-            return redirect(reverse('user:dashboard'))
+    redirect_response = redirect_if_logged_in(request)
+    if redirect_response:
+        return redirect_response
     
     return render(request, 'SaveNLoad/forgot_password.html')
 
@@ -223,13 +209,9 @@ def worker_required(request):
     
     if is_connected:
         # Worker is connected, redirect to appropriate page
-        user = get_current_user(request)
-        if user:
-            # User is logged in, redirect to dashboard
-            if user.is_admin():
-                return redirect(reverse('admin:dashboard'))
-            else:
-                return redirect(reverse('user:dashboard'))
+        redirect_response = redirect_if_logged_in(request)
+        if redirect_response:
+            return redirect_response
         else:
             # User is not logged in, redirect to login
             return redirect(reverse('SaveNLoad:login'))

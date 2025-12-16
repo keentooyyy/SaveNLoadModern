@@ -6,6 +6,12 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from SaveNLoad.models.client_worker import ClientWorker
+from SaveNLoad.views.api_helpers import (
+    parse_json_body,
+    get_client_worker_by_id_or_error,
+    json_response_error,
+    json_response_success
+)
 import json
 import logging
 
@@ -17,11 +23,14 @@ logger = logging.getLogger(__name__)
 def register_client(request):
     """Register a client worker - client_id must be unique per PC"""
     try:
-        data = json.loads(request.body or "{}")
+        data, error_response = parse_json_body(request)
+        if error_response:
+            return error_response
+        
         client_id = data.get('client_id', '').strip()
         
         if not client_id:
-            return JsonResponse({'error': 'client_id is required'}, status=400)
+            return json_response_error('client_id is required', status=400)
         
         # Create or update client worker
         worker, created = ClientWorker.objects.get_or_create(
@@ -39,15 +48,14 @@ def register_client(request):
             worker.save()
         
         logger.info(f"Client worker registered: {client_id}")
-        return JsonResponse({
-            'success': True,
-            'message': 'Client worker registered successfully',
-            'client_id': client_id
-        })
+        return json_response_success(
+            message='Client worker registered successfully',
+            data={'client_id': client_id}
+        )
         
     except Exception as e:
         logger.error(f"Failed to register client: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return json_response_error(str(e), status=500)
 
 
 @csrf_exempt
@@ -55,24 +63,24 @@ def register_client(request):
 def heartbeat(request):
     """Receive heartbeat from client worker"""
     try:
-        data = json.loads(request.body or "{}")
+        data, error_response = parse_json_body(request)
+        if error_response:
+            return error_response
+        
         client_id = data.get('client_id', '').strip()
         
-        if not client_id:
-            return JsonResponse({'error': 'client_id is required'}, status=400)
+        worker, error_response = get_client_worker_by_id_or_error(client_id)
+        if error_response:
+            return error_response
         
-        try:
-            worker = ClientWorker.objects.get(client_id=client_id)
-            worker.last_heartbeat = timezone.now()
-            worker.is_active = True
-            worker.save()
-            return JsonResponse({'success': True})
-        except ClientWorker.DoesNotExist:
-            return JsonResponse({'error': 'Client not registered'}, status=404)
+        worker.last_heartbeat = timezone.now()
+        worker.is_active = True
+        worker.save()
+        return json_response_success()
         
     except Exception as e:
         logger.error(f"Failed to process heartbeat: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return json_response_error(str(e), status=500)
 
 
 @csrf_exempt
@@ -80,24 +88,24 @@ def heartbeat(request):
 def unregister_client(request):
     """Unregister a client worker (called on shutdown)"""
     try:
-        data = json.loads(request.body or "{}")
+        data, error_response = parse_json_body(request)
+        if error_response:
+            return error_response
+        
         client_id = data.get('client_id', '').strip()
         
-        if not client_id:
-            return JsonResponse({'error': 'client_id is required'}, status=400)
+        worker, error_response = get_client_worker_by_id_or_error(client_id)
+        if error_response:
+            return error_response
         
-        try:
-            worker = ClientWorker.objects.get(client_id=client_id)
-            worker.is_active = False
-            worker.save()
-            logger.info(f"Client worker unregistered: {client_id}")
-            return JsonResponse({'success': True, 'message': 'Client worker unregistered'})
-        except ClientWorker.DoesNotExist:
-            return JsonResponse({'error': 'Client not registered'}, status=404)
+        worker.is_active = False
+        worker.save()
+        logger.info(f"Client worker unregistered: {client_id}")
+        return json_response_success(message='Client worker unregistered')
         
     except Exception as e:
         logger.error(f"Failed to unregister client: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return json_response_error(str(e), status=500)
 
 
 @csrf_exempt
@@ -166,7 +174,7 @@ def get_pending_operations(request, client_id):
         return JsonResponse({'operations': operations_list})
         
     except ClientWorker.DoesNotExist:
-        return JsonResponse({'error': 'Client worker not found'}, status=404)
+        return json_response_error('Client worker not found', status=404)
 
 
 @csrf_exempt
@@ -191,11 +199,11 @@ def complete_operation(request, operation_id):
             error_message = data.get('error', data.get('message', 'Operation failed'))
             operation.mark_failed(error_message)
         
-        return JsonResponse({'success': True})
+        return json_response_success()
         
     except OperationQueue.DoesNotExist:
-        return JsonResponse({'error': 'Operation not found'}, status=404)
+        return json_response_error('Operation not found', status=404)
     except Exception as e:
         logger.error(f"Failed to complete operation: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return json_response_error(str(e), status=500)
 
