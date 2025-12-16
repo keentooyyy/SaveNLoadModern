@@ -20,8 +20,10 @@
             {% endfor %}
         {% else %}
             <!-- Fallback if no games are available -->
-            <div class="flex-shrink-0" style="width: 260px;">
-                {% include 'SaveNLoad/components/card.html' with title="No games available" footer="Please try again later" image="" %}
+            <div class="flex-shrink-0 w-100">
+                <div class="text-center py-3">
+                    <p class="text-white-50 mb-0">No recently played games</p>
+                </div>
             </div>
         {% endif %}
     </div>

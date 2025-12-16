@@ -3,6 +3,13 @@ from django.http import JsonResponse
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 from SaveNLoad.views.custom_decorators import login_required, get_current_user, client_worker_required
+from SaveNLoad.views.api_helpers import (
+    parse_json_body,
+    get_game_or_error,
+    check_admin_or_error,
+    json_response_error,
+    json_response_success
+)
 from SaveNLoad.views.rawg_api import search_games as rawg_search_games
 from SaveNLoad.models import Game
 import json
@@ -17,35 +24,60 @@ def settings_view(request):
         # Redirect non-admin users to their dashboard
         return redirect(reverse('user:dashboard'))
     
-    if request.method == 'POST':
+    return render(request, 'SaveNLoad/admin/settings.html')
+
+
+@login_required
+@client_worker_required
+@require_http_methods(["POST"])
+def create_game(request):
+    """Create a new game (AJAX endpoint - Admin only)"""
+    user = get_current_user(request)
+    error_response = check_admin_or_error(user)
+    if error_response:
+        return error_response
+    
+    # Handle both form data and JSON
+    if request.headers.get('Content-Type') == 'application/json':
+        data, error_response = parse_json_body(request)
+        if error_response:
+            return error_response
+        name = (data.get('name') or '').strip()
+        save_file_location = (data.get('save_file_location') or '').strip()
+        banner = (data.get('banner') or '').strip()
+    else:
         name = request.POST.get('name', '').strip()
         save_file_location = request.POST.get('save_file_location', '').strip()
         banner = request.POST.get('banner', '').strip()
-        
-        if not name or not save_file_location:
-            return render(request, 'SaveNLoad/admin/settings.html', {
-                'error': 'Game name and save file location are required.'
-            })
-        
-        # Check if game with same name already exists
-        if Game.objects.filter(name=name).exists():
-            return render(request, 'SaveNLoad/admin/settings.html', {
-                'error': 'A game with this name already exists.'
-            })
-        
-        # Create new game
-        game_data = {
-            'name': name,
-            'save_file_location': save_file_location,
-        }
-        if banner:
-            game_data['banner'] = banner
-        
-        Game.objects.create(**game_data)
-        
-        return redirect('admin:settings')
     
-    return render(request, 'SaveNLoad/admin/settings.html')
+    if not name or not save_file_location:
+        return json_response_error('Game name and save file location are required.', status=400)
+    
+    # Check if game with same name already exists
+    if Game.objects.filter(name=name).exists():
+        return json_response_error('A game with this name already exists.', status=400)
+    
+    # Create new game
+    game_data = {
+        'name': name,
+        'save_file_location': save_file_location,
+    }
+    if banner:
+        game_data['banner'] = banner
+    
+    game = Game.objects.create(**game_data)
+    
+    return json_response_success(
+        message=f'Game "{game.name}" created successfully!',
+        data={
+            'game': {
+                'id': game.id,
+                'name': game.name,
+                'banner': game.banner or '',
+                'save_file_location': game.save_file_location,
+            }
+        }
+    )
 
 
 @login_required
@@ -83,13 +115,14 @@ def search_game(request):
 def game_detail(request, game_id):
     """Get, update, or delete a single Game (admin only, AJAX)."""
     user = get_current_user(request)
-    if not user or not user.is_admin():
-        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    error_response = check_admin_or_error(user)
+    if error_response:
+        return error_response
 
-    try:
-        game = Game.objects.get(pk=game_id)
-    except Game.DoesNotExist:
-        return JsonResponse({'error': 'Game not found'}, status=404)
+    # Get game or return error
+    game, error_response = get_game_or_error(game_id)
+    if error_response:
+        return error_response
 
     if request.method == "GET":
         return JsonResponse({
@@ -102,39 +135,39 @@ def game_detail(request, game_id):
 
     if request.method == "DELETE":
         game.delete()
-        return JsonResponse({'success': True})
+        return json_response_success()
 
     # POST - update
-    try:
-        data = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON body'}, status=400)
+    data, error_response = parse_json_body(request)
+    if error_response:
+        return error_response
 
     name = (data.get('name') or '').strip()
     save_file_location = (data.get('save_file_location') or '').strip()
     banner = (data.get('banner') or '').strip()
 
     if not name or not save_file_location:
-        return JsonResponse({'error': 'Game name and save file location are required.'}, status=400)
+        return json_response_error('Game name and save file location are required.', status=400)
 
     # Ensure unique name (excluding this game)
     if Game.objects.exclude(pk=game.id).filter(name=name).exists():
-        return JsonResponse({'error': 'A game with this name already exists.'}, status=400)
+        return json_response_error('A game with this name already exists.', status=400)
 
     game.name = name
     game.save_file_location = save_file_location
     game.banner = banner or None
     game.save()
 
-    return JsonResponse({
-        'success': True,
-        'game': {
-            'id': game.id,
-            'name': game.name,
-            'banner': game.banner or '',
-            'save_file_location': game.save_file_location,
+    return json_response_success(
+        data={
+            'game': {
+                'id': game.id,
+                'name': game.name,
+                'banner': game.banner or '',
+                'save_file_location': game.save_file_location,
+            }
         }
-    })
+    )
 
 
 @login_required
@@ -142,14 +175,15 @@ def game_detail(request, game_id):
 def delete_game(request, game_id):
     """Dedicated delete endpoint (alias for DELETE for clients that prefer POST)."""
     user = get_current_user(request)
-    if not user or not user.is_admin():
-        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    error_response = check_admin_or_error(user)
+    if error_response:
+        return error_response
 
-    try:
-        game = Game.objects.get(pk=game_id)
-    except Game.DoesNotExist:
-        return JsonResponse({'error': 'Game not found'}, status=404)
+    # Get game or return error
+    game, error_response = get_game_or_error(game_id)
+    if error_response:
+        return error_response
 
     game.delete()
-    return JsonResponse({'success': True})
+    return json_response_success()
 

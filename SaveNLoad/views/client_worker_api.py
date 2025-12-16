@@ -174,6 +174,7 @@ def get_pending_operations(request, client_id):
 def complete_operation(request, operation_id):
     """Mark an operation as complete"""
     from SaveNLoad.models.operation_queue import OperationQueue
+    from django.utils import timezone
     
     try:
         data = json.loads(request.body or "{}")
@@ -182,6 +183,10 @@ def complete_operation(request, operation_id):
         success = data.get('success', False)
         if success:
             operation.mark_completed(result_data=data)
+            # Update game's last_played when save operation completes successfully
+            if operation.operation_type == 'save':
+                operation.game.last_played = timezone.now()
+                operation.game.save()
         else:
             error_message = data.get('error', data.get('message', 'Operation failed'))
             operation.mark_failed(error_message)

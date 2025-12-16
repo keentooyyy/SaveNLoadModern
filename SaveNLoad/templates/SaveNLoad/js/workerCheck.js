@@ -5,7 +5,7 @@
 (function() {
     'use strict';
     
-    const CHECK_INTERVAL = 500; // Check every 5 second
+    const CHECK_INTERVAL = 5000; // Check every 5 second
     // API endpoint is injected from Django template
     const API_ENDPOINT = window.WORKER_CHECK_URL;
     const WORKER_REQUIRED_URL = window.WORKER_REQUIRED_URL;

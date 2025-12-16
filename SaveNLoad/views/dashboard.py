@@ -1,24 +1,40 @@
 from django.shortcuts import render, redirect
 from django.urls import reverse
+from django.utils import timezone
+from datetime import timedelta
 from SaveNLoad.views.custom_decorators import login_required, get_current_user, client_worker_required
 from SaveNLoad.views.rawg_api import get_popular_games
 from SaveNLoad.models import SimpleUsers, Game
 
 
-def get_playtime_strings():
-    """Get ordered playtime strings from most recent to oldest"""
-    return [
-        "Last played 3 mins ago",
-        "Last played 1 hour ago",
-        "Last played 2 hours ago",
-        "Last played 5 hours ago",
-        "Last played 1 day ago",
-        "Last played 2 days ago",
-        "Last played 3 days ago",
-        "Last played 1 week ago",
-        "Last played 2 weeks ago",
-        "Last played 3 weeks ago",
-    ]
+def format_last_played(last_played):
+    """Format last_played datetime as a human-readable string"""
+    if not last_played:
+        return "Never played"
+    
+    now = timezone.now()
+    diff = now - last_played
+    
+    if diff < timedelta(minutes=1):
+        return "Last played just now"
+    elif diff < timedelta(hours=1):
+        minutes = int(diff.total_seconds() / 60)
+        return f"Last played {minutes} min{'s' if minutes != 1 else ''} ago"
+    elif diff < timedelta(days=1):
+        hours = int(diff.total_seconds() / 3600)
+        return f"Last played {hours} hour{'s' if hours != 1 else ''} ago"
+    elif diff < timedelta(days=7):
+        days = diff.days
+        return f"Last played {days} day{'s' if days != 1 else ''} ago"
+    elif diff < timedelta(days=30):
+        weeks = int(diff.days / 7)
+        return f"Last played {weeks} week{'s' if weeks != 1 else ''} ago"
+    elif diff < timedelta(days=365):
+        months = int(diff.days / 30)
+        return f"Last played {months} month{'s' if months != 1 else ''} ago"
+    else:
+        years = int(diff.days / 365)
+        return f"Last played {years} year{'s' if years != 1 else ''} ago"
 
 
 @login_required
@@ -30,37 +46,33 @@ def admin_dashboard(request):
         # Redirect non-admin users to their dashboard
         return redirect(reverse('user:dashboard'))
     
-    # Fetch real games from RAWG API
-    games = get_popular_games(limit=10)
+    # Fetch games from database ordered by last_played (most recent first)
+    # Only show games that have been played at least once
+    recent_db_games = Game.objects.filter(
+        last_played__isnull=False
+    ).order_by('-last_played')[:10]
     
-    # Get ordered playtime strings (most recent to oldest)
-    playtime_strings = get_playtime_strings()
-    
-    # Add fake playtime to each game in order (most recent first)
-    games_with_playtime = []
-    for index, game in enumerate(games):
-        # Assign playtime based on index (first game = most recent)
-        playtime = playtime_strings[index] if index < len(playtime_strings) else playtime_strings[-1]
-        games_with_playtime.append({
-            'title': game['title'],
-            'image': game['image'],
-            'playtime': playtime
+    recent_games = []
+    for game in recent_db_games:
+        recent_games.append({
+            'title': game.name,
+            'image': game.banner if game.banner else '',
+            'playtime': format_last_played(game.last_played),
         })
     
-    # Fetch games from database (user-added games)
-    db_games = Game.objects.all().order_by('-created_at')[:10]
+    # Fetch all games from database for available games section (sorted alphabetically)
+    db_games = Game.objects.all().order_by('name')
     available_games = []
     for game in db_games:
         available_games.append({
             'id': game.id,
             'title': game.name,
             'image': game.banner if game.banner else '',
-            'footer': game.save_file_location,
+            'footer': format_last_played(game.last_played),
         })
     
-    # Games are already sorted by recency (most recent first)
     context = {
-        'recent_games': games_with_playtime,
+        'recent_games': recent_games,
         'available_games': available_games
     }
     

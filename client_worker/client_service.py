@@ -105,14 +105,39 @@ class ClientWorkerService:
                 uploaded_files = []
                 failed_files = []
                 
-                # Collect all files first
+                # Collect all directories (including empty ones) and files
+                dir_list = set()  # Use set to avoid duplicates
                 file_list = []
+                
                 for root, dirs, files in os.walk(local_save_path):
+                    # Add all directories (including empty ones)
+                    for dir_name in dirs:
+                        dir_path = os.path.join(root, dir_name)
+                        rel_dir_path = os.path.relpath(dir_path, local_save_path)
+                        remote_dir_path = rel_dir_path.replace('\\', '/')
+                        dir_list.add(remote_dir_path)
+                    
+                    # Add all files
                     for filename in files:
                         local_file = os.path.join(root, filename)
                         rel_path = os.path.relpath(local_file, local_save_path)
                         remote_filename = rel_path.replace('\\', '/')
                         file_list.append((local_file, remote_filename))
+                
+                # Create empty directories first
+                if dir_list:
+                    logger.info(f"Found {len(dir_list)} directory(ies) to create")
+                    for remote_dir_path in sorted(dir_list):  # Sort to create parent dirs first
+                        try:
+                            self.ftp_client.create_directory(
+                                username=username,
+                                game_name=game_name,
+                                folder_number=save_folder_number,
+                                remote_dir_path=remote_dir_path
+                            )
+                        except Exception as e:
+                            logger.warning(f"Failed to create directory {remote_dir_path}: {e}")
+                            # Continue anyway - directory might already exist or be created by file upload
                 
                 file_count = len(file_list)
                 logger.info(f"Found {file_count} file(s) in {local_save_path}")
@@ -201,13 +226,13 @@ class ClientWorkerService:
         logger.info(f"Loading game {game_id} to {local_save_path} from save_folder {save_folder_number}")
         
         try:
-            success, files, message = self.ftp_client.list_saves(
+            success, files, directories, message = self.ftp_client.list_saves(
                 username=username,
                 game_name=game_name,
                 folder_number=save_folder_number
             )
             
-            logger.info(f"List saves result: success={success}, files_count={len(files) if files else 0}, message={message}")
+            logger.info(f"List saves result: success={success}, files_count={len(files) if files else 0}, dirs_count={len(directories) if directories else 0}, message={message}")
             
             if not success:
                 logger.error(f"Failed to list saves: {message}")
@@ -216,11 +241,11 @@ class ClientWorkerService:
                     'error': f'Failed to list saves: {message}'
                 }
             
-            if not files:
-                logger.warning(f"No save files found: {message}")
+            if not files and not directories:
+                logger.warning(f"No save files or directories found: {message}")
                 return {
                     'success': False,
-                    'error': f'No save files found: {message}'
+                    'error': f'No save files or directories found: {message}'
                 }
             
             downloaded_files = []
@@ -243,26 +268,33 @@ class ClientWorkerService:
                     'error': f'Local save path is not a directory: {local_save_path}'
                 }
             
+            # Create all directories first (including empty ones)
+            if directories:
+                logger.info(f"Creating {len(directories)} directory(ies)")
+                for remote_dir_path in sorted(directories):  # Sort to create parent dirs first
+                    # Normalize path separators
+                    remote_dir_normalized = remote_dir_path.replace('\\', '/')
+                    # Create local directory structure
+                    local_dir = os.path.join(local_save_path, *remote_dir_normalized.split('/'))
+                    os.makedirs(local_dir, exist_ok=True)
+                    logger.debug(f"Created directory: {local_dir}")
+            
             logger.info(f"Downloading {len(files)} file(s) to directory: {local_save_path}")
             
-            # Prepare file list and create directories first
+            # Prepare file list
             file_list = []
             for file_info in files:
                 remote_filename = file_info['name']
                 
-                # Always treat local_save_path as a directory for downloads
-                # Handle nested paths (subdirectories in the save)
-                if '/' in remote_filename or '\\' in remote_filename:
-                    # Normalize path separators to use forward slashes
-                    remote_filename_normalized = remote_filename.replace('\\', '/')
-                    # Create nested directory structure
-                    nested_dir = os.path.join(local_save_path, os.path.dirname(remote_filename_normalized))
-                    os.makedirs(nested_dir, exist_ok=True)
-                    # Build local file path using OS-specific separators
-                    local_file = os.path.join(local_save_path, *remote_filename_normalized.split('/'))
-                else:
-                    # Simple filename, no subdirectories
-                    local_file = os.path.join(local_save_path, remote_filename)
+                # Normalize path separators to use forward slashes
+                remote_filename_normalized = remote_filename.replace('\\', '/')
+                # Build local file path using OS-specific separators
+                local_file = os.path.join(local_save_path, *remote_filename_normalized.split('/'))
+                
+                # Ensure parent directory exists (should already exist from above, but just in case)
+                local_dir = os.path.dirname(local_file)
+                if local_dir != local_save_path:
+                    os.makedirs(local_dir, exist_ok=True)
                 
                 file_list.append((remote_filename, local_file))
             

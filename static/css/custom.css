@@ -285,3 +285,33 @@ body {
     background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.5) 50%, transparent 100%);
 }
 
+/* Game Manage Modal Tabs */
+#gameManageModal .nav-tabs {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#gameManageModal .nav-tabs .nav-link {
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: rgba(255, 255, 255, 0.5) !important;
+    transition: all 0.2s ease;
+    background-color: transparent;
+}
+
+#gameManageModal .nav-tabs .nav-link.active {
+    color: #ffffff !important;
+    background-color: rgba(90, 141, 238, 0.3) !important;
+    border-color: #5a8dee #5a8dee transparent !important;
+    border-bottom-width: 3px !important;
+    font-weight: 600;
+}
+
+#gameManageModal .nav-tabs .nav-link.active i {
+    color: #5a8dee !important;
+}
+
+#gameManageModal .nav-tabs .nav-link:not(.active):hover {
+    color: #ffffff !important;
+    background-color: rgba(255, 255, 255, 0.08);
+}
+

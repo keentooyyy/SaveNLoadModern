@@ -264,6 +264,92 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    // Show toast notification
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `alert alert-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} alert-dismissible fade show position-fixed`;
+        toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        toast.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        document.body.appendChild(toast);
+
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.remove();
+            }
+        }, 5000);
+    }
+
+    // Handle form submission via AJAX
+    const addGameForm = document.getElementById('addGameForm');
+    const saveGameBtn = document.getElementById('saveGameBtn');
+    
+    if (addGameForm && saveGameBtn) {
+        addGameForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const csrfToken = document.querySelector('[name="csrfmiddlewaretoken"]')?.value;
+            if (!csrfToken) {
+                showToast('Error: CSRF token not found', 'error');
+                return;
+            }
+            
+            const name = document.getElementById('name')?.value.trim();
+            const saveFileLocation = document.getElementById('save_file_location')?.value.trim();
+            const banner = document.getElementById('banner')?.value.trim();
+            
+            if (!name || !saveFileLocation) {
+                showToast('Game name and save file location are required.', 'error');
+                return;
+            }
+            
+            // Disable button and show loading state
+            const originalHtml = saveGameBtn.innerHTML;
+            saveGameBtn.disabled = true;
+            saveGameBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+            
+            try {
+                const response = await fetch(window.CREATE_GAME_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        save_file_location: saveFileLocation,
+                        banner: banner || ''
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast(data.message || 'Game created successfully!', 'success');
+                    // Clear form after successful creation
+                    clearForm();
+                    // Reload page after a short delay to show the new game
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    showToast(data.error || 'Failed to create game', 'error');
+                }
+            } catch (error) {
+                console.error('Error creating game:', error);
+                showToast('Error: Failed to create game. Please try again.', 'error');
+            } finally {
+                // Restore button
+                saveGameBtn.disabled = false;
+                saveGameBtn.innerHTML = originalHtml;
+            }
+        });
+    }
+
     // Wire up events
     if (bannerInput) {
         bannerInput.addEventListener('input', handleBannerInput);
