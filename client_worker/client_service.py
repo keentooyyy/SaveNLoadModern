@@ -253,15 +253,24 @@ class ClientWorkerService:
             
             # Ensure the local save path exists as a directory
             # Always treat it as a directory for loading (we download multiple files)
-            if not os.path.exists(local_save_path):
-                os.makedirs(local_save_path, exist_ok=True)
-                logger.info(f"Created directory: {local_save_path}")
-            elif os.path.isfile(local_save_path):
+            # Handle case where path might be a file or directory
+            if os.path.isfile(local_save_path):
                 # If it's a file, use its parent directory instead
                 local_save_path = os.path.dirname(local_save_path)
-                os.makedirs(local_save_path, exist_ok=True)
                 logger.info(f"Path was a file, using parent directory: {local_save_path}")
             
+            # Create the directory and all parent directories if they don't exist
+            try:
+                os.makedirs(local_save_path, exist_ok=True)
+                logger.info(f"Ensured directory exists (created if needed): {local_save_path}")
+            except OSError as e:
+                logger.error(f"Failed to create directory {local_save_path}: {e}")
+                return {
+                    'success': False,
+                    'error': f'Failed to create directory: {local_save_path} - {str(e)}'
+                }
+            
+            # Verify it's actually a directory
             if not os.path.isdir(local_save_path):
                 return {
                     'success': False,

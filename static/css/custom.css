@@ -315,3 +315,20 @@ body {
     background-color: rgba(255, 255, 255, 0.08);
 }
 
+/* Fix available games grid squishing at ~997px width */
+/* Keep 3 columns (col-md-4) until we have enough space for 4 columns */
+@media (min-width: 992px) and (max-width: 1199.98px) {
+    #availableGamesSection .col-lg-3 {
+        flex: 0 0 auto;
+        width: 33.33333333% !important; /* Force 3 columns instead of 4 */
+    }
+}
+
+/* Prevent available games cards from stretching too wide on large screens */
+/* Set upper bound so cards maintain reasonable size even on very wide screens */
+@media (min-width: 1200px) {
+    #availableGamesSection .col-lg-3 {
+        max-width: 300px; /* Upper bound - cards won't stretch beyond this */
+    }
+}
+

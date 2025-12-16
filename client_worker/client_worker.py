@@ -199,20 +199,50 @@ class SaveNLoadClient:
             downloaded_files = []
             failed_files = []
             
-            # Ensure local directory exists
-            if os.path.isdir(local_save_path) or not os.path.exists(local_save_path):
+            # Ensure local directory exists - create full path including all parent directories
+            # Handle case where path might be a file or directory
+            if os.path.isfile(local_save_path):
+                # If it's a file, use its parent directory instead
+                local_save_path = os.path.dirname(local_save_path)
+                logger.info(f"Path was a file, using parent directory: {local_save_path}")
+            
+            # Create the directory and all parent directories if they don't exist
+            try:
                 os.makedirs(local_save_path, exist_ok=True)
+                logger.info(f"Ensured directory exists: {local_save_path}")
+            except OSError as e:
+                logger.error(f"Failed to create directory {local_save_path}: {e}")
+                return {
+                    'success': False,
+                    'error': f'Failed to create directory: {local_save_path} - {str(e)}'
+                }
+            
+            # Verify it's actually a directory
+            if not os.path.isdir(local_save_path):
+                return {
+                    'success': False,
+                    'error': f'Local save path is not a directory: {local_save_path}'
+                }
             
             for file_info in files:
                 remote_filename = file_info['name']
                 
-                if os.path.isdir(local_save_path):
-                    local_file = os.path.join(local_save_path, remote_filename)
-                    if '/' in remote_filename:
-                        nested_dir = os.path.join(local_save_path, os.path.dirname(remote_filename))
+                # Build local file path
+                local_file = os.path.join(local_save_path, remote_filename)
+                
+                # If remote filename contains path separators, create nested directories
+                if '/' in remote_filename or '\\' in remote_filename:
+                    # Normalize path separators
+                    remote_filename_normalized = remote_filename.replace('\\', '/')
+                    # Get the directory part of the path
+                    nested_dir = os.path.join(local_save_path, os.path.dirname(remote_filename_normalized))
+                    # Create nested directory structure (including all parent dirs)
+                    try:
                         os.makedirs(nested_dir, exist_ok=True)
-                else:
-                    local_file = local_save_path
+                        logger.debug(f"Created nested directory: {nested_dir}")
+                    except OSError as e:
+                        logger.warning(f"Failed to create nested directory {nested_dir}: {e}")
+                        # Continue anyway, might still work
                 
                 success, message = self.ftp_client.download_save(
                     username=username,
