@@ -18,6 +18,11 @@ from SaveNLoad.views.input_sanitizer import (
 @csrf_protect
 def login(request):
     """Login page and authentication - CSRF protected"""
+    # Check if client worker is connected
+    from SaveNLoad.models.client_worker import ClientWorker
+    if not ClientWorker.is_worker_connected():
+        return redirect(reverse('SaveNLoad:worker_required'))
+    
     # Check if already logged in
     user = get_current_user(request)
     if user:
@@ -104,6 +109,11 @@ def login(request):
 @csrf_protect
 def register(request):
     """Registration page and user creation - CSRF protected"""
+    # Check if client worker is connected
+    from SaveNLoad.models.client_worker import ClientWorker
+    if not ClientWorker.is_worker_connected():
+        return redirect(reverse('SaveNLoad:worker_required'))
+    
     # Check if already logged in
     user = get_current_user(request)
     if user:
@@ -206,20 +216,25 @@ def logout(request):
     return redirect(reverse('SaveNLoad:login'))
 
 
-@login_required
 def worker_required(request):
     """Page shown when client worker is not connected"""
     from SaveNLoad.models.client_worker import ClientWorker
     is_connected = ClientWorker.is_worker_connected()
     
     if is_connected:
-        # Worker is connected, redirect to dashboard
+        # Worker is connected, redirect to appropriate page
         user = get_current_user(request)
-        if user and user.is_admin():
-            return redirect(reverse('admin:dashboard'))
+        if user:
+            # User is logged in, redirect to dashboard
+            if user.is_admin():
+                return redirect(reverse('admin:dashboard'))
+            else:
+                return redirect(reverse('user:dashboard'))
         else:
-            return redirect(reverse('user:dashboard'))
+            # User is not logged in, redirect to login
+            return redirect(reverse('SaveNLoad:login'))
     
+    # No worker connected - show the worker required page
     # Get all active workers for display
     all_workers = ClientWorker.get_active_workers()
     

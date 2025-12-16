@@ -30,9 +30,48 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function isValidImageUrl(url) {
+        if (!url || typeof url !== 'string') return false;
+        
+        // Remove whitespace
+        url = url.trim();
+        if (!url) return false;
+        
+        // Block dangerous schemes
+        const lowerUrl = url.toLowerCase();
+        if (lowerUrl.startsWith('javascript:') || 
+            lowerUrl.startsWith('data:') || 
+            lowerUrl.startsWith('vbscript:') ||
+            lowerUrl.startsWith('file:')) {
+            return false;
+        }
+        
+        // Only allow http/https URLs
+        try {
+            const urlObj = new URL(url);
+            if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+                return false;
+            }
+        } catch (e) {
+            // Invalid URL format
+            return false;
+        }
+        
+        return true;
+    }
+
     function updateBannerPreview(bannerUrl) {
         clearElement(bannerPreview);
         if (!bannerUrl) return;
+
+        // Validate URL before using it
+        if (!isValidImageUrl(bannerUrl)) {
+            const p = document.createElement('p');
+            p.className = 'text-muted small';
+            p.appendChild(document.createTextNode('Invalid or unsafe URL'));
+            bannerPreview.appendChild(p);
+            return;
+        }
 
         const img = document.createElement('img');
         img.src = bannerUrl;
@@ -41,12 +80,15 @@ document.addEventListener('DOMContentLoaded', function () {
         img.style.height = '100%';
         img.style.objectFit = 'contain';
         img.className = 'img-thumbnail';
+        // Security attributes
+        img.loading = 'lazy';
+        img.referrerPolicy = 'no-referrer';
 
         img.onerror = function () {
             clearElement(bannerPreview);
             const p = document.createElement('p');
             p.className = 'text-muted small';
-            p.appendChild(document.createTextNode('Invalid image URL'));
+            p.appendChild(document.createTextNode('Failed to load image'));
             bannerPreview.appendChild(p);
         };
 

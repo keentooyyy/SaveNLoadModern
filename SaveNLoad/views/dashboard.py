@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect
 from django.urls import reverse
-from SaveNLoad.views.custom_decorators import login_required, get_current_user
+from SaveNLoad.views.custom_decorators import login_required, get_current_user, client_worker_required
 from SaveNLoad.views.rawg_api import get_popular_games
 from SaveNLoad.models import SimpleUsers, Game
 
@@ -22,18 +22,13 @@ def get_playtime_strings():
 
 
 @login_required
+@client_worker_required
 def admin_dashboard(request):
     """Admin dashboard"""
-    from SaveNLoad.models.client_worker import ClientWorker
-    
     user = get_current_user(request)
     if not user or not user.is_admin():
         # Redirect non-admin users to their dashboard
         return redirect(reverse('user:dashboard'))
-    
-    # Check if client worker is connected
-    if not ClientWorker.is_worker_connected():
-        return redirect(reverse('SaveNLoad:worker_required'))
     
     # Fetch real games from RAWG API
     games = get_popular_games(limit=10)
@@ -73,6 +68,7 @@ def admin_dashboard(request):
 
 
 @login_required
+@client_worker_required
 def user_dashboard(request):
     """User dashboard"""
     return render(request, 'SaveNLoad/user/dashboard.html')

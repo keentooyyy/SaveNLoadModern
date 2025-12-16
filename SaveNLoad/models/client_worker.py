@@ -35,8 +35,13 @@ class ClientWorker(models.Model):
     @classmethod
     def get_active_workers(cls, timeout_seconds: int = 30):
         """Get all active workers that are currently online"""
-        workers = cls.objects.filter(is_active=True)
-        return [w for w in workers if w.is_online(timeout_seconds)]
+        # Filter directly in database query for better performance and accuracy
+        from datetime import timedelta
+        timeout_threshold = timezone.now() - timedelta(seconds=timeout_seconds)
+        return list(cls.objects.filter(
+            is_active=True,
+            last_heartbeat__gte=timeout_threshold
+        ))
     
     @classmethod
     def get_worker_by_id(cls, client_id: str, timeout_seconds: int = 30):
@@ -58,5 +63,11 @@ class ClientWorker(models.Model):
     @classmethod
     def is_worker_connected(cls, timeout_seconds: int = 30) -> bool:
         """Check if any worker is connected and active"""
-        return len(cls.get_active_workers(timeout_seconds)) > 0
+        # Direct database query for better performance
+        from datetime import timedelta
+        timeout_threshold = timezone.now() - timedelta(seconds=timeout_seconds)
+        return cls.objects.filter(
+            is_active=True,
+            last_heartbeat__gte=timeout_threshold
+        ).exists()
 

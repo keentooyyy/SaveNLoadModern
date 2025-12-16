@@ -8,56 +8,29 @@
         <div class="mb-4">
             <i class="fas fa-exclamation-triangle text-warning" style="font-size: 4rem;"></i>
         </div>
-        <h2 class="text-white mb-3">Client Worker Required</h2>
+        <h2 class="text-white mb-3">Worker Required</h2>
         <p class="text-white-50 mb-4">
-            The client worker service must be running before you can access the dashboard.
+            The worker service must be running before you can access application.
         </p>
         <div class="card bg-dark border-secondary p-4 mb-4" style="max-width: 600px; margin: 0 auto;">
             <h5 class="text-white mb-3">To get started:</h5>
             <ol class="text-start text-white-50">
                 <li class="mb-2">Open a terminal/command prompt</li>
                 <li class="mb-2">Navigate to the <code class="text-info">client_worker</code> directory</li>
-                <li class="mb-2">Run: <code class="text-info">python client_service.py --server http://192.168.88.101:8000</code></li>
+                <li class="mb-2">Run: <code class="text-info">python client_service.py</code></li>
                 <li class="mb-2">Keep the client worker running</li>
-                <li>Refresh this page once the worker is connected</li>
             </ol>
-        </div>
-        <div class="d-flex gap-2 justify-content-center">
-            <button onclick="window.location.reload()" class="btn btn-primary">
-                <i class="fas fa-sync-alt me-2"></i> Check Connection
-            </button>
-            <a href="{% url 'SaveNLoad:logout' %}" class="btn btn-secondary">
-                <i class="fas fa-sign-out-alt me-2"></i> Logout
-            </a>
         </div>
         <div id="connectionStatus" class="mt-3"></div>
     </div>
 </div>
 
 <script>
-// Auto-check connection status
-function checkConnection() {
-    fetch('/api/client/check/')
-        .then(response => response.json())
-        .then(data => {
-            const statusDiv = document.getElementById('connectionStatus');
-            if (data.connected) {
-                statusDiv.innerHTML = '<div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>Client worker connected! Redirecting...</div>';
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1500);
-            } else {
-                statusDiv.innerHTML = '<div class="alert alert-warning"><i class="fas fa-clock me-2"></i>Waiting for client worker connection...</div>';
-            }
-        })
-        .catch(error => {
-            console.error('Error checking connection:', error);
-        });
-}
-
-// Check every 3 seconds
-setInterval(checkConnection, 3000);
-checkConnection(); // Initial check
+    // Inject Django URL for worker check
+    window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
+</script>
+<script>
+    {% include 'SaveNLoad/js/workerRequiredCheck.js' %}
 </script>
 {% endblock %}
 

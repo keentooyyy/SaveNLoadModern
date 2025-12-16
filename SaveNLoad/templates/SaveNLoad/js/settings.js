@@ -26,9 +26,48 @@ document.addEventListener('DOMContentLoaded', function () {
         bootstrapModal.show();
     }
 
+    function isValidImageUrl(url) {
+        if (!url || typeof url !== 'string') return false;
+        
+        // Remove whitespace
+        url = url.trim();
+        if (!url) return false;
+        
+        // Block dangerous schemes
+        const lowerUrl = url.toLowerCase();
+        if (lowerUrl.startsWith('javascript:') || 
+            lowerUrl.startsWith('data:') || 
+            lowerUrl.startsWith('vbscript:') ||
+            lowerUrl.startsWith('file:')) {
+            return false;
+        }
+        
+        // Only allow http/https URLs
+        try {
+            const urlObj = new URL(url);
+            if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+                return false;
+            }
+        } catch (e) {
+            // Invalid URL format
+            return false;
+        }
+        
+        return true;
+    }
+
     function updateBannerPreview(bannerUrl) {
         clearElement(bannerPreview);
         if (!bannerUrl) return;
+
+        // Validate URL before using it
+        if (!isValidImageUrl(bannerUrl)) {
+            const p = document.createElement('p');
+            p.className = 'text-white-50 small';
+            p.appendChild(document.createTextNode('Invalid or unsafe URL'));
+            bannerPreview.appendChild(p);
+            return;
+        }
 
         const img = document.createElement('img');
         img.src = bannerUrl;
@@ -37,12 +76,15 @@ document.addEventListener('DOMContentLoaded', function () {
         img.style.height = '100%';
         img.style.objectFit = 'contain';
         img.className = 'img-thumbnail';
+        // Security attributes
+        img.loading = 'lazy';
+        img.referrerPolicy = 'no-referrer';
 
         img.onerror = () => {
             clearElement(bannerPreview);
             const p = document.createElement('p');
-            p.className = 'text-muted small';
-            p.appendChild(document.createTextNode('Invalid image URL'));
+            p.className = 'text-white-50 small';
+            p.appendChild(document.createTextNode('Failed to load image'));
             bannerPreview.appendChild(p);
         };
 
@@ -68,7 +110,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (!games || games.length === 0) {
             const p = document.createElement('p');
-            p.className = 'text-muted';
+            p.className = 'text-white-50 text-center py-3';
             p.appendChild(document.createTextNode('No games found.'));
             searchResults.appendChild(p);
             showModal();
@@ -86,7 +128,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const link = document.createElement('a');
             link.href = '#';
-            link.className = 'list-group-item list-group-item-action';
+            link.className = 'list-group-item list-group-item-action bg-primary text-white border-secondary';
 
             // Store raw values in data attributes (not HTML-escaped)
             link.dataset.gameId = gameId;
@@ -94,28 +136,38 @@ document.addEventListener('DOMContentLoaded', function () {
             link.dataset.saveLocation = saveLocation;
             link.dataset.bannerUrl = bannerUrl;
 
+            // Add hover effect
+            link.style.transition = 'background-color 0.2s ease';
+            link.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = 'rgba(90, 141, 238, 0.2)';
+            });
+            link.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = '';
+            });
+
             const row = document.createElement('div');
             row.className = 'd-flex align-items-center';
 
-            if (bannerUrl) {
+            if (bannerUrl && isValidImageUrl(bannerUrl)) {
                 const img = document.createElement('img');
                 img.src = bannerUrl;
                 img.alt = gameName;
-                img.className = 'me-3';
+                img.className = 'me-3 rounded';
                 img.style.width = '50px';
                 img.style.height = '50px';
                 img.style.objectFit = 'cover';
+                img.referrerPolicy = 'no-referrer';
                 row.appendChild(img);
             }
 
             const textWrapper = document.createElement('div');
 
             const titleEl = document.createElement('h6');
-            titleEl.className = 'mb-0';
+            titleEl.className = 'mb-1 text-white';
             titleEl.appendChild(document.createTextNode(gameName));
 
             const saveEl = document.createElement('small');
-            saveEl.className = 'text-muted';
+            saveEl.className = 'text-white-50';
             saveEl.appendChild(document.createTextNode(saveLocation));
 
             textWrapper.appendChild(titleEl);

@@ -44,28 +44,43 @@ def save_game(request, game_id):
         # Use the game's save_file_location if not provided
         local_save_path = game.save_file_location
     
-    # Get or assign client worker
+    # Get or assign client worker (optimized query)
     client_id = data.get('client_id')
     if client_id:
         # Use specified client worker
-        client_worker = ClientWorker.get_worker_by_id(client_id)
-        if not client_worker:
-            return JsonResponse({'error': 'Specified client worker is not online'}, status=400)
+        try:
+            client_worker = ClientWorker.objects.get(client_id=client_id, is_active=True)
+            if not client_worker.is_online():
+                return JsonResponse({'error': 'Specified client worker is not online'}, status=400)
+        except ClientWorker.DoesNotExist:
+            return JsonResponse({'error': 'Specified client worker not found'}, status=400)
     else:
-        # Get any available worker
-        client_worker = ClientWorker.get_any_active_worker()
+        # Get any available worker (optimized - single query)
+        from django.utils import timezone
+        from datetime import timedelta
+        timeout_threshold = timezone.now() - timedelta(seconds=30)
+        client_worker = ClientWorker.objects.filter(
+            is_active=True,
+            last_heartbeat__gte=timeout_threshold
+        ).order_by('-last_heartbeat').first()
+        
         if not client_worker:
             return JsonResponse({
                 'error': 'No client worker available',
                 'requires_worker': True
             }, status=503)
     
-    # Create operation in queue
+    # Get or create next save folder (tracked in database)
+    from SaveNLoad.models.save_folder import SaveFolder
+    save_folder = SaveFolder.get_or_create_next(user, game)
+    
+    # Create operation in queue with save folder number
     operation = OperationQueue.create_operation(
         operation_type=OperationType.SAVE,
         user=user,
         game=game,
         local_save_path=local_save_path,
+        save_folder_number=save_folder.folder_number,
         client_worker=client_worker
     )
     
@@ -73,7 +88,8 @@ def save_game(request, game_id):
         'success': True,
         'message': 'Save operation queued',
         'operation_id': operation.id,
-        'client_id': client_worker.client_id
+        'client_id': client_worker.client_id,
+        'save_folder_number': save_folder.folder_number
     })
 
 
@@ -108,16 +124,33 @@ def load_game(request, game_id):
     
     save_folder_number = data.get('save_folder_number')  # Optional
     
-    # Get or assign client worker
+    # If no save_folder_number specified, use the latest one
+    if save_folder_number is None:
+        from SaveNLoad.models.save_folder import SaveFolder
+        latest_folder = SaveFolder.get_latest(user, game)
+        if latest_folder:
+            save_folder_number = latest_folder.folder_number
+    
+    # Get or assign client worker (optimized query)
     client_id = data.get('client_id')
     if client_id:
         # Use specified client worker
-        client_worker = ClientWorker.get_worker_by_id(client_id)
-        if not client_worker:
-            return JsonResponse({'error': 'Specified client worker is not online'}, status=400)
+        try:
+            client_worker = ClientWorker.objects.get(client_id=client_id, is_active=True)
+            if not client_worker.is_online():
+                return JsonResponse({'error': 'Specified client worker is not online'}, status=400)
+        except ClientWorker.DoesNotExist:
+            return JsonResponse({'error': 'Specified client worker not found'}, status=400)
     else:
-        # Get any available worker
-        client_worker = ClientWorker.get_any_active_worker()
+        # Get any available worker (optimized - single query)
+        from django.utils import timezone
+        from datetime import timedelta
+        timeout_threshold = timezone.now() - timedelta(seconds=30)
+        client_worker = ClientWorker.objects.filter(
+            is_active=True,
+            last_heartbeat__gte=timeout_threshold
+        ).order_by('-last_heartbeat').first()
+        
         if not client_worker:
             return JsonResponse({
                 'error': 'No client worker available',

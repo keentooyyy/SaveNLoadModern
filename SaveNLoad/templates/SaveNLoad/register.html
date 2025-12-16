@@ -81,10 +81,18 @@
         </div>
     </div>
     <script>
+        // Inject worker check URLs
+        window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
+        window.WORKER_REQUIRED_URL = '{% url "SaveNLoad:worker_required" %}';
+    </script>
+    <script>
         {% include 'SaveNLoad/js/togglePasswordVisibility.js' %}
     </script>
     <script>
         {% include 'SaveNLoad/js/registerAjax.js' %}
+    </script>
+    <script>
+        {% include 'SaveNLoad/js/workerCheck.js' %}
     </script>
 {% endblock %}
 

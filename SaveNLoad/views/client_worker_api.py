@@ -76,6 +76,31 @@ def heartbeat(request):
 
 
 @csrf_exempt
+@require_http_methods(["POST"])
+def unregister_client(request):
+    """Unregister a client worker (called on shutdown)"""
+    try:
+        data = json.loads(request.body or "{}")
+        client_id = data.get('client_id', '').strip()
+        
+        if not client_id:
+            return JsonResponse({'error': 'client_id is required'}, status=400)
+        
+        try:
+            worker = ClientWorker.objects.get(client_id=client_id)
+            worker.is_active = False
+            worker.save()
+            logger.info(f"Client worker unregistered: {client_id}")
+            return JsonResponse({'success': True, 'message': 'Client worker unregistered'})
+        except ClientWorker.DoesNotExist:
+            return JsonResponse({'error': 'Client not registered'}, status=404)
+        
+    except Exception as e:
+        logger.error(f"Failed to unregister client: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
 @require_http_methods(["GET"])
 def check_connection(request):
     """Check if any client worker is connected"""

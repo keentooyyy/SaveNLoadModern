@@ -25,6 +25,12 @@
     </div>
 
     <script>
+        // Inject Django URLs for worker check
+        window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
+        window.WORKER_REQUIRED_URL = '{% url "SaveNLoad:worker_required" %}';
+    </script>
+    <script>
+        {% include 'SaveNLoad/js/workerCheck.js' %}
         {% include 'SaveNLoad/js/manageGames.js' %}
         {% include 'SaveNLoad/js/saveLoad.js' %}
     </script>

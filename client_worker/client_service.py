@@ -9,7 +9,8 @@ import time
 import requests
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 from ftp_client import FTPClient
 
@@ -89,9 +90,9 @@ class ClientWorkerService:
     
     
     def save_game(self, game_id: int, local_save_path: str, 
-                 username: str, game_name: str) -> Dict[str, Any]:
+                 username: str, game_name: str, save_folder_number: int) -> Dict[str, Any]:
         """Save game - backup from local PC to FTP"""
-        logger.info(f"Saving game {game_id} from {local_save_path}")
+        logger.info(f"Saving game {game_id} from {local_save_path} to save_folder {save_folder_number}")
         
         if not os.path.exists(local_save_path):
             return {
@@ -104,11 +105,16 @@ class ClientWorkerService:
                 uploaded_files = []
                 failed_files = []
                 
-                # Count files first for logging
-                file_count = 0
+                # Collect all files first
+                file_list = []
                 for root, dirs, files in os.walk(local_save_path):
-                    file_count += len(files)
+                    for filename in files:
+                        local_file = os.path.join(root, filename)
+                        rel_path = os.path.relpath(local_file, local_save_path)
+                        remote_filename = rel_path.replace('\\', '/')
+                        file_list.append((local_file, remote_filename))
                 
+                file_count = len(file_list)
                 logger.info(f"Found {file_count} file(s) in {local_save_path}")
                 
                 if file_count == 0:
@@ -118,27 +124,44 @@ class ClientWorkerService:
                         'error': f'No files found in directory: {local_save_path}'
                     }
                 
-                for root, dirs, files in os.walk(local_save_path):
-                    for filename in files:
-                        local_file = os.path.join(root, filename)
-                        rel_path = os.path.relpath(local_file, local_save_path)
-                        remote_filename = rel_path.replace('\\', '/')
-                        
-                        logger.info(f"Uploading file: {local_file} -> {remote_filename}")
-                        
+                # Process files in parallel batches (max 50 at a time)
+                MAX_WORKERS = min(50, file_count)
+                logger.info(f"Processing {file_count} file(s) with {MAX_WORKERS} parallel workers")
+                
+                def upload_file(file_info: Tuple[str, str]) -> Tuple[bool, str, str]:
+                    """Upload a single file - returns (success, remote_filename, message)"""
+                    local_file, remote_filename = file_info
+                    try:
                         success, message = self.ftp_client.upload_save(
                             username=username,
                             game_name=game_name,
                             local_file_path=local_file,
+                            folder_number=save_folder_number,
                             remote_filename=remote_filename
                         )
-                        
-                        if success:
-                            uploaded_files.append(remote_filename)
-                            logger.info(f"Uploaded: {remote_filename}")
-                        else:
-                            failed_files.append({'file': remote_filename, 'error': message})
-                            logger.error(f"Failed to upload {remote_filename}: {message}")
+                        return (success, remote_filename, message)
+                    except Exception as e:
+                        logger.error(f"Exception uploading {remote_filename}: {e}")
+                        return (False, remote_filename, str(e))
+                
+                # Process files in parallel
+                with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                    future_to_file = {executor.submit(upload_file, file_info): file_info[1] 
+                                     for file_info in file_list}
+                    
+                    for future in as_completed(future_to_file):
+                        remote_filename = future_to_file[future]
+                        try:
+                            success, remote_filename, message = future.result()
+                            if success:
+                                uploaded_files.append(remote_filename)
+                                logger.info(f"Uploaded: {remote_filename}")
+                            else:
+                                failed_files.append({'file': remote_filename, 'error': message})
+                                logger.error(f"Failed to upload {remote_filename}: {message}")
+                        except Exception as e:
+                            failed_files.append({'file': remote_filename, 'error': str(e)})
+                            logger.error(f"Exception processing {remote_filename}: {e}")
                 
                 if failed_files:
                     return {
@@ -157,7 +180,8 @@ class ClientWorkerService:
                 success, message = self.ftp_client.upload_save(
                     username=username,
                     game_name=game_name,
-                    local_file_path=local_save_path
+                    local_file_path=local_save_path,
+                    folder_number=save_folder_number
                 )
                 
                 if success:
@@ -172,15 +196,15 @@ class ClientWorkerService:
             return {'success': False, 'error': f'Save operation failed: {str(e)}'}
     
     def load_game(self, game_id: int, local_save_path: str,
-                 username: str, game_name: str, save_folder_number: Optional[int] = None) -> Dict[str, Any]:
+                 username: str, game_name: str, save_folder_number: int) -> Dict[str, Any]:
         """Load game - download from FTP to local PC"""
-        logger.info(f"Loading game {game_id} to {local_save_path}")
+        logger.info(f"Loading game {game_id} to {local_save_path} from save_folder {save_folder_number}")
         
         try:
             success, files, message = self.ftp_client.list_saves(
                 username=username,
                 game_name=game_name,
-                save_folder_number=save_folder_number
+                folder_number=save_folder_number
             )
             
             logger.info(f"List saves result: success={success}, files_count={len(files) if files else 0}, message={message}")
@@ -221,6 +245,8 @@ class ClientWorkerService:
             
             logger.info(f"Downloading {len(files)} file(s) to directory: {local_save_path}")
             
+            # Prepare file list and create directories first
+            file_list = []
             for file_info in files:
                 remote_filename = file_info['name']
                 
@@ -238,22 +264,46 @@ class ClientWorkerService:
                     # Simple filename, no subdirectories
                     local_file = os.path.join(local_save_path, remote_filename)
                 
-                logger.info(f"Downloading {remote_filename} to {local_file}")
+                file_list.append((remote_filename, local_file))
+            
+            # Process files in parallel batches (max 50 at a time)
+            MAX_WORKERS = min(50, len(file_list))
+            logger.info(f"Processing {len(file_list)} file(s) with {MAX_WORKERS} parallel workers")
+            
+            def download_file(file_info: Tuple[str, str]) -> Tuple[bool, str, str]:
+                """Download a single file - returns (success, remote_filename, message)"""
+                remote_filename, local_file = file_info
+                try:
+                    success, message = self.ftp_client.download_save(
+                        username=username,
+                        game_name=game_name,
+                        remote_filename=remote_filename,
+                        local_file_path=local_file,
+                        folder_number=save_folder_number
+                    )
+                    return (success, remote_filename, message)
+                except Exception as e:
+                    logger.error(f"Exception downloading {remote_filename}: {e}")
+                    return (False, remote_filename, str(e))
+            
+            # Process files in parallel
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                future_to_file = {executor.submit(download_file, file_info): file_info[0] 
+                                 for file_info in file_list}
                 
-                success, message = self.ftp_client.download_save(
-                    username=username,
-                    game_name=game_name,
-                    remote_filename=remote_filename,
-                    local_file_path=local_file,
-                    save_folder_number=save_folder_number
-                )
-                
-                if success:
-                    downloaded_files.append(remote_filename)
-                    logger.info(f"Downloaded: {remote_filename}")
-                else:
-                    failed_files.append({'file': remote_filename, 'error': message})
-                    logger.error(f"Failed to download {remote_filename}: {message}")
+                for future in as_completed(future_to_file):
+                    remote_filename = future_to_file[future]
+                    try:
+                        success, remote_filename, message = future.result()
+                        if success:
+                            downloaded_files.append(remote_filename)
+                            logger.info(f"Downloaded: {remote_filename}")
+                        else:
+                            failed_files.append({'file': remote_filename, 'error': message})
+                            logger.error(f"Failed to download {remote_filename}: {message}")
+                    except Exception as e:
+                        failed_files.append({'file': remote_filename, 'error': str(e)})
+                        logger.error(f"Exception processing {remote_filename}: {e}")
             
             if failed_files:
                 return {
@@ -303,6 +353,23 @@ class ClientWorkerService:
             logger.error(f"Failed to send heartbeat: {e}")
             return False
     
+    def unregister_from_server(self, client_id: str) -> bool:
+        """Unregister this client from the Django server (called on shutdown)"""
+        try:
+            response = self.session.post(
+                f"{self.server_url}/api/client/unregister/",
+                json={'client_id': client_id}
+            )
+            if response.status_code == 200:
+                logger.info(f"Successfully unregistered from server: {client_id}")
+                return True
+            else:
+                logger.warning(f"Unregistration failed: {response.status_code} - {response.text}")
+                return False
+        except Exception as e:
+            logger.error(f"Failed to unregister from server: {e}")
+            return False
+    
     def run(self):
         """Run the service (polling mode)"""
         logger.info("Starting Client Worker Service...")
@@ -350,7 +417,9 @@ class ClientWorkerService:
                     client_id_file.write_text(client_id)
         
         # Register with server
-        self.register_with_server(client_id)
+        if not self.register_with_server(client_id):
+            logger.error("Failed to register with server. Exiting.")
+            return
         
         logger.info(f"Client Worker Service running (ID: {client_id})")
         logger.info(f"Polling server every {self.poll_interval} seconds...")
@@ -377,6 +446,12 @@ class ClientWorkerService:
         except KeyboardInterrupt:
             logger.info("Shutting down Client Worker Service...")
             self.running = False
+        finally:
+            # Unregister on shutdown
+            try:
+                self.unregister_from_server(client_id)
+            except Exception as e:
+                logger.error(f"Error unregistering on shutdown: {e}")
     
     def _process_operation(self, operation: Dict[str, Any]):
         """Process a pending operation from the server"""
@@ -391,8 +466,12 @@ class ClientWorkerService:
         logger.info(f"Processing operation {operation_id}: {op_type} for game {game_id}")
         logger.info(f"Operation details: username={username}, game_name={game_name}, local_path={local_path}, save_folder={save_folder_number}")
         
+        if save_folder_number is None:
+            logger.error(f"Operation {operation_id} missing save_folder_number")
+            return
+        
         if op_type == 'save':
-            result = self.save_game(game_id, local_path, username, game_name)
+            result = self.save_game(game_id, local_path, username, game_name, save_folder_number)
         elif op_type == 'load':
             result = self.load_game(game_id, local_path, username, game_name, save_folder_number)
         else:
@@ -423,11 +502,20 @@ def main():
     """Main entry point"""
     import argparse
     
+    # Check for server URL in environment variable first
+    server_url = os.getenv('SAVENLOAD_SERVER_URL', '').strip()
+    
     parser = argparse.ArgumentParser(description='SaveNLoad Client Worker Service')
-    parser.add_argument('--server', required=True, help='Django server URL')
+    parser.add_argument('--server', default=server_url, 
+                       help='Django server URL (defaults to SAVENLOAD_SERVER_URL env var)')
     parser.add_argument('--poll-interval', type=int, default=5, help='Poll interval in seconds')
     
     args = parser.parse_args()
+    
+    if not args.server:
+        logger.error("Server URL is required. Set SAVENLOAD_SERVER_URL environment variable or use --server argument.")
+        parser.print_help()
+        sys.exit(1)
     
     try:
         service = ClientWorkerService(args.server, args.poll_interval)

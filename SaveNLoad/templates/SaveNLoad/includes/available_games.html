@@ -12,8 +12,11 @@
             {% endfor %}
         {% else %}
             <!-- Fallback if no games are available -->
-            <div class="col-12 col-sm-6 col-md-4 col-lg-3">
-                {% include 'SaveNLoad/components/card.html' with title="No games available" footer="Add games from Settings" image="" card_height='320px' card_padding='3' card_title_tag='h5' card_title_mb='1' card_title_size='1.1rem' card_footer_size='0.85rem' footer_icon='folder' %}
+            <div class="col-12">
+                <div class="text-center py-5">
+                    <p class="text-white-50 mb-2">No games available</p>
+                    <p class="text-white-50 small">Add games from Settings</p>
+                </div>
             </div>
         {% endif %}
     </div>
