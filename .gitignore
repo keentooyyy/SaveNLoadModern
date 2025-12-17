@@ -48,9 +48,11 @@ yarn-error.log*
 package-lock.json
 
 # Environment variables
+# Ignore all .env files (contains sensitive secrets)
 .env
 .env.local
 .env.*.local
+client_worker/.env
 
 # IDE
 .vscode/
@@ -107,5 +109,3 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
-
-.env
