@@ -448,35 +448,6 @@ document.addEventListener('DOMContentLoaded', function () {
     };
     loadSaveFoldersRef = loadSaveFolders; // Store reference
 
-    // Helper function to get the next z-index for modal stacking
-    function getNextModalZIndex() {
-        // Bootstrap default: modal = 1050, backdrop = 1040
-        let maxZIndex = 1050;
-        
-        // Find all existing modals and backdrops
-        const existingModals = document.querySelectorAll('.modal.show, .modal[style*="z-index"]');
-        const existingBackdrops = document.querySelectorAll('.modal-backdrop');
-        
-        // Check modal z-indexes
-        existingModals.forEach(modal => {
-            const zIndex = parseInt(window.getComputedStyle(modal).zIndex) || 0;
-            if (zIndex > maxZIndex) {
-                maxZIndex = zIndex;
-            }
-        });
-        
-        // Check backdrop z-indexes
-        existingBackdrops.forEach(backdrop => {
-            const zIndex = parseInt(window.getComputedStyle(backdrop).zIndex) || 0;
-            if (zIndex > maxZIndex) {
-                maxZIndex = zIndex;
-            }
-        });
-        
-        // Return next z-index (increment by 10 for proper stacking)
-        return maxZIndex + 10;
-    }
-
     // Shared function to create progress modal matching app aesthetics
     function createProgressModal(operationId, title, operationType = 'operation') {
         const modalId = `progressModal_${operationId}`;
@@ -1093,35 +1064,7 @@ document.addEventListener('DOMContentLoaded', function () {
         
         const url = window.DELETE_ALL_SAVES_URL_PATTERN.replace('0', gameId);
         
-        // Show loading toast
-        function showToast(message, type = 'info') {
-            const toast = document.createElement('div');
-            const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-            toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
-            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-            
-            const messageText = document.createTextNode(message);
-            toast.appendChild(messageText);
-            
-            const closeBtn = document.createElement('button');
-            closeBtn.type = 'button';
-            closeBtn.className = 'btn-close';
-            closeBtn.setAttribute('data-bs-dismiss', 'alert');
-            closeBtn.setAttribute('aria-label', 'Close');
-            toast.appendChild(closeBtn);
-            
-            document.body.appendChild(toast);
-
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    toast.remove();
-                }
-            }, 5000);
-        }
-        
         try {
-            showToast('Deleting all saves... Please wait.', 'info');
-            
             const response = await fetch(url, {
                 method: 'DELETE',
                 headers: {
@@ -1134,19 +1077,123 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await response.json();
             
             if (!response.ok || !data.success) {
+                // Show toast notification
+                function showToast(message, type = 'info') {
+                    const toast = document.createElement('div');
+                    const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+                    toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
+                    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+                    
+                    const messageText = document.createTextNode(message);
+                    toast.appendChild(messageText);
+                    
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn-close';
+                    closeBtn.setAttribute('data-bs-dismiss', 'alert');
+                    closeBtn.setAttribute('aria-label', 'Close');
+                    toast.appendChild(closeBtn);
+                    
+                    document.body.appendChild(toast);
+
+                    setTimeout(() => {
+                        if (toast.parentNode) {
+                            toast.remove();
+                        }
+                    }, 5000);
+                }
                 showToast(data.error || 'Failed to delete all saves', 'error');
                 return;
             }
             
-            showToast(data.message || 'All saves deleted successfully!', 'success');
-            
-            // Reload the saves list
-            loadSaveFolders(gameId);
+            // If operation IDs are returned, show progress modal and poll
+            if (data.operation_ids && data.operation_ids.length > 0) {
+                // Use the first operation ID for progress tracking
+                // All operations will be processed in parallel by the client worker
+                const firstOperationId = data.operation_ids[0];
+                const totalCount = data.total_count || data.operation_ids.length;
+                
+                // Show progress modal and poll for status
+                const modalData = createProgressModal(firstOperationId, `Deleting All Saves (${totalCount} folder${totalCount > 1 ? 's' : ''})`, 'delete');
+                pollOperationStatus(
+                    firstOperationId,
+                    modalData,
+                    () => {
+                        // Check if all operations are complete
+                        checkAllOperationsComplete(data.operation_ids, gameId);
+                    },
+                    () => {
+                        // On error, still check if others completed
+                        checkAllOperationsComplete(data.operation_ids, gameId);
+                    }
+                );
+            } else {
+                // Fallback: no operation IDs, show toast
+                function showToast(message, type = 'info') {
+                    const toast = document.createElement('div');
+                    const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+                    toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
+                    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+                    
+                    const messageText = document.createTextNode(message);
+                    toast.appendChild(messageText);
+                    
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn-close';
+                    closeBtn.setAttribute('data-bs-dismiss', 'alert');
+                    closeBtn.setAttribute('aria-label', 'Close');
+                    toast.appendChild(closeBtn);
+                    
+                    document.body.appendChild(toast);
+
+                    setTimeout(() => {
+                        if (toast.parentNode) {
+                            toast.remove();
+                        }
+                    }, 5000);
+                }
+                showToast(data.message || 'All saves deleted successfully!', 'success');
+                loadSaveFolders(gameId);
+            }
             
         } catch (error) {
             console.error('Error deleting all saves:', error);
+            function showToast(message, type = 'info') {
+                const toast = document.createElement('div');
+                const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+                toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
+                toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+                
+                const messageText = document.createTextNode(message);
+                toast.appendChild(messageText);
+                
+                const closeBtn = document.createElement('button');
+                closeBtn.type = 'button';
+                closeBtn.className = 'btn-close';
+                closeBtn.setAttribute('data-bs-dismiss', 'alert');
+                closeBtn.setAttribute('aria-label', 'Close');
+                toast.appendChild(closeBtn);
+                
+                document.body.appendChild(toast);
+
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.remove();
+                    }
+                }, 5000);
+            }
             showToast('Error: Failed to delete all saves. Please try again.', 'error');
         }
+    }
+    
+    // Helper function to check if all delete operations are complete
+    async function checkAllOperationsComplete(operationIds, gameId) {
+        // Reload the saves list to reflect changes
+        loadSaveFolders(gameId);
+        
+        // Optional: Check all operation statuses (for debugging)
+        // For now, just reload the list - if saves are gone, operations completed
     }
 });
 

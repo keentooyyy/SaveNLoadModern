@@ -632,27 +632,24 @@ def delete_all_saves(request, game_id):
         if not client_worker:
             return json_response_error('No active client worker available', status=503)
         
-        # Delete each save folder
-        deleted_count = 0
-        failed_count = 0
-        errors = []
+        # Create DELETE operations for all save folders
+        operation_ids = []
+        invalid_folders = []
         
         for save_folder in save_folders:
             try:
                 # Validate save folder has required information
                 if not save_folder.folder_number:
                     logger.warning(f'Save folder {save_folder.id} missing folder_number, skipping')
-                    save_folder.delete()  # Delete from database anyway
-                    deleted_count += 1
+                    invalid_folders.append(save_folder)
                     continue
                 
                 if not save_folder.ftp_path:
                     logger.warning(f'Save folder {save_folder.id} missing ftp_path, skipping')
-                    save_folder.delete()  # Delete from database anyway
-                    deleted_count += 1
+                    invalid_folders.append(save_folder)
                     continue
                 
-                # Create DELETE operation
+                # Create DELETE operation (will be processed by client worker)
                 operation = OperationQueue.create_operation(
                     operation_type=OperationType.DELETE,
                     user=user,
@@ -662,55 +659,34 @@ def delete_all_saves(request, game_id):
                     ftp_path=save_folder.ftp_path,
                     client_worker=client_worker
                 )
-                
-                # Wait for operation to complete (with shorter timeout per folder)
-                import time
-                timeout = 30  # 30 seconds per folder
-                start_time = time.time()
-                
-                while operation.status in [OperationStatus.PENDING, OperationStatus.IN_PROGRESS]:
-                    if time.time() - start_time > timeout:
-                        # Delete from database anyway
-                        save_folder.delete()
-                        deleted_count += 1
-                        errors.append(f'Save folder {save_folder.folder_number} timed out but removed from database')
-                        break
-                    time.sleep(0.5)
-                    operation.refresh_from_db()
-                
-                # Delete from database
-                save_folder.delete()
-                
-                if operation.status == OperationStatus.COMPLETED:
-                    deleted_count += 1
-                else:
-                    deleted_count += 1  # Still deleted from database
-                    error_msg = operation.error_message or 'Delete operation failed'
-                    errors.append(f'Save folder {save_folder.folder_number}: {error_msg}')
+                operation_ids.append(operation.id)
                     
             except Exception as e:
-                logger.error(f"Failed to delete save folder {save_folder.folder_number}: {e}")
-                failed_count += 1
-                errors.append(f'Save folder {save_folder.folder_number}: {str(e)}')
-                # Try to delete from database anyway
-                try:
-                    save_folder.delete()
-                except:
-                    pass
+                logger.error(f"Failed to create delete operation for save folder {save_folder.folder_number}: {e}")
+                invalid_folders.append(save_folder)
         
-        if failed_count == 0 and not errors:
-            return json_response_success(
-                message=f'All {deleted_count} save folder(s) deleted successfully'
-            )
-        elif deleted_count > 0:
-            error_summary = '; '.join(errors[:3])  # Show first 3 errors
-            if len(errors) > 3:
-                error_summary += f' (and {len(errors) - 3} more)'
-            return json_response_success(
-                message=f'Deleted {deleted_count} save folder(s). Some errors occurred: {error_summary}'
-            )
-        else:
-            return json_response_error(f'Failed to delete save folders: {"; ".join(errors)}', status=500)
+        # Delete invalid folders from database immediately
+        for save_folder in invalid_folders:
+            try:
+                save_folder.delete()
+            except:
+                pass
+        
+        if not operation_ids:
+            if invalid_folders:
+                return json_response_error('No valid save folders found to delete', status=404)
+            return json_response_error('No save folders found for this game', status=404)
+        
+        # Return operation IDs - frontend will poll for status
+        # Save folders will be deleted from database when operations complete successfully
+        return json_response_success(
+            message=f'Delete operations queued for {len(operation_ids)} save folder(s)',
+            data={
+                'operation_ids': operation_ids,
+                'total_count': len(operation_ids),
+                'client_id': client_worker.client_id
+            }
+        )
         
     except Exception as e:
         logger.error(f"Failed to delete all saves: {e}")

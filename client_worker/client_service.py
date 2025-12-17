@@ -23,7 +23,7 @@ load_dotenv()
 class ClientWorkerService:
     """Service that runs on client PC to handle save/load operations"""
     
-    def __init__(self, server_url: str, poll_interval: int = 1):
+    def __init__(self, server_url: str, poll_interval: int = 5):
         """
         Initialize client worker service
         
@@ -1132,7 +1132,7 @@ def main():
     parser = argparse.ArgumentParser(description='SaveNLoad Client Worker Service')
     parser.add_argument('--server', default=server_url, 
                        help='Django server URL (defaults to SAVENLOAD_SERVER_URL env var)')
-    parser.add_argument('--poll-interval', type=int, default=1, help='Poll interval in seconds')
+    parser.add_argument('--poll-interval', type=int, default=5, help='Poll interval in seconds')
     
     args = parser.parse_args()
     
