@@ -6,13 +6,19 @@
     document.addEventListener('DOMContentLoaded', function() {
         loadStats();
         
-        // Setup accordion chevron rotation
+        // Setup accordion chevron rotation and highlight
         const collapseElement = document.getElementById('operationQueueCollapse');
+        const headerButton = document.querySelector('[data-bs-target="#operationQueueCollapse"]');
+        
         if (collapseElement) {
             collapseElement.addEventListener('show.bs.collapse', function() {
                 const chevron = document.getElementById('operationQueueChevron');
                 if (chevron) {
                     chevron.style.transform = 'rotate(90deg)';
+                }
+                // Add highlight effect
+                if (headerButton) {
+                    headerButton.classList.add('active');
                 }
             });
             
@@ -20,6 +26,10 @@
                 const chevron = document.getElementById('operationQueueChevron');
                 if (chevron) {
                     chevron.style.transform = 'rotate(0deg)';
+                }
+                // Remove highlight effect
+                if (headerButton) {
+                    headerButton.classList.remove('active');
                 }
             });
         }

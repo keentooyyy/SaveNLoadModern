@@ -332,9 +332,33 @@ body {
     }
 }
 
-/* Accordion header styles for Add Game and Account Settings */
+/* Mobile: Give more space to search input */
+@media (max-width: 767.98px) {
+    #gameSearchSortCollapse {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+    
+    #gameSearchInput {
+        width: 100% !important;
+    }
+    
+    #gameSortSelect {
+        width: auto !important;
+        min-width: 180px !important;
+        flex-shrink: 0 !important;
+    }
+    
+    #availableGamesSection {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+}
+
+/* Accordion header styles for Add Game, Account Settings, and Operation Queue */
 .add-game-header,
-.account-settings-header {
+.account-settings-header,
+.operation-queue-header {
     cursor: pointer;
     transition: all 0.3s ease;
 }
@@ -344,7 +368,10 @@ body {
 .add-game-header .add-game-chevron,
 .account-settings-header .account-settings-icon,
 .account-settings-header .account-settings-title,
-.account-settings-header .account-settings-chevron {
+.account-settings-header .account-settings-chevron,
+.operation-queue-header .operation-queue-icon,
+.operation-queue-header .operation-queue-title,
+.operation-queue-header .operation-queue-chevron {
     transition: all 0.3s ease;
 }
 
@@ -353,7 +380,10 @@ body {
 .add-game-header.active .add-game-chevron,
 .account-settings-header.active .account-settings-icon,
 .account-settings-header.active .account-settings-title,
-.account-settings-header.active .account-settings-chevron {
+.account-settings-header.active .account-settings-chevron,
+.operation-queue-header.active .operation-queue-icon,
+.operation-queue-header.active .operation-queue-title,
+.operation-queue-header.active .operation-queue-chevron {
     color: #5A8DEE !important;
 }
 

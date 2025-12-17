@@ -12,15 +12,13 @@
         
         if (collapseElement && chevron && headerButton) {
             collapseElement.addEventListener('show.bs.collapse', function() {
-                chevron.classList.remove('fa-chevron-right');
-                chevron.classList.add('fa-chevron-down');
+                chevron.style.transform = 'rotate(90deg)';
                 // Add highlight effect
                 headerButton.classList.add('active');
             });
             
             collapseElement.addEventListener('hide.bs.collapse', function() {
-                chevron.classList.remove('fa-chevron-down');
-                chevron.classList.add('fa-chevron-right');
+                chevron.style.transform = 'rotate(0deg)';
                 // Remove highlight effect
                 headerButton.classList.remove('active');
             });

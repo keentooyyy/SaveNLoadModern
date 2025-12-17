@@ -215,25 +215,30 @@ def forgot_password(request):
             if not email:
                 return json_response_error('Please enter a valid email address.', status=400)
             
-            # Check if user exists with this email
+            # Check if user exists with this email - ONLY send OTP to registered emails
             try:
                 user = SimpleUsers.objects.get(email__iexact=email)
             except SimpleUsers.DoesNotExist:
-                # Don't reveal if email exists or not (security best practice)
-                return json_response_success(
-                    message='If an account with that email exists, an OTP code has been sent.'
+                # User doesn't exist - return error message
+                return json_response_error(
+                    'Email not found. This email address is not registered. Please check your email or create an account.',
+                    status=404
                 )
             
-            # Generate OTP
+            # User exists - verify we're using the registered email (not the input)
+            # This ensures we only send to the exact email stored in the database
+            registered_email = user.email
+            
+            # Generate OTP using the registered email
             try:
-                otp = PasswordResetOTP.generate_otp(user, email, expiry_minutes=10)
+                otp = PasswordResetOTP.generate_otp(user, registered_email, expiry_minutes=10)
                 
-                # Send OTP via email
-                email_sent = send_otp_email(email, otp.otp_code, user.username)
+                # Send OTP via email - ONLY to the registered email address
+                email_sent = send_otp_email(registered_email, otp.otp_code, user.username)
                 
                 if email_sent:
-                    # Store email in session for OTP verification step
-                    request.session['password_reset_email'] = email
+                    # Store registered email in session for OTP verification step
+                    request.session['password_reset_email'] = registered_email
                     request.session['password_reset_user_id'] = user.id
                     # Clear any previous OTP verification
                     request.session.pop('password_reset_otp_verified', None)
@@ -242,7 +247,7 @@ def forgot_password(request):
                         message='OTP code has been sent to your email address. Please check your inbox.'
                     )
                 else:
-                    logger.error(f"Failed to send OTP email to {email}")
+                    logger.error(f"Failed to send OTP email to registered email: {registered_email}")
                     return json_response_error(
                         'Failed to send email. Please try again later.',
                         status=500
@@ -288,11 +293,13 @@ def verify_otp(request):
             action = data.get('action', 'verify')
             
             if action == 'resend':
-                # Resend OTP
+                # Resend OTP - only to registered email
                 try:
                     user = SimpleUsers.objects.get(email__iexact=email)
-                    otp = PasswordResetOTP.generate_otp(user, email, expiry_minutes=10)
-                    email_sent = send_otp_email(email, otp.otp_code, user.username)
+                    # Use the registered email from database, not the session email
+                    registered_email = user.email
+                    otp = PasswordResetOTP.generate_otp(user, registered_email, expiry_minutes=10)
+                    email_sent = send_otp_email(registered_email, otp.otp_code, user.username)
                     
                     if email_sent:
                         return json_response_success(

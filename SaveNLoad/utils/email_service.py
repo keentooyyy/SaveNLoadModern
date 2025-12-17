@@ -31,25 +31,6 @@ def send_otp_email(email: str, otp_code: str, username: str = None) -> bool:
             logger.error("Email configuration is missing. Please set GMAIL_USER and GMAIL_APP_PASSWORD in environment variables.")
             return False
         
-        # Create plain text version
-        if username:
-            greeting = f"Hello {username},"
-        else:
-            greeting = "Hello,"
-        
-        plain_message = f"""{greeting}
-
-You have requested to reset your password for your Save N Load account.
-
-Your OTP code is: {otp_code}
-
-This code will expire in 10 minutes.
-
-If you did not request this password reset, please ignore this email.
-
-Best regards,
-Save N Load Team"""
-        
         # Get icon URL from external hosting (imgbb, imgur, etc.)
         # Set EMAIL_ICON_URL in environment variables with the full URL to your hosted icon
         # Example: https://i.ibb.co/xxxxx/icon.png
@@ -75,16 +56,16 @@ Save N Load Team"""
             }
         )
         
-        # Create email message
+        # Create email message with HTML content
         msg = EmailMultiAlternatives(
             subject=subject,
-            body=plain_message,
+            body=html_message,  # Use HTML as body
             from_email=from_email,
             to=[email]
         )
         
-        # Attach HTML version
-        msg.attach_alternative(html_message, "text/html")
+        # Set content type to HTML
+        msg.content_subtype = "html"
         
         # Send email
         msg.send()

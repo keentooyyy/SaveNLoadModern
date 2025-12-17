@@ -4,6 +4,35 @@
 (function() {
     'use strict';
     
+    // Show toast notification (XSS-safe)
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `alert alert-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} alert-dismissible fade show position-fixed`;
+        toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        
+        // Use textContent for message to prevent XSS
+        const messageSpan = document.createElement('span');
+        messageSpan.textContent = message;
+        toast.appendChild(messageSpan);
+        
+        // Create close button safely
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'btn-close';
+        closeBtn.setAttribute('data-bs-dismiss', 'alert');
+        closeBtn.setAttribute('aria-label', 'Close');
+        toast.appendChild(closeBtn);
+        
+        document.body.appendChild(toast);
+
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.remove();
+            }
+        }, 5000);
+    }
+    
     const forgotPasswordForm = document.getElementById('forgotPasswordForm');
     const sendOtpBtn = document.getElementById('sendOtpBtn');
     
@@ -13,7 +42,7 @@
             
             const csrfToken = document.querySelector('[name="csrfmiddlewaretoken"]')?.value;
             if (!csrfToken) {
-                alert('Error: CSRF token not found');
+                showToast('Error: CSRF token not found', 'error');
                 return;
             }
             
@@ -72,20 +101,25 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    // Redirect to verify OTP page
-                    window.location.href = '{% url "SaveNLoad:verify_otp" %}';
+                    // Email was sent successfully - redirect to verify OTP page
+                    showToast(data.message || 'OTP code has been sent to your email address. Please check your inbox.', 'success');
+                    // Small delay before redirect to show toast
+                    setTimeout(() => {
+                        window.location.href = '{% url "SaveNLoad:verify_otp" %}';
+                    }, 1000);
                 } else {
+                    // Show error message
                     const errorMsg = data.error || data.message || 'Failed to send OTP. Please try again.';
                     if (emailError) {
                         emailError.textContent = errorMsg;
                         emailError.style.display = 'block';
                     } else {
-                        alert(errorMsg);
+                        showToast(errorMsg, 'error');
                     }
                 }
             } catch (error) {
                 console.error('Error sending OTP:', error);
-                alert('Error: Failed to send OTP. Please try again.');
+                showToast('Error: Failed to send OTP. Please try again.', 'error');
             } finally {
                 sendOtpBtn.disabled = false;
                 sendOtpBtn.textContent = '';
