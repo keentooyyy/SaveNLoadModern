@@ -7,6 +7,7 @@ import sys
 import json
 import time
 import requests
+import webbrowser
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -61,7 +62,7 @@ class ClientWorkerService:
             password=ftp_password
         )
         
-        print("INFO: Client Worker Service initialized")
+        print("Client Worker Service ready")
     
     def check_permissions(self) -> bool:
         """Check if we have necessary permissions to access files"""
@@ -72,14 +73,14 @@ class ClientWorkerService:
                 test_path.stat()  # This will raise if no permission
             return True
         except PermissionError:
-            print("WARNING: Insufficient permissions to access files")
+            print("Warning: Insufficient file permissions")
             return False
     
     
     def save_game(self, game_id: int, local_save_path: str, 
                  username: str, game_name: str, save_folder_number: int, ftp_path: Optional[str] = None) -> Dict[str, Any]:
         """Save game - backup from local PC to FTP"""
-        print(f"INFO: Saving game {game_id} from {local_save_path} to save_folder {save_folder_number}")
+        print(f"Backing up save files...")
         
         if not os.path.exists(local_save_path):
             return {
@@ -113,7 +114,6 @@ class ClientWorkerService:
                 
                 # Create empty directories first
                 if dir_list:
-                    print(f"INFO: Found {len(dir_list)} directory(ies) to create")
                     for remote_dir_path in sorted(dir_list):  # Sort to create parent dirs first
                         try:
                             self.ftp_client.create_directory(
@@ -123,15 +123,13 @@ class ClientWorkerService:
                                 remote_dir_path=remote_dir_path,
                                 ftp_path=ftp_path
                             )
-                        except Exception as e:
-                            print(f"WARNING: Failed to create directory {remote_dir_path}: {e}")
+                        except Exception:
                             # Continue anyway - directory might already exist or be created by file upload
+                            pass
                 
                 file_count = len(file_list)
-                print(f"INFO: Found {file_count} file(s) in {local_save_path}")
                 
                 if file_count == 0:
-                    print(f"WARNING: No files found in directory: {local_save_path}")
                     return {
                         'success': False,
                         'error': f'No files found in directory: {local_save_path}'
@@ -139,7 +137,7 @@ class ClientWorkerService:
                 
                 # Process files in parallel batches (max 50 at a time)
                 MAX_WORKERS = min(50, file_count)
-                print(f"INFO: Processing {file_count} file(s) with {MAX_WORKERS} parallel workers")
+                print(f"Uploading {file_count} file(s)...")
                 
                 def upload_file(file_info: Tuple[str, str]) -> Tuple[bool, str, str]:
                     """Upload a single file - returns (success, remote_filename, message)"""
@@ -169,13 +167,10 @@ class ClientWorkerService:
                             success, remote_filename, message = future.result()
                             if success:
                                 uploaded_files.append(remote_filename)
-                                print(f"INFO: Uploaded: {remote_filename}")
                             else:
                                 failed_files.append({'file': remote_filename, 'error': message})
-                                print(f"ERROR: Failed to upload {remote_filename}: {message}")
                         except Exception as e:
                             failed_files.append({'file': remote_filename, 'error': str(e)})
-                            print(f"ERROR: Exception processing {remote_filename}: {e}")
                 
                 if failed_files:
                     return {
@@ -200,20 +195,18 @@ class ClientWorkerService:
                 )
                 
                 if success:
-                    print(f"INFO: Successfully saved: {message}")
                     return {'success': True, 'message': message}
                 else:
-                    print(f"ERROR: Save failed: {message}")
                     return {'success': False, 'error': message}
                     
         except Exception as e:
-            print(f"ERROR: Save operation failed: {e}")
+            print(f"Error: Save operation failed - {str(e)}")
             return {'success': False, 'error': f'Save operation failed: {str(e)}'}
     
     def load_game(self, game_id: int, local_save_path: str,
                  username: str, game_name: str, save_folder_number: int, ftp_path: Optional[str] = None) -> Dict[str, Any]:
         """Load game - download from FTP to local PC"""
-        print(f"INFO: Loading game {game_id} to {local_save_path} from save_folder {save_folder_number}")
+        print(f"Downloading save files...")
         
         try:
             success, files, directories, message = self.ftp_client.list_saves(
@@ -223,17 +216,13 @@ class ClientWorkerService:
                 ftp_path=ftp_path
             )
             
-            print(f"INFO: List saves result: success={success}, files_count={len(files) if files else 0}, dirs_count={len(directories) if directories else 0}, message={message}")
-            
             if not success:
-                print(f"ERROR: Failed to list saves: {message}")
                 return {
                     'success': False,
                     'error': f'Failed to list saves: {message}'
                 }
             
             if not files and not directories:
-                print(f"WARNING: No save files or directories found: {message}")
                 return {
                     'success': False,
                     'error': f'No save files or directories found: {message}'
@@ -248,14 +237,12 @@ class ClientWorkerService:
             if os.path.isfile(local_save_path):
                 # If it's a file, use its parent directory instead
                 local_save_path = os.path.dirname(local_save_path)
-                print(f"INFO: Path was a file, using parent directory: {local_save_path}")
             
             # Create the directory and all parent directories if they don't exist
             try:
                 os.makedirs(local_save_path, exist_ok=True)
-                print(f"INFO: Ensured directory exists (created if needed): {local_save_path}")
             except OSError as e:
-                print(f"ERROR: Failed to create directory {local_save_path}: {e}")
+                print(f"Error: Failed to create directory - {str(e)}")
                 return {
                     'success': False,
                     'error': f'Failed to create directory: {local_save_path} - {str(e)}'
@@ -270,16 +257,12 @@ class ClientWorkerService:
             
             # Create all directories first (including empty ones)
             if directories:
-                print(f"INFO: Creating {len(directories)} directory(ies)")
                 for remote_dir_path in sorted(directories):  # Sort to create parent dirs first
                     # Normalize path separators
                     remote_dir_normalized = remote_dir_path.replace('\\', '/')
                     # Create local directory structure
                     local_dir = os.path.join(local_save_path, *remote_dir_normalized.split('/'))
                     os.makedirs(local_dir, exist_ok=True)
-                    print(f"DEBUG: Created directory: {local_dir}")
-            
-            print(f"INFO: Downloading {len(files)} file(s) to directory: {local_save_path}")
             
             # Prepare file list
             file_list = []
@@ -300,7 +283,6 @@ class ClientWorkerService:
             
             # Process files in parallel batches (max 50 at a time)
             MAX_WORKERS = min(50, len(file_list))
-            print(f"INFO: Processing {len(file_list)} file(s) with {MAX_WORKERS} parallel workers")
             
             def download_file(file_info: Tuple[str, str]) -> Tuple[bool, str, str]:
                 """Download a single file - returns (success, remote_filename, message)"""
@@ -330,13 +312,10 @@ class ClientWorkerService:
                         success, remote_filename, message = future.result()
                         if success:
                             downloaded_files.append(remote_filename)
-                            print(f"INFO: Downloaded: {remote_filename}")
                         else:
                             failed_files.append({'file': remote_filename, 'error': message})
-                            print(f"ERROR: Failed to download {remote_filename}: {message}")
                     except Exception as e:
                         failed_files.append({'file': remote_filename, 'error': str(e)})
-                        print(f"ERROR: Exception processing {remote_filename}: {e}")
             
             if failed_files:
                 return {
@@ -346,7 +325,6 @@ class ClientWorkerService:
                     'failed_files': failed_files
                 }
             
-            print(f"INFO: Successfully loaded {len(downloaded_files)} file(s)")
             return {
                 'success': True,
                 'message': f'Successfully downloaded {len(downloaded_files)} file(s)',
@@ -354,13 +332,12 @@ class ClientWorkerService:
             }
                     
         except Exception as e:
-            print(f"ERROR: Load operation failed: {e}")
+            print(f"Error: Load operation failed - {str(e)}")
             return {'success': False, 'error': f'Load operation failed: {str(e)}'}
     
     def list_saves(self, game_id: int, username: str, game_name: str, 
                   save_folder_number: int, ftp_path: Optional[str] = None) -> Dict[str, Any]:
         """List all save files in a save folder"""
-        print(f"INFO: Listing saves for game {game_id}, save_folder {save_folder_number}")
         
         try:
             success, files, directories, message = self.ftp_client.list_saves(
@@ -389,7 +366,7 @@ class ClientWorkerService:
     def delete_save_folder(self, game_id: int, username: str, game_name: str,
                           save_folder_number: int, ftp_path: Optional[str] = None) -> Dict[str, Any]:
         """Delete a save folder from FTP"""
-        print(f"INFO: Deleting save folder {save_folder_number} for game {game_id}")
+        print(f"Deleting save folder...")
         
         if not ftp_path:
             return {
@@ -402,7 +379,6 @@ class ClientWorkerService:
             try:
                 # Check if path exists
                 if not ftp_host.path.exists(ftp_path) or not ftp_host.path.isdir(ftp_path):
-                    print(f"INFO: Save folder {ftp_path} doesn't exist on FTP")
                     return {
                         'success': True,
                         'message': f'Save folder {save_folder_number} doesn\'t exist on FTP (already deleted)'
@@ -419,17 +395,15 @@ class ClientWorkerService:
                                 delete_recursive(item_path)
                                 try:
                                     ftp_host.rmdir(item_path)
-                                    print(f"INFO: Deleted directory: {item_path}")
-                                except Exception as e:
-                                    print(f"WARNING: Could not delete directory {item_path}: {e}")
+                                except Exception:
+                                    pass
                             else:
                                 try:
                                     ftp_host.remove(item_path)
-                                    print(f"INFO: Deleted file: {item_path}")
-                                except Exception as e:
-                                    print(f"WARNING: Could not delete file {item_path}: {e}")
-                    except Exception as e:
-                        print(f"WARNING: Error listing directory {path}: {e}")
+                                except Exception:
+                                    pass
+                    except Exception:
+                        pass
                 
                 # Delete all contents
                 delete_recursive(ftp_path)
@@ -437,9 +411,7 @@ class ClientWorkerService:
                 # Delete the folder itself
                 try:
                     ftp_host.rmdir(ftp_path)
-                    print(f"INFO: Deleted save folder: {ftp_path}")
                 except Exception as e:
-                    print(f"WARNING: Could not delete folder {ftp_path}: {e}")
                     return {
                         'success': False,
                         'error': f'Failed to delete folder: {str(e)}'
@@ -452,7 +424,7 @@ class ClientWorkerService:
             finally:
                 ftp_host.close()
         except Exception as e:
-            print(f"ERROR: Delete operation failed: {e}")
+            print(f"Error: Delete operation failed - {str(e)}")
             return {'success': False, 'error': f'Delete operation failed: {str(e)}'}
     
     def register_with_server(self, client_id: str) -> bool:
@@ -463,13 +435,12 @@ class ClientWorkerService:
                 json={'client_id': client_id}
             )
             if response.status_code == 200:
-                print(f"INFO: Successfully registered with server as {client_id}")
                 return True
             else:
-                print(f"ERROR: Registration failed: {response.status_code} - {response.text}")
+                print(f"Error: Registration failed - {response.status_code}")
                 return False
         except Exception as e:
-            print(f"ERROR: Failed to register with server: {e}")
+            print(f"Error: Failed to register with server - {str(e)}")
             return False
     
     def send_heartbeat(self, client_id: str) -> bool:
@@ -480,8 +451,8 @@ class ClientWorkerService:
                 json={'client_id': client_id}
             )
             return response.status_code == 200
-        except Exception as e:
-            print(f"ERROR: Failed to send heartbeat: {e}")
+        except Exception:
+            return False
             return False
     
     def unregister_from_server(self, client_id: str) -> bool:
@@ -491,23 +462,18 @@ class ClientWorkerService:
                 f"{self.server_url}/api/client/unregister/",
                 json={'client_id': client_id}
             )
-            if response.status_code == 200:
-                print(f"INFO: Successfully unregistered from server: {client_id}")
-                return True
-            else:
-                print(f"WARNING: Unregistration failed: {response.status_code} - {response.text}")
-                return False
-        except Exception as e:
-            print(f"ERROR: Failed to unregister from server: {e}")
+            return response.status_code == 200
+        except Exception:
+            return False
             return False
     
     def run(self):
         """Run the service (polling mode)"""
-        print("INFO: Starting Client Worker Service...")
+        print("Starting Client Worker Service...")
         
         # Check permissions
         if not self.check_permissions():
-            print("WARNING: Insufficient permissions. You may need to run with elevated privileges.")
+            print("Warning: Insufficient permissions - you may need elevated privileges")
         
         self.running = True
         
@@ -549,14 +515,29 @@ class ClientWorkerService:
         
         # Register with server
         if not self.register_with_server(client_id):
-            print("ERROR: Failed to register with server. Exiting.")
+            print("Error: Failed to register with server. Exiting.")
             return
         
         # Store client_id
         self._current_client_id = client_id
         
-        print(f"INFO: Client Worker Service running (ID: {client_id})")
-        print(f"INFO: Polling server every {self.poll_interval} seconds...")
+        print(f"Connected to server")
+        print(f"Service running (checking for operations every {self.poll_interval} second(s))...")
+        
+        # Open server URL in default browser
+        browser_opened = False
+        try:
+            webbrowser.open(self.server_url)
+            browser_opened = True
+        except Exception:
+            pass
+        
+        # Show URL if browser didn't open or as backup
+        if not browser_opened:
+            print(f"\nServer URL: {self.server_url}")
+            print("(Copy the URL above to open in your browser)")
+        else:
+            print(f"\nServer URL: {self.server_url}")
         
         try:
             while self.running:
@@ -573,19 +554,19 @@ class ClientWorkerService:
                         operations = data.get('operations', [])
                         for op in operations:
                             self._process_operation(op)
-                except Exception as e:
-                    print(f"ERROR: Error polling server: {e}")
+                except Exception:
+                    pass
                 
                 time.sleep(self.poll_interval)
         except KeyboardInterrupt:
-            print("INFO: Shutting down Client Worker Service...")
+            print("\nShutting down...")
             self.running = False
         finally:
             # Unregister on shutdown
             try:
                 self.unregister_from_server(client_id)
-            except Exception as e:
-                print(f"ERROR: Error unregistering on shutdown: {e}")
+            except Exception:
+                pass
     
     def _process_operation(self, operation: Dict[str, Any]):
         """Process a pending operation from the server"""
@@ -598,12 +579,12 @@ class ClientWorkerService:
         save_folder_number = operation.get('save_folder_number')
         ftp_path = operation.get('ftp_path')
         
-        print(f"INFO: Processing operation {operation_id}: {op_type} for game {game_id}")
-        print(f"INFO: Operation details: username={username}, game_name={game_name}, local_path={local_path}, save_folder={save_folder_number}, ftp_path={ftp_path}")
+        op_type_display = op_type.capitalize()
+        print(f"\nProcessing: {op_type_display} operation for {game_name}")
         
         # save_folder_number is required for save/load/list/delete operations
         if op_type in ['save', 'load', 'list', 'delete'] and save_folder_number is None:
-            print(f"ERROR: Operation {operation_id} missing save_folder_number")
+            print(f"Error: Operation missing required information")
             return
         
         if op_type == 'save':
@@ -615,27 +596,25 @@ class ClientWorkerService:
         elif op_type == 'delete':
             result = self.delete_save_folder(game_id, username, game_name, save_folder_number, ftp_path)
         else:
-            print(f"ERROR: Unknown operation type: {op_type}")
+            print(f"Error: Unknown operation type")
             return
         
         # Log the result
         if result.get('success'):
-            print(f"INFO: Operation {operation_id} succeeded: {result.get('message', 'No message')}")
+            message = result.get('message', 'Operation completed successfully')
+            print(f"Success: {message}")
         else:
-            print(f"ERROR: Operation {operation_id} failed: {result.get('error', result.get('message', 'Unknown error'))}")
+            error = result.get('error', result.get('message', 'Unknown error'))
+            print(f"Error: {error}")
         
         # Report result back to server
         try:
-            response = self.session.post(
+            self.session.post(
                 f"{self.server_url}/api/client/complete/{operation_id}/",
                 json=result
             )
-            if response.status_code == 200:
-                print(f"INFO: Operation {operation_id} result reported to server successfully")
-            else:
-                print(f"ERROR: Failed to report operation result: {response.status_code} - {response.text}")
-        except Exception as e:
-            print(f"ERROR: Failed to report operation result: {e}")
+        except Exception:
+            pass
     
 
 def main():
@@ -653,7 +632,7 @@ def main():
     args = parser.parse_args()
     
     if not args.server:
-        print("ERROR: Server URL is required. Set SAVENLOAD_SERVER_URL environment variable or use --server argument.")
+        print("Error: Server URL is required. Set SAVENLOAD_SERVER_URL environment variable or use --server argument.")
         parser.print_help()
         sys.exit(1)
     
@@ -661,7 +640,7 @@ def main():
         service = ClientWorkerService(args.server, args.poll_interval)
         service.run()
     except Exception as e:
-        print(f"ERROR: Service failed: {e}")
+        print(f"Error: Service failed - {str(e)}")
         sys.exit(1)
 
 

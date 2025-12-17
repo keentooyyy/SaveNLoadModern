@@ -29,21 +29,15 @@ class Command(BaseCommand):
 
         # Check if all required environment variables are set
         if not admin_username:
-            self.stdout.write(
-                self.style.ERROR('❌ DEFAULT_ADMIN_USERNAME environment variable is not set')
-            )
+            print('DEFAULT_ADMIN_USERNAME environment variable is not set')
             return
 
         if not admin_email:
-            self.stdout.write(
-                self.style.ERROR('❌ DEFAULT_ADMIN_EMAIL environment variable is not set')
-            )
+            print('DEFAULT_ADMIN_EMAIL environment variable is not set')
             return
 
         if not admin_password:
-            self.stdout.write(
-                self.style.ERROR('❌ DEFAULT_ADMIN_PASSWORD environment variable is not set')
-            )
+            print('DEFAULT_ADMIN_PASSWORD environment variable is not set')
             return
 
         # Check if admin user already exists
@@ -57,17 +51,9 @@ class Command(BaseCommand):
                 existing_user.role = UserRole.ADMIN
                 existing_user.save()
                 
-                self.stdout.write(
-                    self.style.SUCCESS(
-                        f'✅ Updated admin user: {admin_username} (email: {admin_email})'
-                    )
-                )
+                print(f'Updated admin user: {admin_username} (email: {admin_email})')
             else:
-                self.stdout.write(
-                    self.style.WARNING(
-                        f'⚠️  Admin user "{admin_username}" already exists. Use --update flag to update it.'
-                    )
-                )
+                print(f'Admin user "{admin_username}" already exists. Use --update flag to update it.')
             return
 
         except SimpleUsers.DoesNotExist:
@@ -77,11 +63,7 @@ class Command(BaseCommand):
         # Check if email is already taken by another user
         try:
             existing_email = SimpleUsers.objects.get(email=admin_email)
-            self.stdout.write(
-                self.style.ERROR(
-                    f'❌ Email "{admin_email}" is already registered to user "{existing_email.username}"'
-                )
-            )
+            print(f'Email "{admin_email}" is already registered to user "{existing_email.username}"')
             return
         except SimpleUsers.DoesNotExist:
             # Email is available
@@ -97,16 +79,10 @@ class Command(BaseCommand):
             admin_user.set_password(admin_password)
             admin_user.save()
 
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f'✅ Successfully created admin user: {admin_username} (email: {admin_email})'
-                )
-            )
+            print(f'Successfully created admin user: {admin_username} (email: {admin_email})')
             logger.info(f'Default admin user created: {admin_username}')
 
         except IntegrityError as e:
-            self.stdout.write(
-                self.style.ERROR(f'❌ Failed to create admin user: {str(e)}')
-            )
+            print(f'Failed to create admin user: {str(e)}')
             logger.error(f'Failed to create admin user: {str(e)}')
 

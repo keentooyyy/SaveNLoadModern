@@ -68,9 +68,7 @@ class SaveNLoadClient:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            print(f"ERROR: Request failed: {e}")
-            if hasattr(e.response, 'text'):
-                print(f"ERROR: Response: {e.response.text}")
+            print(f"Error: Request failed - {str(e)}")
             raise
     
     def save_game(self, game_id: int, local_save_path: str, 
@@ -87,7 +85,7 @@ class SaveNLoadClient:
         Returns:
             Dict with success status and message
         """
-        print(f"INFO: Saving game {game_id} from {local_save_path}")
+        print(f"Backing up save files...")
         
         if not os.path.exists(local_save_path):
             return {
@@ -117,10 +115,8 @@ class SaveNLoadClient:
                         
                         if success:
                             uploaded_files.append(remote_filename)
-                            print(f"INFO: Uploaded: {remote_filename}")
                         else:
                             failed_files.append({'file': remote_filename, 'error': message})
-                            print(f"ERROR: Failed to upload {remote_filename}: {message}")
                 
                 if failed_files:
                     return {
@@ -144,14 +140,12 @@ class SaveNLoadClient:
                 )
                 
                 if success:
-                    print(f"INFO: Successfully saved: {message}")
                     return {'success': True, 'message': message}
                 else:
-                    print(f"ERROR: Save failed: {message}")
                     return {'success': False, 'error': message}
                     
         except Exception as e:
-            print(f"ERROR: Save operation failed: {e}")
+            print(f"Error: Save operation failed - {str(e)}")
             return {'success': False, 'error': f'Save operation failed: {str(e)}'}
     
     def load_game(self, game_id: int, local_save_path: str,
@@ -169,7 +163,7 @@ class SaveNLoadClient:
         Returns:
             Dict with success status and message
         """
-        print(f"INFO: Loading game {game_id} to {local_save_path}")
+        print(f"Downloading save files...")
         
         try:
             # List all files in the save folder
@@ -194,14 +188,12 @@ class SaveNLoadClient:
             if os.path.isfile(local_save_path):
                 # If it's a file, use its parent directory instead
                 local_save_path = os.path.dirname(local_save_path)
-                print(f"INFO: Path was a file, using parent directory: {local_save_path}")
             
             # Create the directory and all parent directories if they don't exist
             try:
                 os.makedirs(local_save_path, exist_ok=True)
-                print(f"INFO: Ensured directory exists: {local_save_path}")
             except OSError as e:
-                print(f"ERROR: Failed to create directory {local_save_path}: {e}")
+                print(f"Error: Failed to create directory - {str(e)}")
                 return {
                     'success': False,
                     'error': f'Failed to create directory: {local_save_path} - {str(e)}'
@@ -229,10 +221,9 @@ class SaveNLoadClient:
                     # Create nested directory structure (including all parent dirs)
                     try:
                         os.makedirs(nested_dir, exist_ok=True)
-                        print(f"DEBUG: Created nested directory: {nested_dir}")
-                    except OSError as e:
-                        print(f"WARNING: Failed to create nested directory {nested_dir}: {e}")
+                    except OSError:
                         # Continue anyway, might still work
+                        pass
                 
                 success, message = self.ftp_client.download_save(
                     username=username,
@@ -244,10 +235,8 @@ class SaveNLoadClient:
                 
                 if success:
                     downloaded_files.append(remote_filename)
-                    print(f"INFO: Downloaded: {remote_filename}")
                 else:
                     failed_files.append({'file': remote_filename, 'error': message})
-                    print(f"ERROR: Failed to download {remote_filename}: {message}")
             
             if failed_files:
                 return {
@@ -257,7 +246,6 @@ class SaveNLoadClient:
                     'failed_files': failed_files
                 }
             
-            print(f"INFO: Successfully loaded {len(downloaded_files)} file(s)")
             return {
                 'success': True,
                 'message': f'Successfully downloaded {len(downloaded_files)} file(s)',
@@ -265,7 +253,7 @@ class SaveNLoadClient:
             }
                     
         except Exception as e:
-            print(f"ERROR: Load operation failed: {e}")
+            print(f"Error: Load operation failed - {str(e)}")
             return {'success': False, 'error': f'Load operation failed: {str(e)}'}
     
     def get_game_info(self, game_id: int) -> Dict[str, Any]:
@@ -273,7 +261,6 @@ class SaveNLoadClient:
         try:
             return self._make_request('GET', f'/admin/games/{game_id}/')
         except Exception as e:
-            print(f"ERROR: Failed to get game info: {e}")
             return {'error': str(e)}
 
 
@@ -327,8 +314,7 @@ def main():
             sys.exit(1)
             
     except Exception as e:
-        print(f"ERROR: Client worker failed: {e}")
-        print(f"Error: {e}")
+        print(f"Error: Client worker failed - {str(e)}")
         sys.exit(1)
 
 

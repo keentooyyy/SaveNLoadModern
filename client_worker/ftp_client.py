@@ -37,8 +37,7 @@ class FTPClient:
                 ftp_host = ftputil.FTPHost(self.host, self.username, self.password)
             return ftp_host
         except Exception as e:
-            print(f"ERROR: Failed to connect to FTP server: {e}")
-            raise
+            raise ConnectionError(f"Failed to connect to FTP server: {str(e)}")
     
     def _ensure_directory_exists(self, ftp_host: ftputil.FTPHost, path: str) -> None:
         """Ensure a directory path exists on FTP server, creating it if necessary"""
@@ -47,16 +46,13 @@ class FTPClient:
         
         # Check if path exists
         if ftp_host.path.exists(full_path) and ftp_host.path.isdir(full_path):
-            print(f"DEBUG: Directory exists: {full_path}")
             return
         
         # Create directory and all parent directories
         try:
             ftp_host.makedirs(full_path)
-            print(f"INFO: Created FTP directory: {full_path}")
         except Exception as e:
-            print(f"ERROR: Failed to create directory {full_path}: {e}")
-            raise
+            raise OSError(f"Failed to create directory: {str(e)}")
     
     def _get_user_game_path(self, username: str, game_name: str) -> str:
         """Get the base path for a user's game on FTP server"""
@@ -86,15 +82,12 @@ class FTPClient:
                 try:
                     # Create directory structure
                     ftp_host.makedirs(save_folder_path)
-                    print(f"INFO: Created save folder: {save_folder_path}")
                 except Exception as e:
                     # Might already exist, try to navigate
                     if not ftp_host.path.exists(save_folder_path):
-                        print(f"ERROR: Failed to create save folder {save_folder_path}: {e}")
-                        raise
+                        raise OSError(f"Failed to create save folder: {str(e)}")
             # Navigate to save folder
             ftp_host.chdir(save_folder_path)
-            print(f"DEBUG: Navigated to save folder: {save_folder_path}")
             return save_folder_path
         
         # Fallback to constructing path (backward compatibility)
@@ -113,16 +106,13 @@ class FTPClient:
         if not ftp_host.path.exists(save_folder_path) or not ftp_host.path.isdir(save_folder_path):
             try:
                 ftp_host.mkdir(save_folder_name)
-                print(f"INFO: Created save folder: {save_folder_name}")
             except Exception as e:
                 # Might already exist, try to navigate
                 if not ftp_host.path.exists(save_folder_path):
-                    print(f"ERROR: Failed to create save folder {save_folder_name}: {e}")
-                    raise
+                    raise OSError(f"Failed to create save folder: {str(e)}")
         
         # Navigate to save folder
         ftp_host.chdir(save_folder_path)
-        print(f"DEBUG: Navigated to save folder: {save_folder_path}")
         
         return save_folder_path
     
@@ -148,9 +138,7 @@ class FTPClient:
                 if not ftp_host.path.exists(full_dir_path):
                     try:
                         ftp_host.makedirs(full_dir_path)
-                        print(f"INFO: Created directory structure: {full_dir_path}")
                     except Exception as e:
-                        print(f"ERROR: Failed to create directory structure: {e}")
                         return False, f"Failed to create directory structure: {str(e)}"
             else:
                 # Single directory name
@@ -158,16 +146,12 @@ class FTPClient:
                 if not ftp_host.path.exists(full_dir_path):
                     try:
                         ftp_host.mkdir(remote_dir_path)
-                        print(f"INFO: Created empty directory: {full_dir_path}")
                     except Exception as e:
-                        print(f"WARNING: Could not create directory {remote_dir_path}: {e}")
                         return False, f"Failed to create directory: {str(e)}"
             
-            print(f"INFO: Successfully created directory structure: {full_dir_path}")
-            return True, f"Directory created: {full_dir_path}"
+            return True, "Directory created"
             
         except Exception as e:
-            print(f"ERROR: Failed to create directory: {e}")
             return False, f"Failed to create directory: {str(e)}"
         finally:
             if ftp_host:
@@ -201,9 +185,7 @@ class FTPClient:
                     if not ftp_host.path.exists(dir_path):
                         try:
                             ftp_host.makedirs(dir_path)
-                            print(f"DEBUG: Created directory structure: {dir_path}")
                         except Exception as e:
-                            print(f"ERROR: Failed to create directory structure: {e}")
                             return False, f"Failed to create directory structure: {str(e)}"
                     ftp_host.chdir(dir_path)
                 
@@ -216,24 +198,19 @@ class FTPClient:
             # Build full remote path
             full_remote_path = ftp_host.path.join(ftp_host.getcwd(), remote_filename)
             
-            print(f"DEBUG: Current FTP directory: {ftp_host.getcwd()}, uploading: {remote_filename}")
-            
             # Check if file exists and delete it first to ensure overwrite
             if ftp_host.path.exists(full_remote_path) and ftp_host.path.isfile(full_remote_path):
                 try:
                     ftp_host.remove(full_remote_path)
-                    print(f"DEBUG: Deleted existing file: {remote_filename}")
-                except Exception as e:
-                    print(f"WARNING: Could not delete existing file {remote_filename}: {e}")
+                except Exception:
+                    pass
             
             # Upload file using ftputil
             ftp_host.upload(local_file_path, remote_filename)
             
-            print(f"INFO: Successfully uploaded {remote_filename} to {full_remote_path}")
-            return True, f"File uploaded successfully to {full_remote_path}"
+            return True, "File uploaded successfully"
             
         except Exception as e:
-            print(f"ERROR: Failed to upload save file: {e}")
             return False, f"Upload failed: {str(e)}"
         finally:
             if ftp_host:
@@ -259,8 +236,7 @@ class FTPClient:
                 if dir_parts:
                     dir_path = ftp_host.path.join(save_folder_path, *dir_parts)
                     if not ftp_host.path.exists(dir_path) or not ftp_host.path.isdir(dir_path):
-                        print(f"ERROR: Directory not found: {dir_path}")
-                        return False, f"Directory not found: {dir_path}"
+                        return False, f"Directory not found"
                     ftp_host.chdir(dir_path)
                 
                 # Use only the filename (last part)
@@ -274,19 +250,14 @@ class FTPClient:
             
             # Verify file exists
             if not ftp_host.path.exists(full_remote_path) or not ftp_host.path.isfile(full_remote_path):
-                print(f"ERROR: File not found: {remote_filename} in {save_folder_path}")
-                return False, f"File not found: {remote_filename} in {save_folder_path}"
-            
-            print(f"INFO: Downloading file: {remote_filename} from {save_folder_path}")
+                return False, f"File not found"
             
             # Download file using ftputil
             ftp_host.download(remote_filename, local_file_path)
             
-            print(f"INFO: Successfully downloaded {remote_filename} from {save_folder_path}")
-            return True, f"File downloaded successfully from {save_folder_path}/{remote_filename}"
+            return True, "File downloaded successfully"
             
         except Exception as e:
-            print(f"ERROR: Failed to download save file: {e}")
             return False, f"Download failed: {str(e)}"
         finally:
             if ftp_host:
@@ -319,8 +290,8 @@ class FTPClient:
                         sub_files, sub_dirs = self._list_recursive(ftp_host, base_path, item_path)
                         files.extend(sub_files)
                         directories.extend(sub_dirs)
-                    except Exception as e:
-                        print(f"WARNING: Could not list subdirectory {item_path}: {e}")
+                    except Exception:
+                        pass
                 elif ftp_host.path.isfile(full_item_path):
                     # It's a file
                     try:
@@ -332,8 +303,8 @@ class FTPClient:
                         'name': item_path,
                         'size': size
                     })
-        except Exception as e:
-            print(f"ERROR: Error listing directory {current_path}: {e}")
+        except Exception:
+            pass
         
         return files, directories
     
@@ -344,16 +315,13 @@ class FTPClient:
         try:
             ftp_host = self._get_connection()
             save_folder_path = self._navigate_to_save_folder(ftp_host, username, game_name, folder_number, ftp_path)
-            print(f"INFO: Listing files recursively in: {save_folder_path}")
             
             # Recursively list all files and directories
             all_files, all_directories = self._list_recursive(ftp_host, save_folder_path, '.')
             
-            print(f"INFO: Found {len(all_files)} file(s) and {len(all_directories)} directory(ies)")
             return True, all_files, all_directories, f"Found {len(all_files)} file(s) and {len(all_directories)} directory(ies)"
             
         except Exception as e:
-            print(f"ERROR: Failed to list save files: {e}")
             return False, [], [], f"List failed: {str(e)}"
         finally:
             if ftp_host:

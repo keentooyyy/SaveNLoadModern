@@ -29,5 +29,5 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copy project
 COPY . /app/
 
-
-
+# Default command: run migrations and start server
+CMD sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
