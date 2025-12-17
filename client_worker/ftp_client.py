@@ -424,10 +424,57 @@ class FTPClient:
             if not ftp_host.path.exists(full_remote_path) or not ftp_host.path.isfile(full_remote_path):
                 return False, f"File not found"
             
-            # Download file using ftputil
-            ftp_host.download(remote_filename, local_file_path)
+            # Download file using ftputil with retry logic for connection drops
+            max_retries = 3
+            retry_count = 0
+            last_error = None
             
-            return True, "File downloaded successfully"
+            while retry_count < max_retries:
+                try:
+                    ftp_host.download(remote_filename, local_file_path)
+                    return True, "File downloaded successfully"
+                except Exception as e:
+                    last_error = e
+                    error_str = str(e).lower()
+                    # Check if it's a connection error that might be recoverable
+                    if '10054' in error_str or 'connection' in error_str or 'closed' in error_str:
+                        retry_count += 1
+                        if retry_count < max_retries:
+                            # Close and recreate connection
+                            try:
+                                if connection_owner and ftp_host:
+                                    try:
+                                        ftp_host.close()
+                                    except:
+                                        pass
+                                # Get new connection
+                                ftp_host = self._get_connection(reuse=False)  # Force new connection
+                                # Re-navigate to save folder
+                                if save_folder_path:
+                                    save_folder_path = self._navigate_to_save_folder(ftp_host, username, game_name, folder_number, ftp_path)
+                                    # Re-navigate to subdirectory if needed
+                                    if '/' in remote_filename or '\\' in remote_filename:
+                                        path_parts = remote_filename.replace('\\', '/').split('/')
+                                        path_parts = [p for p in path_parts if p]
+                                        dir_parts = path_parts[:-1]
+                                        if dir_parts:
+                                            dir_path = ftp_host.path.join(save_folder_path, *dir_parts)
+                                            if ftp_host.path.exists(dir_path):
+                                                ftp_host.chdir(dir_path)
+                                time.sleep(0.5)  # Brief pause before retry
+                                continue
+                            except Exception as reconnect_error:
+                                # If reconnection fails, break and return error
+                                last_error = reconnect_error
+                                break
+                        else:
+                            # Max retries reached
+                            break
+                    else:
+                        # Not a retryable error
+                        break
+            
+            return False, f"Download failed: {str(last_error)}"
             
         except Exception as e:
             return False, f"Download failed: {str(e)}"
