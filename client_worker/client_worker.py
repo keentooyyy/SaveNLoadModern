@@ -90,7 +90,7 @@ class SaveNLoadClient:
         if not os.path.exists(local_save_path):
             return {
                 'success': False,
-                'error': f'Local save path does not exist: {local_save_path}'
+                'error': 'Oops! You don\'t have any save files to save. Maybe you haven\'t played the game yet, or the save location is incorrect.'
             }
         
         try:

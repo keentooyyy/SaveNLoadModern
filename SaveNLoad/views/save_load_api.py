@@ -56,17 +56,30 @@ def save_game(request, game_id):
         # Use the game's save_file_location if not provided
         local_save_path = game.save_file_location
     
+    # Validate local_save_path is provided (actual existence check happens on client worker)
+    if not local_save_path or not local_save_path.strip():
+        return json_response_error('Local save path is required', status=400)
+    
     # Get client worker or return error
     client_id = data.get('client_id')
     client_worker, error_response = get_client_worker_or_error(client_id)
     if error_response:
         return error_response
     
-    # Get or create next save folder (tracked in database)
+    # Only create save folder after all validations pass
+    # Note: We can't validate local path exists on server (it's on client machine)
+    # Client worker will validate and report back if path doesn't exist
     from SaveNLoad.models.save_folder import SaveFolder
     save_folder = SaveFolder.get_or_create_next(user, game)
     
-    # Create operation in queue with save folder number and FTP path
+    # Validate save folder has required information
+    if not save_folder or not save_folder.folder_number:
+        return json_response_error('Failed to create save folder', status=500)
+    
+    if not save_folder.ftp_path:
+        return json_response_error('Save folder FTP path is missing', status=500)
+    
+    # All validations passed - create operation in queue with save folder number and FTP path
     operation = OperationQueue.create_operation(
         operation_type=OperationType.SAVE,
         user=user,
@@ -118,6 +131,10 @@ def load_game(request, game_id):
     
     save_folder_number = data.get('save_folder_number')  # Optional
     
+    # Validate local_save_path
+    if not local_save_path or not local_save_path.strip():
+        return json_response_error('Local save path is required', status=400)
+    
     # Get the save folder to get ftp_path
     from SaveNLoad.models.save_folder import SaveFolder
     save_folder = None
@@ -126,9 +143,25 @@ def load_game(request, game_id):
         save_folder = SaveFolder.get_latest(user, game)
         if save_folder:
             save_folder_number = save_folder.folder_number
+        else:
+            # No save folders exist for this game
+            return json_response_error('No save files found to load', status=404)
     else:
         # Get the specific save folder
         save_folder = SaveFolder.get_by_number(user, game, save_folder_number)
+        if not save_folder:
+            return json_response_error('Save folder not found', status=404)
+    
+    # Validate save_folder_number is set
+    if save_folder_number is None:
+        return json_response_error('Save folder number is required', status=400)
+    
+    # Validate save_folder exists and has ftp_path
+    if not save_folder:
+        return json_response_error('Save folder not found', status=404)
+    
+    if not save_folder.ftp_path:
+        return json_response_error('Save folder FTP path is missing', status=500)
     
     # Get client worker or return error
     client_id = data.get('client_id')
@@ -136,23 +169,25 @@ def load_game(request, game_id):
     if error_response:
         return error_response
     
-    # Create operation in queue with FTP path
+    # All validations passed - create operation in queue with FTP path
     operation = OperationQueue.create_operation(
         operation_type=OperationType.LOAD,
         user=user,
         game=game,
         local_save_path=local_save_path,
         save_folder_number=save_folder_number,
-        ftp_path=save_folder.ftp_path if save_folder else None,
+        ftp_path=save_folder.ftp_path,
         client_worker=client_worker
     )
     
-    return JsonResponse({
-        'success': True,
-        'message': 'Load operation queued',
-        'operation_id': operation.id,
-        'client_id': client_worker.client_id
-    })
+    return json_response_success(
+        message='Load operation queued',
+        data={
+            'operation_id': operation.id,
+            'client_id': client_worker.client_id,
+            'save_folder_number': save_folder_number
+        }
+    )
 
 
 @login_required
@@ -172,13 +207,40 @@ def check_operation_status(request, operation_id):
     except OperationQueue.DoesNotExist:
         return json_response_error('Operation not found', status=404)
     
+    # Get error message and transform to user-friendly format if needed
+    error_message = None
+    if operation.status == OperationStatus.FAILED and operation.error_message:
+        error_message = operation.error_message
+        error_lower = error_message.lower()
+        # Transform old error messages to user-friendly format
+        if 'local save path does not exist' in error_lower or 'local file not found' in error_lower:
+            if operation.operation_type == 'save':
+                error_message = 'Oops! You don\'t have any save files to save. Maybe you haven\'t played the game yet, or the save location is incorrect.'
+            elif operation.operation_type == 'load':
+                error_message = 'Oops! You don\'t have any save files to load. Maybe you haven\'t saved this game yet.'
+    
+    # Calculate progress percentage
+    progress_percentage = 0
+    if operation.progress_total > 0:
+        progress_percentage = min(100, int((operation.progress_current / operation.progress_total) * 100))
+    elif operation.status == OperationStatus.COMPLETED:
+        progress_percentage = 100
+    elif operation.status == OperationStatus.FAILED:
+        progress_percentage = 0
+    
     return json_response_success(
         data={
             'status': operation.status,
             'completed': operation.status == OperationStatus.COMPLETED,
             'failed': operation.status == OperationStatus.FAILED,
-            'message': operation.error_message if operation.status == OperationStatus.FAILED else None,
-            'result_data': operation.result_data if operation.status == OperationStatus.COMPLETED else None
+            'message': error_message,
+            'result_data': operation.result_data if operation.status == OperationStatus.COMPLETED else None,
+            'progress': {
+                'current': operation.progress_current,
+                'total': operation.progress_total,
+                'percentage': progress_percentage,
+                'message': operation.progress_message or ''
+            }
         }
     )
 
@@ -208,12 +270,19 @@ def delete_save_folder(request, game_id, folder_number):
         if not save_folder:
             return json_response_error('Save folder not found', status=404)
         
+        # Validate save folder has required information
+        if not save_folder.folder_number:
+            return json_response_error('Save folder number is missing', status=500)
+        
+        if not save_folder.ftp_path:
+            return json_response_error('Save folder FTP path is missing', status=500)
+        
         # Get client worker
         client_worker = ClientWorker.get_any_active_worker()
         if not client_worker:
             return json_response_error('No active client worker available', status=503)
         
-        # Create DELETE operation (with client_worker set but status PENDING)
+        # All validations passed - create DELETE operation (with client_worker set but status PENDING)
         operation = OperationQueue.create_operation(
             operation_type=OperationType.DELETE,
             user=user,
@@ -224,32 +293,16 @@ def delete_save_folder(request, game_id, folder_number):
             client_worker=client_worker
         )
         
-        # Wait for operation to be picked up and completed (poll with timeout)
-        import time
-        timeout = 60  # 60 seconds timeout for delete
-        start_time = time.time()
-        
-        # Wait for operation to move from PENDING to IN_PROGRESS to COMPLETED/FAILED
-        while operation.status in [OperationStatus.PENDING, OperationStatus.IN_PROGRESS]:
-            if time.time() - start_time > timeout:
-                # Delete from database anyway
-                save_folder.delete()
-                return json_response_error('Delete operation timed out, but folder removed from database', status=504)
-            time.sleep(0.5)
-            operation.refresh_from_db()
-        
-        # Delete from database
-        save_folder.delete()
-        
-        if operation.status == OperationStatus.COMPLETED:
-            return json_response_success(
-                message=f'Save folder {folder_number} deleted successfully'
-            )
-        else:
-            error_msg = operation.error_message or 'Delete operation failed'
-            return json_response_success(
-                message=f'Save folder {folder_number} deleted from database (FTP deletion may have failed: {error_msg})'
-            )
+        # Return operation_id immediately - frontend will poll for status
+        # Save folder will be deleted from database when operation completes successfully
+        return json_response_success(
+            message='Delete operation queued',
+            data={
+                'operation_id': operation.id,
+                'client_id': client_worker.client_id,
+                'save_folder_number': folder_number
+            }
+        )
         
     except Exception as e:
         logger.error(f"Failed to delete save folder: {e}")
@@ -332,13 +385,20 @@ def list_saves(request, game_id):
     if not save_folder:
         return json_response_error('Save folder not found', status=404)
     
+    # Validate save folder has required information
+    if not save_folder.folder_number:
+        return json_response_error('Save folder number is missing', status=500)
+    
+    if not save_folder.ftp_path:
+        return json_response_error('Save folder FTP path is missing', status=500)
+    
     # Get client worker
     client_worker = ClientWorker.get_any_active_worker()
     if not client_worker:
         return json_response_error('No active client worker available', status=503)
     
     try:
-        # Create LIST operation (with client_worker set but status PENDING)
+        # All validations passed - create LIST operation (with client_worker set but status PENDING)
         operation = OperationQueue.create_operation(
             operation_type=OperationType.LIST,
             user=user,
@@ -410,13 +470,21 @@ def backup_all_saves(request, game_id):
         # Create zip buffer in memory
         zip_buffer = io.BytesIO()
         
-        # Create ftputil session
-        # ftputil.FTPHost doesn't accept port directly, use session factory for custom port
-        if ftp_port != 21:
-            session_factory = ftputil.session.session_factory(port=ftp_port)
-            ftp_host_obj = ftputil.FTPHost(ftp_host, ftp_username, ftp_password, session_factory=session_factory)
-        else:
-            ftp_host_obj = ftputil.FTPHost(ftp_host, ftp_username, ftp_password)
+        # Create ftputil session with proper error handling
+        try:
+            # ftputil.FTPHost doesn't accept port directly, use session factory for custom port
+            if ftp_port != 21:
+                session_factory = ftputil.session.session_factory(port=ftp_port)
+                ftp_host_obj = ftputil.FTPHost(ftp_host, ftp_username, ftp_password, session_factory=session_factory)
+            else:
+                ftp_host_obj = ftputil.FTPHost(ftp_host, ftp_username, ftp_password)
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"FTP connection failed: {error_msg}")
+            # Check for authentication errors
+            if '530' in error_msg or 'Not logged in' in error_msg or 'password' in error_msg.lower():
+                return json_response_error('FTP authentication failed. Please check FTP credentials in server configuration.', status=500)
+            return json_response_error(f'Failed to connect to FTP server: {error_msg}', status=500)
         
         try:
             # Check if base path exists
@@ -531,4 +599,120 @@ def backup_all_saves(request, game_id):
     except Exception as e:
         logger.error(f"Failed to create backup: {e}")
         return json_response_error(f'Failed to create backup: {str(e)}', status=500)
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def delete_all_saves(request, game_id):
+    """
+    Delete all save folders for a game (from FTP and database)
+    """
+    user = get_current_user(request)
+    if not user:
+        return json_response_error('Unauthorized', status=403)
+    
+    # Get game or return error
+    game, error_response = get_game_or_error(game_id)
+    if error_response:
+        return error_response
+    
+    from SaveNLoad.models.save_folder import SaveFolder
+    from SaveNLoad.models.client_worker import ClientWorker
+    from SaveNLoad.models.operation_queue import OperationQueue, OperationType, OperationStatus
+    
+    try:
+        # Get all save folders for this user and game
+        save_folders = SaveFolder.objects.filter(user=user, game=game)
+        
+        if not save_folders.exists():
+            return json_response_error('No save folders found for this game', status=404)
+        
+        # Get client worker
+        client_worker = ClientWorker.get_any_active_worker()
+        if not client_worker:
+            return json_response_error('No active client worker available', status=503)
+        
+        # Delete each save folder
+        deleted_count = 0
+        failed_count = 0
+        errors = []
+        
+        for save_folder in save_folders:
+            try:
+                # Validate save folder has required information
+                if not save_folder.folder_number:
+                    logger.warning(f'Save folder {save_folder.id} missing folder_number, skipping')
+                    save_folder.delete()  # Delete from database anyway
+                    deleted_count += 1
+                    continue
+                
+                if not save_folder.ftp_path:
+                    logger.warning(f'Save folder {save_folder.id} missing ftp_path, skipping')
+                    save_folder.delete()  # Delete from database anyway
+                    deleted_count += 1
+                    continue
+                
+                # Create DELETE operation
+                operation = OperationQueue.create_operation(
+                    operation_type=OperationType.DELETE,
+                    user=user,
+                    game=game,
+                    local_save_path='',  # Not needed for delete
+                    save_folder_number=save_folder.folder_number,
+                    ftp_path=save_folder.ftp_path,
+                    client_worker=client_worker
+                )
+                
+                # Wait for operation to complete (with shorter timeout per folder)
+                import time
+                timeout = 30  # 30 seconds per folder
+                start_time = time.time()
+                
+                while operation.status in [OperationStatus.PENDING, OperationStatus.IN_PROGRESS]:
+                    if time.time() - start_time > timeout:
+                        # Delete from database anyway
+                        save_folder.delete()
+                        deleted_count += 1
+                        errors.append(f'Save folder {save_folder.folder_number} timed out but removed from database')
+                        break
+                    time.sleep(0.5)
+                    operation.refresh_from_db()
+                
+                # Delete from database
+                save_folder.delete()
+                
+                if operation.status == OperationStatus.COMPLETED:
+                    deleted_count += 1
+                else:
+                    deleted_count += 1  # Still deleted from database
+                    error_msg = operation.error_message or 'Delete operation failed'
+                    errors.append(f'Save folder {save_folder.folder_number}: {error_msg}')
+                    
+            except Exception as e:
+                logger.error(f"Failed to delete save folder {save_folder.folder_number}: {e}")
+                failed_count += 1
+                errors.append(f'Save folder {save_folder.folder_number}: {str(e)}')
+                # Try to delete from database anyway
+                try:
+                    save_folder.delete()
+                except:
+                    pass
+        
+        if failed_count == 0 and not errors:
+            return json_response_success(
+                message=f'All {deleted_count} save folder(s) deleted successfully'
+            )
+        elif deleted_count > 0:
+            error_summary = '; '.join(errors[:3])  # Show first 3 errors
+            if len(errors) > 3:
+                error_summary += f' (and {len(errors) - 3} more)'
+            return json_response_success(
+                message=f'Deleted {deleted_count} save folder(s). Some errors occurred: {error_summary}'
+            )
+        else:
+            return json_response_error(f'Failed to delete save folders: {"; ".join(errors)}', status=500)
+        
+    except Exception as e:
+        logger.error(f"Failed to delete all saves: {e}")
+        return json_response_error(f'Failed to delete all saves: {str(e)}', status=500)
 

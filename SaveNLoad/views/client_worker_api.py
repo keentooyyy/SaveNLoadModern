@@ -183,6 +183,35 @@ def get_pending_operations(request, client_id):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def update_operation_progress(request, operation_id):
+    """Update progress for an operation"""
+    from SaveNLoad.models.operation_queue import OperationQueue
+    
+    try:
+        data = json.loads(request.body or "{}")
+        operation = OperationQueue.objects.get(pk=operation_id)
+        
+        # Update progress fields
+        if 'current' in data:
+            operation.progress_current = int(data.get('current', 0))
+        if 'total' in data:
+            operation.progress_total = int(data.get('total', 0))
+        if 'message' in data:
+            operation.progress_message = str(data.get('message', ''))[:200]  # Limit to 200 chars
+        
+        operation.save(update_fields=['progress_current', 'progress_total', 'progress_message'])
+        
+        return json_response_success()
+        
+    except OperationQueue.DoesNotExist:
+        return json_response_error('Operation not found', status=404)
+    except Exception as e:
+        logger.error(f"Failed to update operation progress: {e}")
+        return json_response_error(str(e), status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def complete_operation(request, operation_id):
     """Mark an operation as complete"""
     from SaveNLoad.models.operation_queue import OperationQueue
@@ -199,9 +228,66 @@ def complete_operation(request, operation_id):
             if operation.operation_type == 'save':
                 operation.game.last_played = timezone.now()
                 operation.game.save()
+            # Delete save folder from database when DELETE operation completes successfully
+            elif operation.operation_type == 'delete' and operation.save_folder_number:
+                from SaveNLoad.models.save_folder import SaveFolder
+                try:
+                    save_folder = SaveFolder.get_by_number(
+                        operation.user,
+                        operation.game,
+                        operation.save_folder_number
+                    )
+                    if save_folder:
+                        save_folder.delete()
+                        logger.info(f"Deleted save folder {operation.save_folder_number} from database after successful FTP deletion")
+                except Exception as e:
+                    logger.warning(f"Failed to delete save folder from database after operation: {e}")
         else:
             error_message = data.get('error', data.get('message', 'Operation failed'))
+            
+            # Transform error messages to be user-friendly
+            error_lower = error_message.lower() if error_message else ''
+            if 'local save path does not exist' in error_lower or 'local file not found' in error_lower:
+                if operation.operation_type == 'save':
+                    error_message = 'Oops! You don\'t have any save files to save. Maybe you haven\'t played the game yet, or the save location is incorrect.'
+                elif operation.operation_type == 'load':
+                    error_message = 'Oops! You don\'t have any save files to load. Maybe you haven\'t saved this game yet.'
+            
             operation.mark_failed(error_message)
+            
+            # Cleanup: If SAVE operation failed due to missing local path, delete the save folder
+            # This prevents orphaned save folders when user provides invalid path
+            if operation.operation_type == 'save' and operation.save_folder_number:
+                error_lower = error_message.lower() if error_message else ''
+                # Check if error is about local path not existing
+                path_errors = [
+                    'does not exist',
+                    'not found',
+                    'local save path',
+                    'local file not found',
+                    'local path does not exist',
+                    "don't have any save files",
+                    "haven't played the game"
+                ]
+                if any(err in error_lower for err in path_errors):
+                    from SaveNLoad.models.save_folder import SaveFolder
+                    try:
+                        save_folder = SaveFolder.get_by_number(
+                            operation.user, 
+                            operation.game, 
+                            operation.save_folder_number
+                        )
+                        if save_folder:
+                            # Check if save folder was created around the same time as the operation
+                            # This ensures we only delete save folders created for this failed operation
+                            from datetime import timedelta
+                            time_threshold = operation.created_at - timedelta(minutes=1)
+                            if save_folder.created_at >= time_threshold:
+                                # Delete the save folder
+                                save_folder.delete()
+                                logger.info(f"Deleted save folder {save_folder.folder_number} due to failed save operation (path error: {error_message})")
+                    except Exception as e:
+                        logger.warning(f"Failed to cleanup save folder after failed operation: {e}")
         
         return json_response_success()
         

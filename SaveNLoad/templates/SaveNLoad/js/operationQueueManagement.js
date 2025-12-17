@@ -2,6 +2,36 @@
 (function() {
     'use strict';
 
+    // Show toast notification (XSS-safe)
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
+        toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        
+        // Use textContent for message to prevent XSS
+        const messageSpan = document.createElement('span');
+        messageSpan.textContent = message;
+        toast.appendChild(messageSpan);
+        
+        // Create close button safely
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'btn-close';
+        closeBtn.setAttribute('data-bs-dismiss', 'alert');
+        closeBtn.setAttribute('aria-label', 'Close');
+        toast.appendChild(closeBtn);
+        
+        document.body.appendChild(toast);
+
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.remove();
+            }
+        }, 5000);
+    }
+
     // Load stats on page load
     document.addEventListener('DOMContentLoaded', function() {
         loadStats();
@@ -37,8 +67,9 @@
         // Setup clear button
         const clearBtn = document.getElementById('clearOperationsBtn');
         if (clearBtn) {
-            clearBtn.addEventListener('click', function() {
-                if (confirm('Are you sure you want to clear all operations? This cannot be undone!')) {
+            clearBtn.addEventListener('click', async function() {
+                const confirmed = await customConfirm('Are you sure you want to clear all operations? This cannot be undone!');
+                if (confirmed) {
                     performCleanup('all', clearBtn);
                 }
             });
@@ -190,7 +221,7 @@
         
         const url = window.OPERATION_QUEUE_CLEANUP_URL;
         if (!url) {
-            alert('Cleanup URL not configured');
+            showToast('Cleanup URL not configured', 'error');
             button.disabled = false;
             button.replaceWith(originalContent);
             return;
@@ -208,14 +239,15 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+                showToast(data.message || 'Cleanup completed successfully', 'success');
                 loadStats(); // Refresh stats
             } else {
-                alert('Error: ' + (data.error || 'Cleanup failed'));
+                showToast(data.error || 'Cleanup failed', 'error');
             }
         })
         .catch(error => {
             console.error('Error performing cleanup:', error);
-            alert('Error performing cleanup: ' + error.message);
+            showToast('Error performing cleanup: ' + error.message, 'error');
         })
         .finally(() => {
             button.disabled = false;

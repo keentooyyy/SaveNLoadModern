@@ -410,10 +410,19 @@ def operation_queue_cleanup(request):
     # OperationQueue and SaveFolder are completely independent - no ForeignKey between them
     
     if cleanup_type == 'completed':
+        # Check if there are any completed operations first
+        completed_count = OperationQueue.objects.filter(status=OperationStatus.COMPLETED).count()
+        if completed_count == 0:
+            return json_response_success(
+                message='No completed operations to delete',
+                data={'deleted_count': 0}
+            )
+        
         # Delete all completed operations - ONLY OperationQueue records
         deleted_count, deleted_objects = OperationQueue.objects.filter(status=OperationStatus.COMPLETED).delete()
         # Verify only OperationQueue was deleted (safety check)
-        if 'SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1:
+        # Allow empty dict (nothing to delete) or exactly one key that is OperationQueue
+        if deleted_objects and ('SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1):
             logger.warning(f"Unexpected objects deleted: {deleted_objects}")
         return json_response_success(
             message=f'Deleted {deleted_count} completed operation(s)',
@@ -421,9 +430,18 @@ def operation_queue_cleanup(request):
         )
     
     elif cleanup_type == 'failed':
+        # Check if there are any failed operations first
+        failed_count = OperationQueue.objects.filter(status=OperationStatus.FAILED).count()
+        if failed_count == 0:
+            return json_response_success(
+                message='No failed operations to delete',
+                data={'deleted_count': 0}
+            )
+        
         # Delete all failed operations - ONLY OperationQueue records
         deleted_count, deleted_objects = OperationQueue.objects.filter(status=OperationStatus.FAILED).delete()
-        if 'SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1:
+        # Allow empty dict (nothing to delete) or exactly one key that is OperationQueue
+        if deleted_objects and ('SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1):
             logger.warning(f"Unexpected objects deleted: {deleted_objects}")
         return json_response_success(
             message=f'Deleted {deleted_count} failed operation(s)',
@@ -431,10 +449,19 @@ def operation_queue_cleanup(request):
         )
     
     elif cleanup_type == 'old':
-        # Delete operations older than 30 days - ONLY OperationQueue records
+        # Check if there are any old operations first
         thirty_days_ago = timezone.now() - timedelta(days=30)
+        old_count = OperationQueue.objects.filter(created_at__lt=thirty_days_ago).count()
+        if old_count == 0:
+            return json_response_success(
+                message='No old operations (30+ days) to delete',
+                data={'deleted_count': 0}
+            )
+        
+        # Delete operations older than 30 days - ONLY OperationQueue records
         deleted_count, deleted_objects = OperationQueue.objects.filter(created_at__lt=thirty_days_ago).delete()
-        if 'SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1:
+        # Allow empty dict (nothing to delete) or exactly one key that is OperationQueue
+        if deleted_objects and ('SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1):
             logger.warning(f"Unexpected objects deleted: {deleted_objects}")
         return json_response_success(
             message=f'Deleted {deleted_count} old operation(s) (30+ days)',
@@ -442,10 +469,19 @@ def operation_queue_cleanup(request):
         )
     
     elif cleanup_type == 'all':
+        # Check if there are any operations first
+        total_count = OperationQueue.objects.count()
+        if total_count == 0:
+            return json_response_success(
+                message='No operations to delete - queue is empty',
+                data={'deleted_count': 0}
+            )
+        
         # Delete all operations - ONLY OperationQueue records
         deleted_count, deleted_objects = OperationQueue.objects.all().delete()
-        # Safety check: verify only OperationQueue was deleted
-        if 'SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1:
+        # Safety check: verify only OperationQueue was deleted (or nothing if empty)
+        # Allow empty dict (nothing to delete) or exactly one key that is OperationQueue
+        if deleted_objects and ('SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1):
             logger.error(f"CRITICAL: Unexpected objects deleted during cleanup: {deleted_objects}")
             return json_response_error(
                 f'Cleanup deleted unexpected objects: {deleted_objects}. Aborted to prevent data loss.',

@@ -9,9 +9,107 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Poll operation status until completion
     async function pollOperationStatus(operationId, btn, originalIcon, originalText) {
-        const maxAttempts = 60; // 60 attempts = 60 seconds max (1 second intervals)
+        const maxAttempts = 300; // 300 attempts = 5 minutes max (1 second intervals)
         let attempts = 0;
         const pollInterval = 1000; // Poll every 1 second
+        
+        // Create modal for progress
+        const modalId = `progressModal_${operationId}`;
+        const modalBackdrop = document.createElement('div');
+        modalBackdrop.className = 'modal fade';
+        modalBackdrop.id = modalId;
+        modalBackdrop.setAttribute('data-bs-backdrop', 'static');
+        modalBackdrop.setAttribute('data-bs-keyboard', 'false');
+        modalBackdrop.setAttribute('tabindex', '-1');
+        modalBackdrop.setAttribute('aria-labelledby', `${modalId}Label`);
+        modalBackdrop.setAttribute('aria-hidden', 'true');
+        
+        const modalDialog = document.createElement('div');
+        modalDialog.className = 'modal-dialog modal-dialog-centered';
+        
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content bg-primary text-white border-0';
+        
+        const modalHeader = document.createElement('div');
+        modalHeader.className = 'modal-header bg-primary border-secondary';
+        
+        const modalTitle = document.createElement('h5');
+        modalTitle.className = 'modal-title text-white';
+        modalTitle.id = `${modalId}Label`;
+        modalTitle.textContent = 'Operation in Progress';
+        
+        modalHeader.appendChild(modalTitle);
+        
+        const modalBody = document.createElement('div');
+        modalBody.className = 'modal-body bg-primary';
+        
+        const progressBarWrapper = document.createElement('div');
+        progressBarWrapper.className = 'progress';
+        progressBarWrapper.style.height = '30px';
+        progressBarWrapper.style.marginBottom = '15px';
+        progressBarWrapper.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        
+        const progressBar = document.createElement('div');
+        progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated';
+        progressBar.setAttribute('role', 'progressbar');
+        progressBar.style.width = '0%';
+        progressBar.style.backgroundColor = '#0d6efd';
+        progressBar.setAttribute('aria-valuenow', '0');
+        progressBar.setAttribute('aria-valuemin', '0');
+        progressBar.setAttribute('aria-valuemax', '100');
+        
+        const progressText = document.createElement('div');
+        progressText.className = 'text-center mt-3';
+        progressText.style.fontSize = '0.9rem';
+        progressText.style.fontWeight = '500';
+        progressText.style.color = '#ffffff';
+        progressText.textContent = 'Starting...';
+        
+        const progressDetails = document.createElement('div');
+        progressDetails.className = 'text-center text-white-50 mt-2';
+        progressDetails.style.fontSize = '0.85rem';
+        progressDetails.textContent = 'Please wait while the operation completes...';
+        
+        progressBarWrapper.appendChild(progressBar);
+        modalBody.appendChild(progressBarWrapper);
+        modalBody.appendChild(progressText);
+        modalBody.appendChild(progressDetails);
+        
+        modalContent.appendChild(modalHeader);
+        modalContent.appendChild(modalBody);
+        modalDialog.appendChild(modalContent);
+        modalBackdrop.appendChild(modalDialog);
+        
+        // Add modal to body
+        document.body.appendChild(modalBackdrop);
+        
+        // Show modal using Bootstrap
+        const modal = new bootstrap.Modal(modalBackdrop, {
+            backdrop: 'static',
+            keyboard: false
+        });
+        modal.show();
+        
+        const updateProgress = (progressData) => {
+            const percentage = progressData.percentage || 0;
+            const current = progressData.current || 0;
+            const total = progressData.total || 0;
+            const message = progressData.message || '';
+            
+            progressBar.style.width = `${percentage}%`;
+            progressBar.setAttribute('aria-valuenow', percentage);
+            
+            if (total > 0) {
+                progressText.textContent = `${current}/${total} ${message || 'Processing...'}`;
+                progressDetails.textContent = `${percentage}% complete`;
+            } else if (message) {
+                progressText.textContent = message;
+                progressDetails.textContent = 'Processing...';
+            } else {
+                progressText.textContent = 'Processing...';
+                progressDetails.textContent = 'Please wait...';
+            }
+        };
         
         const checkStatus = async () => {
             try {
@@ -27,25 +125,58 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 const data = await response.json();
                 
+                // Update progress bar
+                if (data.progress) {
+                    updateProgress(data.progress);
+                }
+                
                 if (data.completed) {
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.style.backgroundColor = '#198754';
+                    progressBar.style.width = '100%';
+                    progressBar.setAttribute('aria-valuenow', '100');
+                    progressText.textContent = 'Operation Complete!';
+                    progressDetails.textContent = 'Successfully completed';
                     showToast('Game saved successfully!', 'success');
+                    // Close modal after a delay
+                    setTimeout(() => {
+                        modal.hide();
+                        modalBackdrop.remove();
+                    }, 1500);
                     // Refresh page after a short delay to update recent games
                     setTimeout(() => {
                         window.location.reload();
-                    }, 1000);
+                    }, 2000);
                     return true;
                 } else if (data.failed) {
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.style.backgroundColor = '#dc3545';
+                    progressText.textContent = 'Operation Failed';
+                    progressDetails.textContent = data.message || 'An error occurred';
                     showToast(data.message || 'Save operation failed', 'error');
-                    // Restore button on failure
-                    btn.disabled = false;
-                    while (btn.firstChild) {
-                        btn.removeChild(btn.firstChild);
-                    }
-                    if (originalIcon) {
-                        const iconClone = originalIcon.cloneNode(true);
-                        btn.appendChild(iconClone);
-                    }
-                    btn.appendChild(document.createTextNode(' Save'));
+                    // Add close button on failure
+                    const modalFooter = document.createElement('div');
+                    modalFooter.className = 'modal-footer bg-primary border-secondary';
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn btn-outline-secondary text-white';
+                    closeBtn.textContent = 'Close';
+                    closeBtn.onclick = () => {
+                        modal.hide();
+                        modalBackdrop.remove();
+                        // Restore button on failure
+                        btn.disabled = false;
+                        while (btn.firstChild) {
+                            btn.removeChild(btn.firstChild);
+                        }
+                        if (originalIcon) {
+                            const iconClone = originalIcon.cloneNode(true);
+                            btn.appendChild(iconClone);
+                        }
+                        btn.appendChild(document.createTextNode(' Save'));
+                    };
+                    modalFooter.appendChild(closeBtn);
+                    modalContent.appendChild(modalFooter);
                     return true;
                 }
                 
@@ -68,17 +199,34 @@ document.addEventListener('DOMContentLoaded', function () {
             if (completed || attempts >= maxAttempts) {
                 clearInterval(poll);
                 if (attempts >= maxAttempts && !completed) {
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.style.backgroundColor = '#ffc107';
+                    progressText.textContent = 'Operation Timed Out';
+                    progressDetails.textContent = 'The operation is taking longer than expected. Please check the operation status manually.';
                     showToast('Operation is taking longer than expected. Please refresh the page.', 'error');
-                    // Restore button on timeout
-                    btn.disabled = false;
-                    while (btn.firstChild) {
-                        btn.removeChild(btn.firstChild);
-                    }
-                    if (originalIcon) {
-                        const iconClone = originalIcon.cloneNode(true);
-                        btn.appendChild(iconClone);
-                    }
-                    btn.appendChild(document.createTextNode(' Save'));
+                    // Add close button on timeout
+                    const modalFooter = document.createElement('div');
+                    modalFooter.className = 'modal-footer bg-primary border-secondary';
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn btn-outline-secondary text-white';
+                    closeBtn.textContent = 'Close';
+                    closeBtn.onclick = () => {
+                        modal.hide();
+                        modalBackdrop.remove();
+                        // Restore button on timeout
+                        btn.disabled = false;
+                        while (btn.firstChild) {
+                            btn.removeChild(btn.firstChild);
+                        }
+                        if (originalIcon) {
+                            const iconClone = originalIcon.cloneNode(true);
+                            btn.appendChild(iconClone);
+                        }
+                        btn.appendChild(document.createTextNode(' Save'));
+                    };
+                    modalFooter.appendChild(closeBtn);
+                    modalContent.appendChild(modalFooter);
                 }
             }
         }, pollInterval);
@@ -218,6 +366,40 @@ document.addEventListener('DOMContentLoaded', function () {
             btn.appendChild(document.createTextNode(' Loading...'));
 
             try {
+                // First check if there are any save folders for this game (if URL pattern is available)
+                const listFoldersUrlPattern = window.LIST_SAVE_FOLDERS_URL_PATTERN;
+                if (listFoldersUrlPattern) {
+                    try {
+                        const listFoldersUrl = listFoldersUrlPattern.replace('/0/', `/${gameId}/`);
+                        const foldersResponse = await fetch(listFoldersUrl, {
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        });
+                        
+                        if (foldersResponse.ok) {
+                            const foldersData = await foldersResponse.json();
+                            if (!foldersData.success || !foldersData.save_folders || foldersData.save_folders.length === 0) {
+                                // No save folders found - show friendly message
+                                showToast('Oops! You have no save files to load', 'error');
+                                // Restore button
+                                btn.disabled = false;
+                                while (btn.firstChild) {
+                                    btn.removeChild(btn.firstChild);
+                                }
+                                if (originalIcon) {
+                                    const iconClone = originalIcon.cloneNode(true);
+                                    btn.appendChild(iconClone);
+                                }
+                                btn.appendChild(document.createTextNode(' Quick Load'));
+                                return;
+                            }
+                        }
+                    } catch (e) {
+                        // If check fails, continue with load attempt - backend will handle it
+                        console.log('Could not check save folders, proceeding with load');
+                    }
+                }
+                
+                // Proceed with load if save folders exist
                 const urlPattern = window.LOAD_GAME_URL_PATTERN;
                 const url = urlPattern.replace('/0/', `/${gameId}/`);
                 const response = await fetch(url, {
@@ -236,7 +418,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     // Poll for operation completion
                     await pollLoadOperationStatus(data.operation_id, btn, originalIcon);
                 } else {
-                    showToast(data.error || data.message || 'Failed to load game', 'error');
+                    // Check if error is about no save folders
+                    if (data.error && (data.error.includes('No save folders') || data.error.includes('save folder'))) {
+                        showToast('Oops! You have no save files to load', 'error');
+                    } else {
+                        showToast(data.error || data.message || 'Failed to load game', 'error');
+                    }
                     // Restore button on error
                     btn.disabled = false;
                     while (btn.firstChild) {
@@ -267,9 +454,107 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Poll load operation status until completion
     async function pollLoadOperationStatus(operationId, btn, originalIcon) {
-        const maxAttempts = 60; // 60 attempts = 60 seconds max (1 second intervals)
+        const maxAttempts = 300; // 300 attempts = 5 minutes max (1 second intervals)
         let attempts = 0;
         const pollInterval = 1000; // Poll every 1 second
+        
+        // Create modal for progress
+        const modalId = `progressModal_${operationId}`;
+        const modalBackdrop = document.createElement('div');
+        modalBackdrop.className = 'modal fade';
+        modalBackdrop.id = modalId;
+        modalBackdrop.setAttribute('data-bs-backdrop', 'static');
+        modalBackdrop.setAttribute('data-bs-keyboard', 'false');
+        modalBackdrop.setAttribute('tabindex', '-1');
+        modalBackdrop.setAttribute('aria-labelledby', `${modalId}Label`);
+        modalBackdrop.setAttribute('aria-hidden', 'true');
+        
+        const modalDialog = document.createElement('div');
+        modalDialog.className = 'modal-dialog modal-dialog-centered';
+        
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content bg-primary text-white border-0';
+        
+        const modalHeader = document.createElement('div');
+        modalHeader.className = 'modal-header bg-primary border-secondary';
+        
+        const modalTitle = document.createElement('h5');
+        modalTitle.className = 'modal-title text-white';
+        modalTitle.id = `${modalId}Label`;
+        modalTitle.textContent = 'Loading Game';
+        
+        modalHeader.appendChild(modalTitle);
+        
+        const modalBody = document.createElement('div');
+        modalBody.className = 'modal-body bg-primary';
+        
+        const progressBarWrapper = document.createElement('div');
+        progressBarWrapper.className = 'progress';
+        progressBarWrapper.style.height = '30px';
+        progressBarWrapper.style.marginBottom = '15px';
+        progressBarWrapper.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        
+        const progressBar = document.createElement('div');
+        progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated';
+        progressBar.setAttribute('role', 'progressbar');
+        progressBar.style.width = '0%';
+        progressBar.style.backgroundColor = '#0d6efd';
+        progressBar.setAttribute('aria-valuenow', '0');
+        progressBar.setAttribute('aria-valuemin', '0');
+        progressBar.setAttribute('aria-valuemax', '100');
+        
+        const progressText = document.createElement('div');
+        progressText.className = 'text-center mt-3';
+        progressText.style.fontSize = '0.9rem';
+        progressText.style.fontWeight = '500';
+        progressText.style.color = '#ffffff';
+        progressText.textContent = 'Starting...';
+        
+        const progressDetails = document.createElement('div');
+        progressDetails.className = 'text-center text-white-50 mt-2';
+        progressDetails.style.fontSize = '0.85rem';
+        progressDetails.textContent = 'Please wait while the game loads...';
+        
+        progressBarWrapper.appendChild(progressBar);
+        modalBody.appendChild(progressBarWrapper);
+        modalBody.appendChild(progressText);
+        modalBody.appendChild(progressDetails);
+        
+        modalContent.appendChild(modalHeader);
+        modalContent.appendChild(modalBody);
+        modalDialog.appendChild(modalContent);
+        modalBackdrop.appendChild(modalDialog);
+        
+        // Add modal to body
+        document.body.appendChild(modalBackdrop);
+        
+        // Show modal using Bootstrap
+        const modal = new bootstrap.Modal(modalBackdrop, {
+            backdrop: 'static',
+            keyboard: false
+        });
+        modal.show();
+        
+        const updateProgress = (progressData) => {
+            const percentage = progressData.percentage || 0;
+            const current = progressData.current || 0;
+            const total = progressData.total || 0;
+            const message = progressData.message || '';
+            
+            progressBar.style.width = `${percentage}%`;
+            progressBar.setAttribute('aria-valuenow', percentage);
+            
+            if (total > 0) {
+                progressText.textContent = `${current}/${total} ${message || 'Processing...'}`;
+                progressDetails.textContent = `${percentage}% complete`;
+            } else if (message) {
+                progressText.textContent = message;
+                progressDetails.textContent = 'Processing...';
+            } else {
+                progressText.textContent = 'Processing...';
+                progressDetails.textContent = 'Please wait...';
+            }
+        };
         
         const checkStatus = async () => {
             try {
@@ -285,8 +570,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 const data = await response.json();
                 
+                // Update progress bar
+                if (data.progress) {
+                    updateProgress(data.progress);
+                }
+                
                 if (data.completed) {
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.style.backgroundColor = '#198754';
+                    progressBar.style.width = '100%';
+                    progressBar.setAttribute('aria-valuenow', '100');
+                    progressText.textContent = 'Operation Complete!';
+                    progressDetails.textContent = 'Successfully completed';
                     showToast('Game loaded successfully!', 'success');
+                    // Close modal after a delay
+                    setTimeout(() => {
+                        modal.hide();
+                        modalBackdrop.remove();
+                    }, 1500);
                     // Restore button
                     btn.disabled = false;
                     while (btn.firstChild) {
@@ -299,17 +600,34 @@ document.addEventListener('DOMContentLoaded', function () {
                     btn.appendChild(document.createTextNode(' Quick Load'));
                     return true;
                 } else if (data.failed) {
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.style.backgroundColor = '#dc3545';
+                    progressText.textContent = 'Operation Failed';
+                    progressDetails.textContent = data.message || 'An error occurred';
                     showToast(data.message || 'Load operation failed', 'error');
-                    // Restore button on failure
-                    btn.disabled = false;
-                    while (btn.firstChild) {
-                        btn.removeChild(btn.firstChild);
-                    }
-                    if (originalIcon) {
-                        const iconClone = originalIcon.cloneNode(true);
-                        btn.appendChild(iconClone);
-                    }
-                    btn.appendChild(document.createTextNode(' Quick Load'));
+                    // Add close button on failure
+                    const modalFooter = document.createElement('div');
+                    modalFooter.className = 'modal-footer bg-primary border-secondary';
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn btn-outline-secondary text-white';
+                    closeBtn.textContent = 'Close';
+                    closeBtn.onclick = () => {
+                        modal.hide();
+                        modalBackdrop.remove();
+                        // Restore button on failure
+                        btn.disabled = false;
+                        while (btn.firstChild) {
+                            btn.removeChild(btn.firstChild);
+                        }
+                        if (originalIcon) {
+                            const iconClone = originalIcon.cloneNode(true);
+                            btn.appendChild(iconClone);
+                        }
+                        btn.appendChild(document.createTextNode(' Quick Load'));
+                    };
+                    modalFooter.appendChild(closeBtn);
+                    modalContent.appendChild(modalFooter);
                     return true;
                 }
                 
@@ -332,17 +650,34 @@ document.addEventListener('DOMContentLoaded', function () {
             if (completed || attempts >= maxAttempts) {
                 clearInterval(poll);
                 if (attempts >= maxAttempts && !completed) {
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.style.backgroundColor = '#ffc107';
+                    progressText.textContent = 'Operation Timed Out';
+                    progressDetails.textContent = 'The operation is taking longer than expected. Please check the operation status manually.';
                     showToast('Operation is taking longer than expected. Please refresh the page.', 'error');
-                    // Restore button on timeout
-                    btn.disabled = false;
-                    while (btn.firstChild) {
-                        btn.removeChild(btn.firstChild);
-                    }
-                    if (originalIcon) {
-                        const iconClone = originalIcon.cloneNode(true);
-                        btn.appendChild(iconClone);
-                    }
-                    btn.appendChild(document.createTextNode(' Quick Load'));
+                    // Add close button on timeout
+                    const modalFooter = document.createElement('div');
+                    modalFooter.className = 'modal-footer bg-primary border-secondary';
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn btn-outline-secondary text-white';
+                    closeBtn.textContent = 'Close';
+                    closeBtn.onclick = () => {
+                        modal.hide();
+                        modalBackdrop.remove();
+                        // Restore button on timeout
+                        btn.disabled = false;
+                        while (btn.firstChild) {
+                            btn.removeChild(btn.firstChild);
+                        }
+                        if (originalIcon) {
+                            const iconClone = originalIcon.cloneNode(true);
+                            btn.appendChild(iconClone);
+                        }
+                        btn.appendChild(document.createTextNode(' Quick Load'));
+                    };
+                    modalFooter.appendChild(closeBtn);
+                    modalContent.appendChild(modalFooter);
                 }
             }
         }, pollInterval);

@@ -9,5 +9,6 @@ urlpatterns = [
     path('settings/', settings.user_settings_view, name='settings'),
     path('account/update/', settings.update_account_settings, name='update_account_settings'),
     path('games/<int:game_id>/backup-all-saves/', save_load_api.backup_all_saves, name='backup_all_saves'),
+    path('games/<int:game_id>/delete-all-saves/', save_load_api.delete_all_saves, name='delete_all_saves'),
 ]
 

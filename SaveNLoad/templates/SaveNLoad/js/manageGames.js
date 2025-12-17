@@ -245,7 +245,8 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        if (!confirm('Are you sure you want to delete this game? This cannot be undone.')) {
+        const confirmed = await customConfirm('Are you sure you want to delete this game? This cannot be undone.');
+        if (!confirmed) {
             return;
         }
 
@@ -342,9 +343,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            // Add backup button at the top
-            const backupButtonContainer = document.createElement('div');
-            backupButtonContainer.className = 'mb-3 d-flex justify-content-end';
+            // Add backup and delete buttons at the top
+            const buttonContainer = document.createElement('div');
+            buttonContainer.className = 'mb-3 d-flex justify-content-end gap-2';
             
             const backupButton = document.createElement('button');
             backupButton.className = 'btn btn-secondary text-white';
@@ -356,7 +357,19 @@ document.addEventListener('DOMContentLoaded', function () {
             backupButton.addEventListener('click', function() {
                 backupAllSaves(gameId);
             });
-            backupButtonContainer.appendChild(backupButton);
+            buttonContainer.appendChild(backupButton);
+            
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'btn btn-danger text-white';
+            deleteButton.type = 'button';
+            const deleteIcon = document.createElement('i');
+            deleteIcon.className = 'fas fa-trash me-2';
+            deleteButton.appendChild(deleteIcon);
+            deleteButton.appendChild(document.createTextNode('Delete All Saves'));
+            deleteButton.addEventListener('click', function() {
+                deleteAllSaves(gameId);
+            });
+            buttonContainer.appendChild(deleteButton);
 
             const listGroup = document.createElement('div');
             listGroup.className = 'list-group';
@@ -425,7 +438,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             clearElement(container);
-            container.appendChild(backupButtonContainer);
+            container.appendChild(buttonContainer);
             container.appendChild(listGroup);
         } catch (error) {
             console.error('Error loading save folders:', error);
@@ -434,6 +447,211 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
     loadSaveFoldersRef = loadSaveFolders; // Store reference
+
+    // Shared function to create progress modal matching app aesthetics
+    function createProgressModal(operationId, title, operationType = 'operation') {
+        const modalId = `progressModal_${operationId}`;
+        const modalBackdrop = document.createElement('div');
+        modalBackdrop.className = 'modal fade';
+        modalBackdrop.id = modalId;
+        modalBackdrop.setAttribute('data-bs-backdrop', 'static');
+        modalBackdrop.setAttribute('data-bs-keyboard', 'false');
+        modalBackdrop.setAttribute('tabindex', '-1');
+        modalBackdrop.setAttribute('aria-labelledby', `${modalId}Label`);
+        modalBackdrop.setAttribute('aria-hidden', 'true');
+        
+        const modalDialog = document.createElement('div');
+        modalDialog.className = 'modal-dialog modal-dialog-centered';
+        
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content bg-primary text-white border-0';
+        
+        const modalHeader = document.createElement('div');
+        modalHeader.className = 'modal-header bg-primary border-secondary';
+        
+        const modalTitle = document.createElement('h5');
+        modalTitle.className = 'modal-title text-white';
+        modalTitle.id = `${modalId}Label`;
+        modalTitle.textContent = title;
+        
+        modalHeader.appendChild(modalTitle);
+        
+        const modalBody = document.createElement('div');
+        modalBody.className = 'modal-body bg-primary';
+        
+        const progressBarWrapper = document.createElement('div');
+        progressBarWrapper.className = 'progress';
+        progressBarWrapper.style.height = '30px';
+        progressBarWrapper.style.marginBottom = '15px';
+        progressBarWrapper.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        
+        const progressBar = document.createElement('div');
+        progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated';
+        progressBar.setAttribute('role', 'progressbar');
+        progressBar.style.width = '0%';
+        progressBar.style.backgroundColor = '#0d6efd';
+        progressBar.setAttribute('aria-valuenow', '0');
+        progressBar.setAttribute('aria-valuemin', '0');
+        progressBar.setAttribute('aria-valuemax', '100');
+        
+        const progressText = document.createElement('div');
+        progressText.className = 'text-center mt-3';
+        progressText.style.fontSize = '0.9rem';
+        progressText.style.fontWeight = '500';
+        progressText.style.color = '#ffffff';
+        progressText.textContent = 'Starting...';
+        
+        const progressDetails = document.createElement('div');
+        progressDetails.className = 'text-center text-white-50 mt-2';
+        progressDetails.style.fontSize = '0.85rem';
+        progressDetails.textContent = 'Please wait while the operation completes...';
+        
+        progressBarWrapper.appendChild(progressBar);
+        modalBody.appendChild(progressBarWrapper);
+        modalBody.appendChild(progressText);
+        modalBody.appendChild(progressDetails);
+        
+        modalContent.appendChild(modalHeader);
+        modalContent.appendChild(modalBody);
+        modalDialog.appendChild(modalContent);
+        modalBackdrop.appendChild(modalDialog);
+        
+        // Add modal to body
+        document.body.appendChild(modalBackdrop);
+        
+        // Show modal using Bootstrap
+        const modal = new bootstrap.Modal(modalBackdrop, {
+            backdrop: 'static',
+            keyboard: false
+        });
+        modal.show();
+        
+        const updateProgress = (progressData) => {
+            const percentage = progressData.percentage || 0;
+            const current = progressData.current || 0;
+            const total = progressData.total || 0;
+            const message = progressData.message || '';
+            
+            progressBar.style.width = `${percentage}%`;
+            progressBar.setAttribute('aria-valuenow', percentage);
+            
+            if (total > 0) {
+                progressText.textContent = `${current}/${total} ${message || 'Processing...'}`;
+                progressDetails.textContent = `${percentage}% complete`;
+            } else if (message) {
+                progressText.textContent = message;
+                progressDetails.textContent = 'Processing...';
+            } else {
+                progressText.textContent = 'Processing...';
+                progressDetails.textContent = 'Please wait...';
+            }
+        };
+        
+        return { modal, modalBackdrop, modalContent, updateProgress, progressBar, progressText, progressDetails };
+    }
+
+    // Shared function to poll operation status
+    async function pollOperationStatus(operationId, modalData, onComplete, onError) {
+        const maxAttempts = 300; // 5 minutes max
+        let attempts = 0;
+        const pollInterval = 1000; // 1 second
+        
+        const { modal, modalBackdrop, modalContent, updateProgress, progressBar, progressText, progressDetails } = modalData;
+        
+        const checkStatus = async () => {
+            try {
+                const urlPattern = window.CHECK_OPERATION_STATUS_URL_PATTERN;
+                const url = urlPattern.replace('/0/', `/${operationId}/`);
+                const response = await fetch(url, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to check operation status');
+                }
+                
+                const data = await response.json();
+                
+                // Update progress bar
+                if (data.progress) {
+                    updateProgress(data.progress);
+                }
+                
+                if (data.completed) {
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.style.backgroundColor = '#198754';
+                    progressBar.style.width = '100%';
+                    progressBar.setAttribute('aria-valuenow', '100');
+                    progressText.textContent = 'Operation Complete!';
+                    progressDetails.textContent = 'Successfully completed';
+                    setTimeout(() => {
+                        modal.hide();
+                        modalBackdrop.remove();
+                    }, 1500);
+                    if (onComplete) onComplete();
+                    return true;
+                } else if (data.failed) {
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.style.backgroundColor = '#dc3545';
+                    progressText.textContent = 'Operation Failed';
+                    progressDetails.textContent = data.message || 'An error occurred';
+                    // Add close button on failure
+                    const modalFooter = document.createElement('div');
+                    modalFooter.className = 'modal-footer bg-primary border-secondary';
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn btn-outline-secondary text-white';
+                    closeBtn.textContent = 'Close';
+                    closeBtn.onclick = () => {
+                        modal.hide();
+                        modalBackdrop.remove();
+                        if (onError) onError();
+                    };
+                    modalFooter.appendChild(closeBtn);
+                    modalContent.appendChild(modalFooter);
+                    return true;
+                }
+                
+                return false;
+            } catch (error) {
+                console.error('Error checking operation status:', error);
+                return false;
+            }
+        };
+        
+        // Initial check
+        const completed = await checkStatus();
+        if (completed) return;
+        
+        // Poll until completion or max attempts
+        const poll = setInterval(async () => {
+            attempts++;
+            const completed = await checkStatus();
+            
+            if (completed || attempts >= maxAttempts) {
+                clearInterval(poll);
+                if (attempts >= maxAttempts && !completed) {
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.style.backgroundColor = '#ffc107';
+                    progressText.textContent = 'Operation Timed Out';
+                    progressDetails.textContent = 'The operation is taking longer than expected. Please check the operation status manually.';
+                    const modalFooter = document.createElement('div');
+                    modalFooter.className = 'modal-footer bg-primary border-secondary';
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn btn-outline-secondary text-white';
+                    closeBtn.textContent = 'Close';
+                    closeBtn.onclick = () => {
+                        modal.hide();
+                        modalBackdrop.remove();
+                        if (onError) onError();
+                    };
+                    modalFooter.appendChild(closeBtn);
+                    modalContent.appendChild(modalFooter);
+                }
+            }
+        }, pollInterval);
+    }
 
     async function deleteSaveFolder(gameId, saveFolderNumber) {
         const csrfInput = document.querySelector('#gameCsrfForm input[name="csrfmiddlewaretoken"]') ||
@@ -445,7 +663,8 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        if (!confirm(`Are you sure you want to delete Save ${saveFolderNumber}? This action cannot be undone.`)) {
+        const confirmed = await customConfirm(`Are you sure you want to delete Save ${saveFolderNumber}? This action cannot be undone.`);
+        if (!confirmed) {
             return;
         }
 
@@ -490,9 +709,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const data = await response.json();
 
-            if (data.success) {
+            console.log('Delete response:', data); // Debug
+
+            if (data.success && data.operation_id) {
+                // Show progress modal and poll for status
+                const modalData = createProgressModal(data.operation_id, 'Deleting Save Folder', 'delete');
+                pollOperationStatus(
+                    data.operation_id,
+                    modalData,
+                    () => {
+                        showToast('Save folder deleted successfully!', 'success');
+                        loadSaveFolders(gameId);
+                    },
+                    () => {
+                        showToast('Failed to delete save folder', 'error');
+                    }
+                );
+            } else if (data.success) {
                 showToast(data.message || 'Save folder deleted successfully!', 'success');
-                // Reload the saves list
                 loadSaveFolders(gameId);
             } else {
                 showToast(data.error || 'Failed to delete save folder', 'error');
@@ -555,9 +789,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const data = await response.json();
 
-            if (data.success) {
+            console.log('Load response:', data); // Debug
+
+            if (data.success && data.operation_id) {
+                // Show progress modal and poll for status
+                const modalData = createProgressModal(data.operation_id, 'Loading Game', 'load');
+                pollOperationStatus(
+                    data.operation_id,
+                    modalData,
+                    () => {
+                        showToast('Game loaded successfully!', 'success');
+                    },
+                    () => {
+                        showToast('Failed to load game', 'error');
+                    }
+                );
+            } else if (data.success) {
                 showToast(data.message || 'Game loaded successfully!', 'success');
-                modal.hide();
             } else {
                 showToast(data.error || data.message || 'Failed to load game', 'error');
             }
@@ -768,6 +1016,94 @@ document.addEventListener('DOMContentLoaded', function () {
         } catch (error) {
             console.error('Error creating backup:', error);
             showToast('Error: Failed to create backup. Please try again.', 'error');
+        }
+    }
+
+    /**
+     * Delete all saves for a game
+     */
+    async function deleteAllSaves(gameId) {
+        if (!window.DELETE_ALL_SAVES_URL_PATTERN) {
+            console.error('DELETE_ALL_SAVES_URL_PATTERN not defined');
+            return;
+        }
+        
+        // Get CSRF token (same way as deleteSaveFolder)
+        const csrfInput = document.querySelector('#gameCsrfForm input[name="csrfmiddlewaretoken"]') ||
+            document.querySelector('#gameManageForm input[name="csrfmiddlewaretoken"]');
+        const csrfToken = csrfInput ? csrfInput.value : null;
+        
+        if (!csrfToken) {
+            console.error('CSRF token not found');
+            return;
+        }
+        
+        // Show confirmation dialog
+        const confirmed = await customConfirm(
+            'Are you sure you want to delete ALL save files for this game? This action cannot be undone!',
+            'Delete All Saves',
+            'danger'
+        );
+        
+        if (!confirmed) {
+            return;
+        }
+        
+        const url = window.DELETE_ALL_SAVES_URL_PATTERN.replace('0', gameId);
+        
+        // Show loading toast
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+            toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
+            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            
+            const messageText = document.createTextNode(message);
+            toast.appendChild(messageText);
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.className = 'btn-close';
+            closeBtn.setAttribute('data-bs-dismiss', 'alert');
+            closeBtn.setAttribute('aria-label', 'Close');
+            toast.appendChild(closeBtn);
+            
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 5000);
+        }
+        
+        try {
+            showToast('Deleting all saves... Please wait.', 'info');
+            
+            const response = await fetch(url, {
+                method: 'DELETE',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': csrfToken
+                },
+                credentials: 'same-origin'
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok || !data.success) {
+                showToast(data.error || 'Failed to delete all saves', 'error');
+                return;
+            }
+            
+            showToast(data.message || 'All saves deleted successfully!', 'success');
+            
+            // Reload the saves list
+            loadSaveFolders(gameId);
+            
+        } catch (error) {
+            console.error('Error deleting all saves:', error);
+            showToast('Error: Failed to delete all saves. Please try again.', 'error');
         }
     }
 });

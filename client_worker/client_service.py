@@ -8,9 +8,11 @@ import json
 import time
 import requests
 import webbrowser
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from queue import Queue
 from dotenv import load_dotenv
 from ftp_client import FTPClient
 
@@ -44,6 +46,8 @@ class ClientWorkerService:
         self.poll_interval = poll_interval
         self.session = requests.Session()
         self.running = False
+        self._heartbeat_thread = None
+        self._current_client_id = None
         
         
         # Setup FTP client
@@ -64,6 +68,21 @@ class ClientWorkerService:
         
         print("Client Worker Service ready")
     
+    def _update_progress(self, operation_id: int, current: int, total: int, message: str = ''):
+        """Send progress update to server"""
+        try:
+            self.session.post(
+                f"{self.server_url}/api/client/progress/{operation_id}/",
+                json={
+                    'current': current,
+                    'total': total,
+                    'message': message
+                },
+                timeout=2
+            )
+        except Exception:
+            pass  # Silently fail - progress updates are not critical
+    
     def check_permissions(self) -> bool:
         """Check if we have necessary permissions to access files"""
         try:
@@ -78,14 +97,15 @@ class ClientWorkerService:
     
     
     def save_game(self, game_id: int, local_save_path: str, 
-                 username: str, game_name: str, save_folder_number: int, ftp_path: Optional[str] = None) -> Dict[str, Any]:
+                 username: str, game_name: str, save_folder_number: int, ftp_path: Optional[str] = None,
+                 operation_id: Optional[int] = None) -> Dict[str, Any]:
         """Save game - backup from local PC to FTP"""
         print(f"Backing up save files...")
         
         if not os.path.exists(local_save_path):
             return {
                 'success': False,
-                'error': f'Local save path does not exist: {local_save_path}'
+                'error': 'Oops! You don\'t have any save files to save. Maybe you haven\'t played the game yet, or the save location is incorrect.'
             }
         
         try:
@@ -93,84 +113,231 @@ class ClientWorkerService:
                 uploaded_files = []
                 failed_files = []
                 
-                # Collect all directories (including empty ones) and files
-                dir_list = set()  # Use set to avoid duplicates
-                file_list = []
+                # Streaming approach: collect files on-demand as workers become available
+                # Like FileZilla - starts uploading immediately, collects more files as workers finish
+                print("Starting upload (collecting files on-demand)...")
                 
-                for root, dirs, files in os.walk(local_save_path):
-                    # Add all directories (including empty ones)
-                    for dir_name in dirs:
-                        dir_path = os.path.join(root, dir_name)
-                        rel_dir_path = os.path.relpath(dir_path, local_save_path)
-                        remote_dir_path = rel_dir_path.replace('\\', '/')
-                        dir_list.add(remote_dir_path)
+                # Queue for files to be uploaded (buffer up to 100 files ahead)
+                file_queue = Queue(maxsize=100)
+                dir_queue = Queue()  # Queue for directories to create
+                
+                # Thread-safe counters
+                progress_lock = threading.Lock()
+                completed_count = [0]
+                total_files = [0]  # Will be updated as we discover files
+                scanning_done = [False]
+                files_found = [False]  # Track if we found any files
+                
+                MAX_WORKERS = 10  # Fixed worker count like FileZilla
+                
+                def file_collector():
+                    """Producer thread: walks directory and feeds files to queue"""
+                    dir_list = set()
+                    file_count = 0
                     
-                    # Add all files
-                    for filename in files:
-                        local_file = os.path.join(root, filename)
-                        rel_path = os.path.relpath(local_file, local_save_path)
-                        remote_filename = rel_path.replace('\\', '/')
-                        file_list.append((local_file, remote_filename))
+                    try:
+                        for root, dirs, files in os.walk(local_save_path):
+                            # Process directories
+                            root_rel = os.path.relpath(root, local_save_path)
+                            if root_rel == '.':
+                                root_rel = ''
+                            else:
+                                root_rel = root_rel.replace('\\', '/')
+                            
+                            for dir_name in dirs:
+                                if root_rel:
+                                    remote_dir_path = f"{root_rel}/{dir_name}"
+                                else:
+                                    remote_dir_path = dir_name
+                                if remote_dir_path not in dir_list:
+                                    dir_list.add(remote_dir_path)
+                                    dir_queue.put(remote_dir_path)
+                            
+                            # Process files - add to queue as we discover them
+                            for filename in files:
+                                file_count += 1
+                                files_found[0] = True
+                                local_file = os.path.join(root, filename)
+                                if root_rel:
+                                    remote_filename = f"{root_rel}/{filename}"
+                                else:
+                                    remote_filename = filename
+                                
+                                # Put file in queue (will block if queue is full, allowing workers to catch up)
+                                file_queue.put((local_file, remote_filename))
+                                with progress_lock:
+                                    total_files[0] = file_count
+                    
+                    except Exception as e:
+                        print(f"Error during file collection: {e}")
+                    finally:
+                        scanning_done[0] = True
+                        # Wait for queue to empty before sending sentinels
+                        # This ensures all discovered files are processed
+                        file_queue.join()  # Wait for all items to be processed
+                        # Put sentinel values to signal completion to all workers
+                        for _ in range(MAX_WORKERS):
+                            file_queue.put(None)
                 
-                # Create empty directories first
-                if dir_list:
-                    for remote_dir_path in sorted(dir_list):  # Sort to create parent dirs first
+                # Start file collection in background thread
+                collector_thread = threading.Thread(target=file_collector, daemon=True)
+                collector_thread.start()
+                
+                # Create directories in background (non-blocking)
+                def create_directories():
+                    """Create directories as they're discovered"""
+                    dirs_created = 0
+                    while True:
                         try:
-                            self.ftp_client.create_directory(
+                            remote_dir_path = dir_queue.get(timeout=1)
+                            try:
+                                self.ftp_client.create_directory(
+                                    username=username,
+                                    game_name=game_name,
+                                    folder_number=save_folder_number,
+                                    remote_dir_path=remote_dir_path,
+                                    ftp_path=ftp_path
+                                )
+                                dirs_created += 1
+                            except Exception:
+                                pass  # Directory might already exist
+                            dir_queue.task_done()
+                        except:
+                            if scanning_done[0] and dir_queue.empty():
+                                break
+                
+                dir_thread = threading.Thread(target=create_directories, daemon=True)
+                dir_thread.start()
+                
+                def upload_worker():
+                    """Worker function: pulls files from queue and uploads them continuously"""
+                    worker_results = []
+                    while True:
+                        # Get file from queue
+                        file_info = file_queue.get()
+                        if file_info is None:  # Sentinel - no more files
+                            file_queue.task_done()
+                            break  # Exit loop when sentinel received
+                        
+                        local_file, remote_filename = file_info
+                        try:
+                            # Reuse connection within thread for better performance
+                            success, message = self.ftp_client.upload_save(
                                 username=username,
                                 game_name=game_name,
+                                local_file_path=local_file,
                                 folder_number=save_folder_number,
-                                remote_dir_path=remote_dir_path,
+                                remote_filename=remote_filename,
                                 ftp_path=ftp_path
                             )
-                        except Exception:
-                            # Continue anyway - directory might already exist or be created by file upload
-                            pass
+                            
+                            # Update progress
+                            with progress_lock:
+                                completed_count[0] += 1
+                                current = completed_count[0]
+                                total = total_files[0]
+                                # Show filename (truncate if too long)
+                                display_name = remote_filename if len(remote_filename) <= 60 else remote_filename[:57] + "..."
+                                if success:
+                                    if total > 0:
+                                        print(f"  [{current}/{total}] Uploaded: {display_name}")
+                                        if operation_id:
+                                            self._update_progress(operation_id, current, total, f"Uploaded: {display_name}")
+                                    else:
+                                        print(f"  [{current}] Uploaded: {display_name}")
+                                        if operation_id:
+                                            self._update_progress(operation_id, current, 0, f"Uploaded: {display_name}")
+                                else:
+                                    # Show error immediately - upload_save returned success=False
+                                    error_msg = message if message else "Upload failed"
+                                    if total > 0:
+                                        print(f"  [{current}/{total}] FAILED: {display_name}")
+                                        print(f"      Error: {error_msg}")
+                                        if operation_id:
+                                            self._update_progress(operation_id, current, total, f"Failed: {display_name}")
+                                    else:
+                                        print(f"  [{current}] FAILED: {display_name}")
+                                        print(f"      Error: {error_msg}")
+                                        if operation_id:
+                                            self._update_progress(operation_id, current, 0, f"Failed: {display_name}")
+                            
+                            file_queue.task_done()
+                            worker_results.append((success, remote_filename, message))
+                        except Exception as e:
+                            with progress_lock:
+                                completed_count[0] += 1
+                                current = completed_count[0]
+                                total = total_files[0]
+                                print(f"  [{current}/{total if total > 0 else '?'}] ERROR uploading {remote_filename}: {e}")
+                                if operation_id:
+                                    self._update_progress(operation_id, current, total if total > 0 else 0, f"Error: {remote_filename}")
+                            file_queue.task_done()
+                            worker_results.append((False, remote_filename, str(e)))
+                    
+                    return worker_results
                 
-                file_count = len(file_list)
-                
-                if file_count == 0:
+                # Check if we found any files
+                # Wait a moment for collector to start finding files
+                time.sleep(0.1)
+                if not files_found[0] and scanning_done[0]:
                     return {
                         'success': False,
                         'error': f'No files found in directory: {local_save_path}'
                     }
                 
-                # Process files in parallel batches (max 50 at a time)
-                MAX_WORKERS = min(50, file_count)
-                print(f"Uploading {file_count} file(s)...")
+                print(f"Starting upload with {MAX_WORKERS} worker(s)...")
                 
-                def upload_file(file_info: Tuple[str, str]) -> Tuple[bool, str, str]:
-                    """Upload a single file - returns (success, remote_filename, message)"""
-                    local_file, remote_filename = file_info
-                    try:
-                        success, message = self.ftp_client.upload_save(
-                            username=username,
-                            game_name=game_name,
-                            local_file_path=local_file,
-                            folder_number=save_folder_number,
-                            remote_filename=remote_filename,
-                            ftp_path=ftp_path
-                        )
-                        return (success, remote_filename, message)
-                    except Exception as e:
-                        print(f"ERROR: Exception uploading {remote_filename}: {e}")
-                        return (False, remote_filename, str(e))
-                
-                # Process files in parallel
+                # Process files in parallel - workers pull from queue as they become available
                 with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-                    future_to_file = {executor.submit(upload_file, file_info): file_info[1] 
-                                     for file_info in file_list}
+                    # Submit all workers
+                    futures = [executor.submit(upload_worker) for _ in range(MAX_WORKERS)]
                     
-                    for future in as_completed(future_to_file):
-                        remote_filename = future_to_file[future]
-                        try:
-                            success, remote_filename, message = future.result()
-                            if success:
-                                uploaded_files.append(remote_filename)
+                    # Process results as they complete
+                    while futures:
+                        done_futures = []
+                        remaining_futures = []
+                        
+                        for future in futures:
+                            if future.done():
+                                done_futures.append(future)
                             else:
-                                failed_files.append({'file': remote_filename, 'error': message})
-                        except Exception as e:
-                            failed_files.append({'file': remote_filename, 'error': str(e)})
+                                remaining_futures.append(future)
+                        
+                        for future in done_futures:
+                            result = future.result()
+                            # Worker returns a list of results (all files it processed)
+                            if result:
+                                for success, remote_filename, message in result:
+                                    if success:
+                                        uploaded_files.append(remote_filename)
+                                    else:
+                                        failed_files.append({'file': remote_filename, 'error': message})
+                        
+                        futures = remaining_futures
+                        
+                        # Small sleep to avoid busy waiting
+                        if futures:
+                            time.sleep(0.01)
+                
+                # Wait for threads to finish
+                collector_thread.join(timeout=1)
+                dir_thread.join(timeout=1)
+                
+                print(f"Upload complete: {len(uploaded_files)} succeeded, {len(failed_files)} failed")
+                
+                # Show failed files with error messages
+                if failed_files:
+                    print(f"\nFailed files ({len(failed_files)}):")
+                    for i, failed in enumerate(failed_files[:20], 1):  # Show first 20 failures
+                        file_name = failed.get('file', 'Unknown')
+                        error_msg = failed.get('error', 'Unknown error')
+                        display_name = file_name if len(file_name) <= 70 else file_name[:67] + "..."
+                        print(f"  {i}. {display_name}")
+                        print(f"     Error: {error_msg}")
+                    if len(failed_files) > 20:
+                        print(f"  ... and {len(failed_files) - 20} more failed files")
+                
+                # Note: Thread-local connections are automatically cleaned up when threads end
                 
                 if failed_files:
                     return {
@@ -186,6 +353,8 @@ class ClientWorkerService:
                     'uploaded_files': uploaded_files
                 }
             else:
+                # Single file upload
+                print(f"Uploading single file: {os.path.basename(local_save_path)}")
                 success, message = self.ftp_client.upload_save(
                     username=username,
                     game_name=game_name,
@@ -195,8 +364,10 @@ class ClientWorkerService:
                 )
                 
                 if success:
+                    print(f"Upload complete: {os.path.basename(local_save_path)}")
                     return {'success': True, 'message': message}
                 else:
+                    print(f"Upload failed: {message}")
                     return {'success': False, 'error': message}
                     
         except Exception as e:
@@ -204,9 +375,10 @@ class ClientWorkerService:
             return {'success': False, 'error': f'Save operation failed: {str(e)}'}
     
     def load_game(self, game_id: int, local_save_path: str,
-                 username: str, game_name: str, save_folder_number: int, ftp_path: Optional[str] = None) -> Dict[str, Any]:
+                 username: str, game_name: str, save_folder_number: int, ftp_path: Optional[str] = None,
+                 operation_id: Optional[int] = None) -> Dict[str, Any]:
         """Load game - download from FTP to local PC"""
-        print(f"Downloading save files...")
+        print(f"Preparing to download save files...")
         
         try:
             success, files, directories, message = self.ftp_client.list_saves(
@@ -264,58 +436,177 @@ class ClientWorkerService:
                     local_dir = os.path.join(local_save_path, *remote_dir_normalized.split('/'))
                     os.makedirs(local_dir, exist_ok=True)
             
-            # Prepare file list
-            file_list = []
-            for file_info in files:
-                remote_filename = file_info['name']
-                
-                # Normalize path separators to use forward slashes
-                remote_filename_normalized = remote_filename.replace('\\', '/')
-                # Build local file path using OS-specific separators
-                local_file = os.path.join(local_save_path, *remote_filename_normalized.split('/'))
-                
-                # Ensure parent directory exists (should already exist from above, but just in case)
-                local_dir = os.path.dirname(local_file)
-                if local_dir != local_save_path:
-                    os.makedirs(local_dir, exist_ok=True)
-                
-                file_list.append((remote_filename, local_file))
+            # Streaming approach: download files on-demand as workers become available
+            # Like FileZilla - starts downloading immediately, processes files as workers finish
+            print("Starting download (processing files on-demand)...")
             
-            # Process files in parallel batches (max 50 at a time)
-            MAX_WORKERS = min(50, len(file_list))
+            # Queue for files to be downloaded (buffer up to 100 files ahead)
+            file_queue = Queue(maxsize=100)
             
-            def download_file(file_info: Tuple[str, str]) -> Tuple[bool, str, str]:
-                """Download a single file - returns (success, remote_filename, message)"""
-                remote_filename, local_file = file_info
+            # Thread-safe counters
+            progress_lock = threading.Lock()
+            completed_count = [0]
+            total_files = [len(files)]
+            processing_done = [False]
+            
+            MAX_WORKERS = 10  # Fixed worker count like FileZilla
+            
+            # Send initial progress
+            if operation_id and total_files[0] > 0:
+                self._update_progress(operation_id, 0, total_files[0], f"Found {total_files[0]} file(s) to download")
+            
+            def file_processor():
+                """Producer: prepares files and feeds them to queue"""
                 try:
-                    success, message = self.ftp_client.download_save(
-                        username=username,
-                        game_name=game_name,
-                        remote_filename=remote_filename,
-                        local_file_path=local_file,
-                        folder_number=save_folder_number,
-                        ftp_path=ftp_path
-                    )
-                    return (success, remote_filename, message)
+                    for file_info in files:
+                        remote_filename = file_info['name']
+                        
+                        # Normalize path separators to use forward slashes
+                        remote_filename_normalized = remote_filename.replace('\\', '/')
+                        # Build local file path using OS-specific separators
+                        local_file = os.path.join(local_save_path, *remote_filename_normalized.split('/'))
+                        
+                        # Ensure parent directory exists (should already exist from above, but just in case)
+                        local_dir = os.path.dirname(local_file)
+                        if local_dir != local_save_path:
+                            os.makedirs(local_dir, exist_ok=True)
+                        
+                        # Put file in queue (will block if queue is full, allowing workers to catch up)
+                        file_queue.put((remote_filename, local_file))
                 except Exception as e:
-                    print(f"ERROR: Exception downloading {remote_filename}: {e}")
-                    return (False, remote_filename, str(e))
+                    print(f"Error during file processing: {e}")
+                finally:
+                    processing_done[0] = True
+                    # Wait for queue to empty before sending sentinels
+                    file_queue.join()
+                    # Put sentinel values to signal completion to all workers
+                    for _ in range(MAX_WORKERS):
+                        file_queue.put(None)
             
-            # Process files in parallel
-            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-                future_to_file = {executor.submit(download_file, file_info): file_info[0] 
-                                 for file_info in file_list}
-                
-                for future in as_completed(future_to_file):
-                    remote_filename = future_to_file[future]
+            # Start file processing in background thread
+            processor_thread = threading.Thread(target=file_processor, daemon=True)
+            processor_thread.start()
+            
+            def download_worker():
+                """Worker function: pulls files from queue and downloads them continuously"""
+                worker_results = []
+                while True:
+                    # Get file from queue
+                    file_info = file_queue.get()
+                    if file_info is None:  # Sentinel - no more files
+                        file_queue.task_done()
+                        break  # Exit loop when sentinel received
+                    
+                    remote_filename, local_file = file_info
                     try:
-                        success, remote_filename, message = future.result()
-                        if success:
-                            downloaded_files.append(remote_filename)
-                        else:
-                            failed_files.append({'file': remote_filename, 'error': message})
+                        # Reuse connection within thread for better performance
+                        success, message = self.ftp_client.download_save(
+                            username=username,
+                            game_name=game_name,
+                            remote_filename=remote_filename,
+                            local_file_path=local_file,
+                            folder_number=save_folder_number,
+                            ftp_path=ftp_path
+                        )
+                        
+                        # Update progress
+                        with progress_lock:
+                            completed_count[0] += 1
+                            current = completed_count[0]
+                            total = total_files[0]
+                            # Show filename (truncate if too long)
+                            display_name = remote_filename if len(remote_filename) <= 60 else remote_filename[:57] + "..."
+                            if success:
+                                if total > 0:
+                                    print(f"  [{current}/{total}] Downloaded: {display_name}")
+                                    if operation_id:
+                                        self._update_progress(operation_id, current, total, f"Downloaded: {display_name}")
+                                else:
+                                    print(f"  [{current}] Downloaded: {display_name}")
+                                    if operation_id:
+                                        self._update_progress(operation_id, current, 0, f"Downloaded: {display_name}")
+                            else:
+                                # Show error immediately
+                                error_msg = message if message else "Download failed"
+                                if total > 0:
+                                    print(f"  [{current}/{total}] FAILED: {display_name}")
+                                    print(f"      Error: {error_msg}")
+                                    if operation_id:
+                                        self._update_progress(operation_id, current, total, f"Failed: {display_name}")
+                                else:
+                                    print(f"  [{current}] FAILED: {display_name}")
+                                    print(f"      Error: {error_msg}")
+                                    if operation_id:
+                                        self._update_progress(operation_id, current, 0, f"Failed: {display_name}")
+                        
+                        file_queue.task_done()
+                        worker_results.append((success, remote_filename, message))
                     except Exception as e:
-                        failed_files.append({'file': remote_filename, 'error': str(e)})
+                        with progress_lock:
+                            completed_count[0] += 1
+                            current = completed_count[0]
+                            total = total_files[0]
+                            print(f"  [{current}/{total if total > 0 else '?'}] ERROR downloading {remote_filename}: {e}")
+                            if operation_id:
+                                self._update_progress(operation_id, current, total if total > 0 else 0, f"Error: {remote_filename}")
+                        file_queue.task_done()
+                        worker_results.append((False, remote_filename, str(e)))
+                
+                return worker_results
+            
+            # Wait a moment for processor to start
+            time.sleep(0.1)
+            
+            print(f"Starting download with {MAX_WORKERS} worker(s)...")
+            
+            # Process files in parallel - workers pull from queue as they become available
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                # Submit all workers
+                futures = [executor.submit(download_worker) for _ in range(MAX_WORKERS)]
+                
+                # Process results as they complete
+                while futures:
+                    done_futures = []
+                    remaining_futures = []
+                    
+                    for future in futures:
+                        if future.done():
+                            done_futures.append(future)
+                        else:
+                            remaining_futures.append(future)
+                    
+                    for future in done_futures:
+                        result = future.result()
+                        # Worker returns a list of results (all files it processed)
+                        if result:
+                            for success, remote_filename, message in result:
+                                if success:
+                                    downloaded_files.append(remote_filename)
+                                else:
+                                    failed_files.append({'file': remote_filename, 'error': message})
+                    
+                    futures = remaining_futures
+                    
+                    # Small sleep to avoid busy waiting
+                    if futures:
+                        time.sleep(0.01)
+            
+            # Wait for threads to finish
+            processor_thread.join(timeout=1)
+            
+            print(f"Download complete: {len(downloaded_files)} succeeded, {len(failed_files)} failed")
+            
+            # Show failed files with error messages
+            if failed_files:
+                print(f"\nFailed files ({len(failed_files)}):")
+                for i, failed in enumerate(failed_files[:20], 1):  # Show first 20 failures
+                    file_name = failed.get('file', 'Unknown')
+                    error_msg = failed.get('error', 'Unknown error')
+                    display_name = file_name if len(file_name) <= 70 else file_name[:67] + "..."
+                    print(f"  {i}. {display_name}")
+                    print(f"     Error: {error_msg}")
+                if len(failed_files) > 20:
+                    print(f"  ... and {len(failed_files) - 20} more failed files")
             
             if failed_files:
                 return {
@@ -338,6 +629,7 @@ class ClientWorkerService:
     def list_saves(self, game_id: int, username: str, game_name: str, 
                   save_folder_number: int, ftp_path: Optional[str] = None) -> Dict[str, Any]:
         """List all save files in a save folder"""
+        print(f"Listing save files...")
         
         try:
             success, files, directories, message = self.ftp_client.list_saves(
@@ -353,6 +645,7 @@ class ClientWorkerService:
                     'error': f'Failed to list saves: {message}'
                 }
             
+            print(f"Found {len(files)} file(s) and {len(directories)} directory(ies)")
             return {
                 'success': True,
                 'files': files,
@@ -364,9 +657,10 @@ class ClientWorkerService:
             return {'success': False, 'error': f'List operation failed: {str(e)}'}
     
     def delete_save_folder(self, game_id: int, username: str, game_name: str,
-                          save_folder_number: int, ftp_path: Optional[str] = None) -> Dict[str, Any]:
-        """Delete a save folder from FTP"""
-        print(f"Deleting save folder...")
+                          save_folder_number: int, ftp_path: Optional[str] = None,
+                          operation_id: Optional[int] = None) -> Dict[str, Any]:
+        """Delete a save folder from FTP - FORCE DELETE (always deletes everything)"""
+        print(f"Deleting save folder (force delete - will delete all contents)...")
         
         if not ftp_path:
             return {
@@ -375,54 +669,243 @@ class ClientWorkerService:
             }
         
         try:
-            ftp_host = self.ftp_client._get_connection()
-            try:
-                # Check if path exists
-                if not ftp_host.path.exists(ftp_path) or not ftp_host.path.isdir(ftp_path):
-                    return {
-                        'success': True,
-                        'message': f'Save folder {save_folder_number} doesn\'t exist on FTP (already deleted)'
-                    }
-                
-                # Recursively delete all files and directories
-                def delete_recursive(path):
-                    """Recursively delete directory and all contents"""
-                    try:
-                        items = ftp_host.listdir(path)
-                        for item in items:
-                            item_path = ftp_host.path.join(path, item)
-                            if ftp_host.path.isdir(item_path):
-                                delete_recursive(item_path)
-                                try:
-                                    ftp_host.rmdir(item_path)
-                                except Exception:
-                                    pass
-                            else:
-                                try:
-                                    ftp_host.remove(item_path)
-                                except Exception:
-                                    pass
-                    except Exception:
-                        pass
-                
-                # Delete all contents
-                delete_recursive(ftp_path)
-                
-                # Delete the folder itself
-                try:
-                    ftp_host.rmdir(ftp_path)
-                except Exception as e:
-                    return {
-                        'success': False,
-                        'error': f'Failed to delete folder: {str(e)}'
-                    }
-                
+            # First, list all items to delete
+            success, files, directories, message = self.ftp_client.list_saves(
+                username=username,
+                game_name=game_name,
+                folder_number=save_folder_number,
+                ftp_path=ftp_path
+            )
+            
+            if not success:
+                return {
+                    'success': False,
+                    'error': f'Failed to list items for deletion: {message}'
+                }
+            
+            # Collect all items to delete (files first, then directories)
+            items_to_delete = []
+            
+            # Add all files
+            for file_info in files:
+                items_to_delete.append({
+                    'type': 'file',
+                    'path': file_info['name'],
+                    'full_path': None  # Will be constructed during deletion
+                })
+            
+            # Add all directories (sorted by depth, deepest first)
+            # This ensures we delete child directories before parent directories
+            dir_paths = sorted(directories, key=lambda x: x.count('/'), reverse=True)
+            for dir_path in dir_paths:
+                items_to_delete.append({
+                    'type': 'directory',
+                    'path': dir_path,
+                    'full_path': None
+                })
+            
+            # Add the root directory itself (last)
+            items_to_delete.append({
+                'type': 'directory',
+                'path': '',
+                'full_path': ftp_path
+            })
+            
+            if not items_to_delete:
+                # Nothing to delete
                 return {
                     'success': True,
-                    'message': f'Successfully deleted save folder {save_folder_number}'
+                    'message': 'Save folder is already empty'
                 }
-            finally:
-                ftp_host.close()
+            
+            # Streaming approach: delete items on-demand as workers become available
+            print("Starting delete (processing items on-demand)...")
+            
+            # Queue for items to be deleted (buffer up to 100 items ahead)
+            delete_queue = Queue(maxsize=100)
+            
+            # Thread-safe counters
+            progress_lock = threading.Lock()
+            completed_count = [0]
+            total_items = [len(items_to_delete)]
+            processing_done = [False]
+            
+            MAX_WORKERS = 10  # Fixed worker count like FileZilla
+            
+            # Send initial progress
+            if operation_id and total_items[0] > 0:
+                self._update_progress(operation_id, 0, total_items[0], f"Found {total_items[0]} item(s) to delete")
+            
+            def item_processor():
+                """Producer: prepares items and feeds them to queue"""
+                try:
+                    for item in items_to_delete:
+                        # Put item in queue (will block if queue is full, allowing workers to catch up)
+                        delete_queue.put(item)
+                except Exception as e:
+                    print(f"Error during item processing: {e}")
+                finally:
+                    processing_done[0] = True
+                    # Wait for queue to empty before sending sentinels
+                    delete_queue.join()
+                    # Put sentinel values to signal completion to all workers
+                    for _ in range(MAX_WORKERS):
+                        delete_queue.put(None)
+            
+            # Start item processing in background thread
+            processor_thread = threading.Thread(target=item_processor, daemon=True)
+            processor_thread.start()
+            
+            deleted_items = []
+            failed_items = []
+            
+            def delete_worker():
+                """Worker function: pulls items from queue and deletes them continuously"""
+                worker_results = []
+                while True:
+                    # Get item from queue
+                    item = delete_queue.get()
+                    if item is None:  # Sentinel - no more items
+                        delete_queue.task_done()
+                        break  # Exit loop when sentinel received
+                    
+                    item_type = item['type']
+                    item_path = item['path']
+                    
+                    try:
+                        # Build full path
+                        if item['full_path']:
+                            full_path = item['full_path']
+                        else:
+                            # Construct full path from base ftp_path
+                            if item_path:
+                                full_path = f"{ftp_path.rstrip('/')}/{item_path.lstrip('/')}"
+                            else:
+                                full_path = ftp_path
+                        
+                        # Delete the item
+                        if item_type == 'file':
+                            # Delete file using delete_file helper
+                            success, message = self.ftp_client.delete_file(full_path)
+                        else:
+                            # Delete directory using delete_directory helper
+                            # Since we're deleting in order (deepest first), directories should be empty
+                            success, message = self.ftp_client.delete_directory(full_path)
+                        
+                        # Update progress
+                        with progress_lock:
+                            completed_count[0] += 1
+                            current = completed_count[0]
+                            total = total_items[0]
+                            # Show item name (truncate if too long)
+                            display_name = item_path if item_path and len(item_path) <= 60 else (item_path[:57] + "..." if item_path else os.path.basename(full_path))
+                            if success:
+                                if total > 0:
+                                    print(f"  [{current}/{total}] Deleted: {display_name}")
+                                    if operation_id:
+                                        self._update_progress(operation_id, current, total, f"Deleted: {display_name}")
+                                else:
+                                    print(f"  [{current}] Deleted: {display_name}")
+                                    if operation_id:
+                                        self._update_progress(operation_id, current, 0, f"Deleted: {display_name}")
+                            else:
+                                # Show error immediately
+                                error_msg = message if message else "Delete failed"
+                                if total > 0:
+                                    print(f"  [{current}/{total}] FAILED: {display_name}")
+                                    print(f"      Error: {error_msg}")
+                                    if operation_id:
+                                        self._update_progress(operation_id, current, total, f"Failed: {display_name}")
+                                else:
+                                    print(f"  [{current}] FAILED: {display_name}")
+                                    print(f"      Error: {error_msg}")
+                                    if operation_id:
+                                        self._update_progress(operation_id, current, 0, f"Failed: {display_name}")
+                        
+                        delete_queue.task_done()
+                        worker_results.append((success, item_path, message))
+                    except Exception as e:
+                        with progress_lock:
+                            completed_count[0] += 1
+                            current = completed_count[0]
+                            total = total_items[0]
+                            display_name = item_path if item_path and len(item_path) <= 60 else (item_path[:57] + "..." if item_path else "unknown")
+                            print(f"  [{current}/{total if total > 0 else '?'}] ERROR deleting {display_name}: {e}")
+                            if operation_id:
+                                self._update_progress(operation_id, current, total if total > 0 else 0, f"Error: {display_name}")
+                        delete_queue.task_done()
+                        worker_results.append((False, item_path, str(e)))
+                
+                return worker_results
+            
+            # Wait a moment for processor to start
+            time.sleep(0.1)
+            
+            print(f"Starting delete with {MAX_WORKERS} worker(s)...")
+            
+            # Process items in parallel - workers pull from queue as they become available
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                # Submit all workers
+                futures = [executor.submit(delete_worker) for _ in range(MAX_WORKERS)]
+                
+                # Process results as they complete
+                while futures:
+                    done_futures = []
+                    remaining_futures = []
+                    
+                    for future in futures:
+                        if future.done():
+                            done_futures.append(future)
+                        else:
+                            remaining_futures.append(future)
+                    
+                    for future in done_futures:
+                        result = future.result()
+                        # Worker returns a list of results (all items it processed)
+                        if result:
+                            for success, item_path, message in result:
+                                if success:
+                                    deleted_items.append(item_path)
+                                else:
+                                    failed_items.append({'item': item_path, 'error': message})
+                    
+                    futures = remaining_futures
+                    
+                    # Small sleep to avoid busy waiting
+                    if futures:
+                        time.sleep(0.01)
+            
+            # Wait for threads to finish
+            processor_thread.join(timeout=1)
+            
+            print(f"Delete complete: {len(deleted_items)} succeeded, {len(failed_items)} failed")
+            
+            # Show failed items with error messages
+            if failed_items:
+                print(f"\nFailed items ({len(failed_items)}):")
+                for i, failed in enumerate(failed_items[:20], 1):  # Show first 20 failures
+                    item_name = failed.get('item', 'Unknown')
+                    error_msg = failed.get('error', 'Unknown error')
+                    display_name = item_name if len(item_name) <= 70 else item_name[:67] + "..."
+                    print(f"  {i}. {display_name}")
+                    print(f"     Error: {error_msg}")
+                if len(failed_items) > 20:
+                    print(f"  ... and {len(failed_items) - 20} more failed items")
+            
+            if failed_items:
+                return {
+                    'success': False,
+                    'message': f'Deleted {len(deleted_items)} item(s), {len(failed_items)} failed',
+                    'deleted_items': deleted_items,
+                    'failed_items': failed_items
+                }
+            
+            return {
+                'success': True,
+                'message': f'Successfully deleted {len(deleted_items)} item(s)',
+                'deleted_items': deleted_items
+            }
+                    
         except Exception as e:
             print(f"Error: Delete operation failed - {str(e)}")
             return {'success': False, 'error': f'Delete operation failed: {str(e)}'}
@@ -448,12 +931,26 @@ class ClientWorkerService:
         try:
             response = self.session.post(
                 f"{self.server_url}/api/client/heartbeat/",
-                json={'client_id': client_id}
+                json={'client_id': client_id},
+                timeout=5  # Short timeout for heartbeat
             )
             return response.status_code == 200
         except Exception:
             return False
-            return False
+    
+    def _heartbeat_loop(self, client_id: str):
+        """Background thread that continuously sends heartbeats"""
+        heartbeat_interval = 10  # Send heartbeat every 10 seconds (server timeout is 30 seconds)
+        while self.running:
+            try:
+                self.send_heartbeat(client_id)
+            except Exception:
+                pass  # Silently fail - will retry on next interval
+            # Sleep in small increments so we can check self.running frequently
+            for _ in range(heartbeat_interval * 10):  # 10 seconds = 100 * 0.1 second sleeps
+                if not self.running:
+                    break
+                time.sleep(0.1)
     
     def unregister_from_server(self, client_id: str) -> bool:
         """Unregister this client from the Django server (called on shutdown)"""
@@ -524,6 +1021,11 @@ class ClientWorkerService:
         print(f"Connected to server")
         print(f"Service running (checking for operations every {self.poll_interval} second(s))...")
         
+        # Start heartbeat thread (runs continuously, even during long operations)
+        self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, args=(client_id,), daemon=True)
+        self._heartbeat_thread.start()
+        print("Heartbeat thread started (sending heartbeats every 10 seconds)")
+        
         # Open server URL in default browser
         browser_opened = False
         try:
@@ -541,13 +1043,12 @@ class ClientWorkerService:
         
         try:
             while self.running:
-                # Send heartbeat
-                self.send_heartbeat(client_id)
-                
                 # Poll server for pending operations
+                # Note: Heartbeat is sent in separate thread, so it continues during long operations
                 try:
                     response = self.session.get(
-                        f"{self.server_url}/api/client/pending/{client_id}/"
+                        f"{self.server_url}/api/client/pending/{client_id}/",
+                        timeout=5  # Short timeout for polling
                     )
                     if response.status_code == 200:
                         data = response.json()
@@ -562,6 +1063,10 @@ class ClientWorkerService:
             print("\nShutting down...")
             self.running = False
         finally:
+            # Wait for heartbeat thread to finish
+            if self._heartbeat_thread and self._heartbeat_thread.is_alive():
+                # Thread will exit when self.running becomes False
+                self._heartbeat_thread.join(timeout=2)
             # Unregister on shutdown
             try:
                 self.unregister_from_server(client_id)
@@ -588,13 +1093,13 @@ class ClientWorkerService:
             return
         
         if op_type == 'save':
-            result = self.save_game(game_id, local_path, username, game_name, save_folder_number, ftp_path)
+            result = self.save_game(game_id, local_path, username, game_name, save_folder_number, ftp_path, operation_id)
         elif op_type == 'load':
-            result = self.load_game(game_id, local_path, username, game_name, save_folder_number, ftp_path)
+            result = self.load_game(game_id, local_path, username, game_name, save_folder_number, ftp_path, operation_id)
         elif op_type == 'list':
             result = self.list_saves(game_id, username, game_name, save_folder_number, ftp_path)
         elif op_type == 'delete':
-            result = self.delete_save_folder(game_id, username, game_name, save_folder_number, ftp_path)
+            result = self.delete_save_folder(game_id, username, game_name, save_folder_number, ftp_path, operation_id)
         else:
             print(f"Error: Unknown operation type")
             return

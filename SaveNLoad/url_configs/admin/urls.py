@@ -12,6 +12,7 @@ urlpatterns = [
     # More specific patterns first to avoid conflicts
     path('games/<int:game_id>/save-folders/<int:folder_number>/delete/', save_load_api.delete_save_folder, name='delete_save_folder'),
     path('games/<int:game_id>/backup-all-saves/', save_load_api.backup_all_saves, name='backup_all_saves'),
+    path('games/<int:game_id>/delete-all-saves/', save_load_api.delete_all_saves, name='delete_all_saves'),
     path('games/<int:game_id>/save-folders/', save_load_api.list_save_folders, name='list_save_folders'),
     path('games/<int:game_id>/saves/', save_load_api.list_saves, name='list_saves'),
     path('games/<int:game_id>/load/', save_load_api.load_game, name='load_game'),
