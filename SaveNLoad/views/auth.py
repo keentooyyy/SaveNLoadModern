@@ -10,7 +10,10 @@ from SaveNLoad.views.api_helpers import (
     check_worker_connected_or_redirect,
     redirect_if_logged_in,
     json_response_with_redirect,
-    json_response_field_errors
+    json_response_field_errors,
+    json_response_error,
+    json_response_success,
+    parse_json_body
 )
 from SaveNLoad.views.input_sanitizer import (
     sanitize_username,
@@ -67,10 +70,10 @@ def login(request):
                     
                     # Handle "Remember Me" functionality
                     if not remember_me:
-                        # Session expires when browser closes
-                        request.session.set_expiry(0)
+                        # Session expires in 1 day (86400 seconds) - standard practice
+                        request.session.set_expiry(86400)
                     else:
-                        # Session expires in 2 weeks
+                        # Session expires in 2 weeks (1209600 seconds) when "Remember Me" is checked
                         request.session.set_expiry(1209600)
                     
                     # Server-side redirect for AJAX (via custom header)
@@ -186,13 +189,256 @@ def register(request):
 @ensure_csrf_cookie
 @csrf_protect
 def forgot_password(request):
-    """Forgot password page - CSRF protected"""
+    """Forgot password page - sends OTP via email"""
     # Check if already logged in
     redirect_response = redirect_if_logged_in(request)
     if redirect_response:
         return redirect_response
     
+    if request.method == 'POST':
+        # Handle AJAX requests
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            from SaveNLoad.models.password_reset_otp import PasswordResetOTP
+            from SaveNLoad.utils.email_service import send_otp_email
+            import logging
+            
+            logger = logging.getLogger(__name__)
+            
+            data, error_response = parse_json_body(request)
+            if error_response:
+                return error_response
+            
+            # Sanitize email
+            raw_email = data.get('email', '').strip()
+            email = sanitize_email(raw_email)
+            
+            if not email:
+                return json_response_error('Please enter a valid email address.', status=400)
+            
+            # Check if user exists with this email
+            try:
+                user = SimpleUsers.objects.get(email__iexact=email)
+            except SimpleUsers.DoesNotExist:
+                # Don't reveal if email exists or not (security best practice)
+                return json_response_success(
+                    message='If an account with that email exists, an OTP code has been sent.'
+                )
+            
+            # Generate OTP
+            try:
+                otp = PasswordResetOTP.generate_otp(user, email, expiry_minutes=10)
+                
+                # Send OTP via email
+                email_sent = send_otp_email(email, otp.otp_code, user.username)
+                
+                if email_sent:
+                    # Store email in session for OTP verification step
+                    request.session['password_reset_email'] = email
+                    request.session['password_reset_user_id'] = user.id
+                    # Clear any previous OTP verification
+                    request.session.pop('password_reset_otp_verified', None)
+                    
+                    return json_response_success(
+                        message='OTP code has been sent to your email address. Please check your inbox.'
+                    )
+                else:
+                    logger.error(f"Failed to send OTP email to {email}")
+                    return json_response_error(
+                        'Failed to send email. Please try again later.',
+                        status=500
+                    )
+            except Exception as e:
+                logger.error(f"Error generating/sending OTP: {str(e)}")
+                return json_response_error(
+                    'An error occurred. Please try again later.',
+                    status=500
+                )
+    
     return render(request, 'SaveNLoad/forgot_password.html')
+
+
+@ensure_csrf_cookie
+@csrf_protect
+def verify_otp(request):
+    """Verify OTP page - validates OTP code"""
+    # Check if already logged in
+    redirect_response = redirect_if_logged_in(request)
+    if redirect_response:
+        return redirect_response
+    
+    # Check if email is in session (from forgot_password step)
+    email = request.session.get('password_reset_email')
+    if not email:
+        # No email in session, redirect to forgot password
+        return redirect(reverse('SaveNLoad:forgot_password'))
+    
+    if request.method == 'POST':
+        # Handle AJAX requests
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            from SaveNLoad.models.password_reset_otp import PasswordResetOTP
+            from SaveNLoad.utils.email_service import send_otp_email
+            import logging
+            
+            logger = logging.getLogger(__name__)
+            
+            data, error_response = parse_json_body(request)
+            if error_response:
+                return error_response
+            
+            action = data.get('action', 'verify')
+            
+            if action == 'resend':
+                # Resend OTP
+                try:
+                    user = SimpleUsers.objects.get(email__iexact=email)
+                    otp = PasswordResetOTP.generate_otp(user, email, expiry_minutes=10)
+                    email_sent = send_otp_email(email, otp.otp_code, user.username)
+                    
+                    if email_sent:
+                        return json_response_success(
+                            message='A new OTP code has been sent to your email address.'
+                        )
+                    else:
+                        logger.error(f"Failed to resend OTP email to {email}")
+                        return json_response_error(
+                            'Failed to send email. Please try again later.',
+                            status=500
+                        )
+                except SimpleUsers.DoesNotExist:
+                    return json_response_error('User not found.', status=404)
+                except Exception as e:
+                    logger.error(f"Error resending OTP: {str(e)}")
+                    return json_response_error(
+                        'An error occurred. Please try again later.',
+                        status=500
+                    )
+            
+            # Verify OTP
+            otp_code = data.get('otp_code', '').strip()
+            
+            if not otp_code:
+                return json_response_error('OTP code is required.', status=400)
+            
+            # Validate OTP - must match the email in session
+            otp = PasswordResetOTP.validate_otp(email, otp_code)
+            if not otp:
+                return json_response_error('Invalid or expired OTP code.', status=400)
+            
+            # Verify OTP belongs to the correct user (prevent IDOR)
+            user_id = request.session.get('password_reset_user_id')
+            if otp.user.id != user_id:
+                return json_response_error('Invalid OTP code.', status=400)
+            
+            # Mark OTP as verified in session
+            request.session['password_reset_otp_verified'] = True
+            request.session['password_reset_otp_id'] = otp.id
+            
+            # Redirect to reset password page
+            redirect_url = reverse('SaveNLoad:reset_password')
+            return json_response_with_redirect(
+                message='OTP verified successfully!',
+                redirect_url=redirect_url
+            )
+    
+    # GET request - show verify OTP form
+    return render(request, 'SaveNLoad/verify_otp.html', {
+        'email': email
+    })
+
+
+@ensure_csrf_cookie
+@csrf_protect
+def reset_password(request):
+    """Reset password page - sets new password after OTP verification"""
+    # Check if already logged in
+    redirect_response = redirect_if_logged_in(request)
+    if redirect_response:
+        return redirect_response
+    
+    # Check if email and OTP verification are in session
+    email = request.session.get('password_reset_email')
+    otp_verified = request.session.get('password_reset_otp_verified')
+    otp_id = request.session.get('password_reset_otp_id')
+    
+    if not email or not otp_verified or not otp_id:
+        # Missing required session data, redirect to forgot password
+        return redirect(reverse('SaveNLoad:forgot_password'))
+    
+    if request.method == 'POST':
+        # Handle AJAX requests
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            from SaveNLoad.models.password_reset_otp import PasswordResetOTP
+            import logging
+            
+            logger = logging.getLogger(__name__)
+            
+            data, error_response = parse_json_body(request)
+            if error_response:
+                return error_response
+            
+            new_password = data.get('new_password', '').strip()
+            confirm_password = data.get('confirm_password', '').strip()
+            
+            # Validate inputs
+            if not new_password:
+                return json_response_error('New password is required.', status=400)
+            
+            if not confirm_password:
+                return json_response_error('Please confirm your new password.', status=400)
+            
+            if new_password != confirm_password:
+                return json_response_error('Passwords do not match.', status=400)
+            
+            # Validate password strength
+            is_valid, error_msg = validate_password_strength(new_password)
+            if not is_valid:
+                return json_response_error(error_msg, status=400)
+            
+            # Verify OTP is still valid and matches session
+            try:
+                otp = PasswordResetOTP.objects.get(id=otp_id, email__iexact=email, is_used=False)
+                
+                if not otp.is_valid():
+                    return json_response_error('OTP has expired. Please request a new one.', status=400)
+                
+                # Verify OTP belongs to the correct user (prevent IDOR)
+                user_id = request.session.get('password_reset_user_id')
+                if otp.user.id != user_id:
+                    return json_response_error('Invalid session. Please start over.', status=400)
+                
+                # Reset password
+                user = otp.user
+                user.set_password(new_password)
+                user.save()
+                
+                # Mark OTP as used
+                otp.mark_as_used()
+                
+                # Clear session data
+                request.session.pop('password_reset_email', None)
+                request.session.pop('password_reset_user_id', None)
+                request.session.pop('password_reset_otp_verified', None)
+                request.session.pop('password_reset_otp_id', None)
+                
+                # Redirect to login
+                redirect_url = reverse('SaveNLoad:login')
+                return json_response_with_redirect(
+                    message='Password reset successfully! Please login with your new password.',
+                    redirect_url=redirect_url
+                )
+            except PasswordResetOTP.DoesNotExist:
+                return json_response_error('Invalid session. Please start over.', status=400)
+            except Exception as e:
+                logger.error(f"Error resetting password: {str(e)}")
+                return json_response_error(
+                    'An error occurred. Please try again.',
+                    status=500
+                )
+    
+    # GET request - show reset password form
+    return render(request, 'SaveNLoad/reset_password.html', {
+        'email': email
+    })
 
 
 @login_required

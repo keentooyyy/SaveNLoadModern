@@ -18,71 +18,76 @@
         <!-- Collapsible Content -->
         <div class="collapse" id="accountSettingsCollapse">
             <div class="card-body">
-                <!-- Change Password -->
-                <div class="">
-                    <h6 class="text-white mb-3 fw-bold">Change Password</h6>
+                <form id="accountSettingsForm">
+                    {% csrf_token %}
                     
-                    <form id="changePasswordForm">
-                        {% csrf_token %}
-                        
-                        <div class="mb-3">
-                            <label for="currentPassword" class="form-label text-white">Current Password</label>
-                            <div class="input-group">
-                                <input 
-                                    type="password" 
-                                    class="form-control bg-primary border border-secondary text-white" 
-                                    id="currentPassword" 
-                                    name="current_password"
-                                    placeholder="Enter current password"
-                                    required>
-                                <button class="btn btn-outline-secondary text-white" type="button" id="toggleCurrentPassword">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="newPassword" class="form-label text-white">New Password</label>
-                            <div class="input-group">
-                                <input 
-                                    type="password" 
-                                    class="form-control bg-primary border border-secondary text-white" 
-                                    id="newPassword" 
-                                    name="new_password"
-                                    placeholder="Enter new password"
-                                    required>
-                                <button class="btn btn-outline-secondary text-white" type="button" id="toggleNewPassword">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="confirmPassword" class="form-label text-white">Confirm New Password</label>
-                            <div class="input-group">
-                                <input 
-                                    type="password" 
-                                    class="form-control bg-primary border border-secondary text-white" 
-                                    id="confirmPassword" 
-                                    name="confirm_password"
-                                    placeholder="Confirm new password"
-                                    required>
-                                <button class="btn btn-outline-secondary text-white" type="button" id="toggleConfirmPassword">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-secondary text-white fw-bold" id="changePasswordBtn">
-                                <i class="fas fa-key me-1"></i>Change Password
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary text-white" onclick="document.getElementById('changePasswordForm').reset();">
-                                Clear
+                    <!-- Email Field -->
+                    <div class="mb-3">
+                        <label for="email" class="form-label text-white">Email</label>
+                        <input 
+                            type="email" 
+                            class="form-control bg-primary border border-secondary text-white" 
+                            id="email" 
+                            name="email"
+                            placeholder="Enter your email"
+                            value="{{ user.email }}">
+                    </div>
+                    
+                    <!-- Password Fields (Optional - only fill if you want to change password) -->
+                    <div class="mb-3">
+                        <label for="currentPassword" class="form-label text-white">Current Password <span class="text-white-50">(optional)</span></label>
+                        <div class="input-group">
+                            <input 
+                                type="password" 
+                                class="form-control bg-primary border border-secondary text-white" 
+                                id="currentPassword" 
+                                name="current_password"
+                                placeholder="Enter current password">
+                            <button class="btn btn-outline-secondary text-white" type="button" id="toggleCurrentPassword">
+                                <i class="fas fa-eye"></i>
                             </button>
                         </div>
-                    </form>
-                </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="newPassword" class="form-label text-white">New Password <span class="text-white-50">(optional)</span></label>
+                        <div class="input-group">
+                            <input 
+                                type="password" 
+                                class="form-control bg-primary border border-secondary text-white" 
+                                id="newPassword" 
+                                name="new_password"
+                                placeholder="Enter new password">
+                            <button class="btn btn-outline-secondary text-white" type="button" id="toggleNewPassword">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="confirmPassword" class="form-label text-white">Confirm New Password <span class="text-white-50">(optional)</span></label>
+                        <div class="input-group">
+                            <input 
+                                type="password" 
+                                class="form-control bg-primary border border-secondary text-white" 
+                                id="confirmPassword" 
+                                name="confirm_password"
+                                placeholder="Confirm new password">
+                            <button class="btn btn-outline-secondary text-white" type="button" id="toggleConfirmPassword">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-secondary text-white fw-bold" id="saveAccountSettingsBtn">
+                            <i class="fas fa-save me-1"></i>Save Changes
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary text-white" onclick="document.getElementById('accountSettingsForm').reset(); document.getElementById('email').value = '{{ user.email }}';">
+                            Clear
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

@@ -19,6 +19,8 @@ urlpatterns = [
     path('games/<int:game_id>/delete/', settings.delete_game, name='game_delete'),
     path('games/<int:game_id>/', settings.game_detail, name='game_detail'),
     path('operations/<int:operation_id>/status/', save_load_api.check_operation_status, name='check_operation_status'),
-    path('account/change-password/', settings.change_password, name='change_password'),
+    path('account/update/', settings.update_account_settings, name='update_account_settings'),
+    path('operations/queue/stats/', settings.operation_queue_stats, name='operation_queue_stats'),
+    path('operations/queue/cleanup/', settings.operation_queue_cleanup, name='operation_queue_cleanup'),
 ]
 

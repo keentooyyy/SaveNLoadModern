@@ -52,11 +52,11 @@
                                 <div class="mb-2">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <label for="password" class="fs-6 mb-0 opacity-50">PASSWORD</label>
-                                        <a href="{% url 'SaveNLoad:forgot_password' %}" class="text-secondary text-decoration-none fs-6">Forgot Password?</a>
+                                        <a href="{% url 'SaveNLoad:forgot_password' %}" class="text-secondary text-decoration-none fs-6" tabindex="-1">Forgot Password?</a>
                                     </div>
                                     <div class="position-relative">
                                         <input type="password" class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white pe-5" id="password" name="password" placeholder="Enter your password" required>
-                                        <i class="fas fa-eye-slash position-absolute top-50 end-0 translate-middle-y me-3 text-white-50" id="togglePassword" style="cursor: pointer; font-weight: 300;"></i>
+                                        <i class="fas fa-eye-slash position-absolute top-50 end-0 translate-middle-y me-3 text-white-50" id="togglePassword" style="cursor: pointer; font-weight: 300;" tabindex="-1"></i>
                                     </div>
                                     <div class="invalid-feedback text-warning" id="password-error" style="display: none;"></div>
                                 </div>

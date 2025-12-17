@@ -29,7 +29,7 @@
         // Inject Django URLs for worker check
         window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
         window.WORKER_REQUIRED_URL = '{% url "SaveNLoad:worker_required" %}';
-        window.CHANGE_PASSWORD_URL = '{% url "user:change_password" %}';
+        window.UPDATE_ACCOUNT_SETTINGS_URL = '{% url "user:update_account_settings" %}';
     </script>
     <script>
         {% include 'SaveNLoad/js/workerCheck.js' %}

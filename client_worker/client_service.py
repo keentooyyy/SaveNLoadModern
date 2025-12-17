@@ -20,7 +20,7 @@ load_dotenv()
 class ClientWorkerService:
     """Service that runs on client PC to handle save/load operations"""
     
-    def __init__(self, server_url: str, poll_interval: int = 5):
+    def __init__(self, server_url: str, poll_interval: int = 1):
         """
         Initialize client worker service
         
@@ -77,7 +77,7 @@ class ClientWorkerService:
     
     
     def save_game(self, game_id: int, local_save_path: str, 
-                 username: str, game_name: str, save_folder_number: int) -> Dict[str, Any]:
+                 username: str, game_name: str, save_folder_number: int, ftp_path: Optional[str] = None) -> Dict[str, Any]:
         """Save game - backup from local PC to FTP"""
         print(f"INFO: Saving game {game_id} from {local_save_path} to save_folder {save_folder_number}")
         
@@ -120,7 +120,8 @@ class ClientWorkerService:
                                 username=username,
                                 game_name=game_name,
                                 folder_number=save_folder_number,
-                                remote_dir_path=remote_dir_path
+                                remote_dir_path=remote_dir_path,
+                                ftp_path=ftp_path
                             )
                         except Exception as e:
                             print(f"WARNING: Failed to create directory {remote_dir_path}: {e}")
@@ -149,7 +150,8 @@ class ClientWorkerService:
                             game_name=game_name,
                             local_file_path=local_file,
                             folder_number=save_folder_number,
-                            remote_filename=remote_filename
+                            remote_filename=remote_filename,
+                            ftp_path=ftp_path
                         )
                         return (success, remote_filename, message)
                     except Exception as e:
@@ -193,7 +195,8 @@ class ClientWorkerService:
                     username=username,
                     game_name=game_name,
                     local_file_path=local_save_path,
-                    folder_number=save_folder_number
+                    folder_number=save_folder_number,
+                    ftp_path=ftp_path
                 )
                 
                 if success:
@@ -208,7 +211,7 @@ class ClientWorkerService:
             return {'success': False, 'error': f'Save operation failed: {str(e)}'}
     
     def load_game(self, game_id: int, local_save_path: str,
-                 username: str, game_name: str, save_folder_number: int) -> Dict[str, Any]:
+                 username: str, game_name: str, save_folder_number: int, ftp_path: Optional[str] = None) -> Dict[str, Any]:
         """Load game - download from FTP to local PC"""
         print(f"INFO: Loading game {game_id} to {local_save_path} from save_folder {save_folder_number}")
         
@@ -216,7 +219,8 @@ class ClientWorkerService:
             success, files, directories, message = self.ftp_client.list_saves(
                 username=username,
                 game_name=game_name,
-                folder_number=save_folder_number
+                folder_number=save_folder_number,
+                ftp_path=ftp_path
             )
             
             print(f"INFO: List saves result: success={success}, files_count={len(files) if files else 0}, dirs_count={len(directories) if directories else 0}, message={message}")
@@ -307,7 +311,8 @@ class ClientWorkerService:
                         game_name=game_name,
                         remote_filename=remote_filename,
                         local_file_path=local_file,
-                        folder_number=save_folder_number
+                        folder_number=save_folder_number,
+                        ftp_path=ftp_path
                     )
                     return (success, remote_filename, message)
                 except Exception as e:
@@ -351,6 +356,104 @@ class ClientWorkerService:
         except Exception as e:
             print(f"ERROR: Load operation failed: {e}")
             return {'success': False, 'error': f'Load operation failed: {str(e)}'}
+    
+    def list_saves(self, game_id: int, username: str, game_name: str, 
+                  save_folder_number: int, ftp_path: Optional[str] = None) -> Dict[str, Any]:
+        """List all save files in a save folder"""
+        print(f"INFO: Listing saves for game {game_id}, save_folder {save_folder_number}")
+        
+        try:
+            success, files, directories, message = self.ftp_client.list_saves(
+                username=username,
+                game_name=game_name,
+                folder_number=save_folder_number,
+                ftp_path=ftp_path
+            )
+            
+            if not success:
+                return {
+                    'success': False,
+                    'error': f'Failed to list saves: {message}'
+                }
+            
+            return {
+                'success': True,
+                'files': files,
+                'directories': directories,
+                'message': message
+            }
+        except Exception as e:
+            print(f"ERROR: List operation failed: {e}")
+            return {'success': False, 'error': f'List operation failed: {str(e)}'}
+    
+    def delete_save_folder(self, game_id: int, username: str, game_name: str,
+                          save_folder_number: int, ftp_path: Optional[str] = None) -> Dict[str, Any]:
+        """Delete a save folder from FTP"""
+        print(f"INFO: Deleting save folder {save_folder_number} for game {game_id}")
+        
+        if not ftp_path:
+            return {
+                'success': False,
+                'error': 'FTP path is required for delete operation'
+            }
+        
+        try:
+            ftp_host = self.ftp_client._get_connection()
+            try:
+                # Check if path exists
+                if not ftp_host.path.exists(ftp_path) or not ftp_host.path.isdir(ftp_path):
+                    print(f"INFO: Save folder {ftp_path} doesn't exist on FTP")
+                    return {
+                        'success': True,
+                        'message': f'Save folder {save_folder_number} doesn\'t exist on FTP (already deleted)'
+                    }
+                
+                # Recursively delete all files and directories
+                def delete_recursive(path):
+                    """Recursively delete directory and all contents"""
+                    try:
+                        items = ftp_host.listdir(path)
+                        for item in items:
+                            item_path = ftp_host.path.join(path, item)
+                            if ftp_host.path.isdir(item_path):
+                                delete_recursive(item_path)
+                                try:
+                                    ftp_host.rmdir(item_path)
+                                    print(f"INFO: Deleted directory: {item_path}")
+                                except Exception as e:
+                                    print(f"WARNING: Could not delete directory {item_path}: {e}")
+                            else:
+                                try:
+                                    ftp_host.remove(item_path)
+                                    print(f"INFO: Deleted file: {item_path}")
+                                except Exception as e:
+                                    print(f"WARNING: Could not delete file {item_path}: {e}")
+                    except Exception as e:
+                        print(f"WARNING: Error listing directory {path}: {e}")
+                
+                # Delete all contents
+                delete_recursive(ftp_path)
+                
+                # Delete the folder itself
+                try:
+                    ftp_host.rmdir(ftp_path)
+                    print(f"INFO: Deleted save folder: {ftp_path}")
+                except Exception as e:
+                    print(f"WARNING: Could not delete folder {ftp_path}: {e}")
+                    return {
+                        'success': False,
+                        'error': f'Failed to delete folder: {str(e)}'
+                    }
+                
+                return {
+                    'success': True,
+                    'message': f'Successfully deleted save folder {save_folder_number}'
+                }
+            finally:
+                ftp_host.close()
+        except Exception as e:
+            print(f"ERROR: Delete operation failed: {e}")
+            return {'success': False, 'error': f'Delete operation failed: {str(e)}'}
     
     def register_with_server(self, client_id: str) -> bool:
         """Register this client with the Django server"""
@@ -493,18 +596,24 @@ class ClientWorkerService:
         username = operation.get('username')
         game_name = operation.get('game_name')
         save_folder_number = operation.get('save_folder_number')
+        ftp_path = operation.get('ftp_path')
         
         print(f"INFO: Processing operation {operation_id}: {op_type} for game {game_id}")
-        print(f"INFO: Operation details: username={username}, game_name={game_name}, local_path={local_path}, save_folder={save_folder_number}")
+        print(f"INFO: Operation details: username={username}, game_name={game_name}, local_path={local_path}, save_folder={save_folder_number}, ftp_path={ftp_path}")
         
-        if save_folder_number is None:
+        # save_folder_number is required for save/load/list/delete operations
+        if op_type in ['save', 'load', 'list', 'delete'] and save_folder_number is None:
             print(f"ERROR: Operation {operation_id} missing save_folder_number")
             return
         
         if op_type == 'save':
-            result = self.save_game(game_id, local_path, username, game_name, save_folder_number)
+            result = self.save_game(game_id, local_path, username, game_name, save_folder_number, ftp_path)
         elif op_type == 'load':
-            result = self.load_game(game_id, local_path, username, game_name, save_folder_number)
+            result = self.load_game(game_id, local_path, username, game_name, save_folder_number, ftp_path)
+        elif op_type == 'list':
+            result = self.list_saves(game_id, username, game_name, save_folder_number, ftp_path)
+        elif op_type == 'delete':
+            result = self.delete_save_folder(game_id, username, game_name, save_folder_number, ftp_path)
         else:
             print(f"ERROR: Unknown operation type: {op_type}")
             return
@@ -539,7 +648,7 @@ def main():
     parser = argparse.ArgumentParser(description='SaveNLoad Client Worker Service')
     parser.add_argument('--server', default=server_url, 
                        help='Django server URL (defaults to SAVENLOAD_SERVER_URL env var)')
-    parser.add_argument('--poll-interval', type=int, default=5, help='Poll interval in seconds')
+    parser.add_argument('--poll-interval', type=int, default=1, help='Poll interval in seconds')
     
     args = parser.parse_args()
     

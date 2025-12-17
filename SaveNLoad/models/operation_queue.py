@@ -27,10 +27,14 @@ class OperationType:
     """Operation type constants"""
     SAVE = 'save'
     LOAD = 'load'
+    LIST = 'list'
+    DELETE = 'delete'
     
     CHOICES = [
         (SAVE, 'Save'),
         (LOAD, 'Load'),
+        (LIST, 'List'),
+        (DELETE, 'Delete'),
     ]
 
 
@@ -45,6 +49,7 @@ class OperationQueue(models.Model):
                                      help_text="Client worker assigned to this operation")
     local_save_path = models.CharField(max_length=500, help_text="Local save file path")
     save_folder_number = models.IntegerField(null=True, blank=True, help_text="Optional save folder number")
+    ftp_path = models.CharField(max_length=500, null=True, blank=True, help_text="Full FTP path for the save folder")
     result_data = models.JSONField(null=True, blank=True, help_text="Operation result data")
     error_message = models.TextField(null=True, blank=True, help_text="Error message if operation failed")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -92,7 +97,7 @@ class OperationQueue(models.Model):
     
     @classmethod
     def create_operation(cls, operation_type: str, user: SimpleUsers, game: Game, 
-                        local_save_path: str, save_folder_number=None, client_worker=None):
+                        local_save_path: str, save_folder_number=None, ftp_path=None, client_worker=None):
         """Create a new operation in the queue"""
         operation = cls.objects.create(
             operation_type=operation_type,
@@ -100,6 +105,7 @@ class OperationQueue(models.Model):
             game=game,
             local_save_path=local_save_path,
             save_folder_number=save_folder_number,
+            ftp_path=ftp_path,
             client_worker=client_worker,
             status=OperationStatus.PENDING
         )

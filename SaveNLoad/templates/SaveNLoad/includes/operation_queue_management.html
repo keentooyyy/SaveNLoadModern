@@ -1,0 +1,46 @@
+<div class="container-fluid px-4 pt-3">
+    <div class="card shadow-lg bg-primary text-white border-0">
+        <!-- Collapsible Header -->
+        <button 
+            class="card-header bg-primary text-white border-0 p-3 w-100 text-start d-flex justify-content-between align-items-center operation-queue-header"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#operationQueueCollapse"
+            aria-expanded="false"
+            aria-controls="operationQueueCollapse">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-tasks me-3 text-white operation-queue-icon"></i>
+                <h5 class="mb-0 text-white operation-queue-title">Operation Queue Management</h5>
+            </div>
+            <i class="fas fa-chevron-right text-white operation-queue-chevron" id="operationQueueChevron"></i>
+        </button>
+
+        <!-- Collapsible Content -->
+        <div class="collapse" id="operationQueueCollapse">
+            <div class="card-body">
+                <!-- Stats Section -->
+                <div class="mb-4">
+                    <h6 class="text-white mb-3 fw-bold">Queue Statistics</h6>
+                    <div id="operationQueueStats" class="text-white">
+                        <div class="text-center py-3">
+                            <div class="spinner-border text-light" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="border-secondary my-4">
+
+                <!-- Clear Operations -->
+                <div class="">
+                    <h6 class="text-white mb-3 fw-bold">Clear Operations</h6>
+                    <button type="button" class="btn btn-secondary text-white fw-bold" id="clearOperationsBtn">
+                        <i class="fas fa-trash me-1"></i>Clear All Operations
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+

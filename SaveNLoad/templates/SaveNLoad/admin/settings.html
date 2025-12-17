@@ -15,6 +15,7 @@
             {% include 'SaveNLoad/includes/page_header.html' with page_title="Settings" %}
 
             {% include 'SaveNLoad/includes/add_game_form.html' %}
+            {% include 'SaveNLoad/includes/operation_queue_management.html' %}
             {% include 'SaveNLoad/includes/account_settings.html' %}
             {% include 'SaveNLoad/includes/game_search_modal.html' %}
             {% include 'SaveNLoad/includes/manage_game_modal.html' %}
@@ -33,7 +34,7 @@
         window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
         window.WORKER_REQUIRED_URL = '{% url "SaveNLoad:worker_required" %}';
         window.CREATE_GAME_URL = '{% url "admin:create_game" %}';
-        window.CHANGE_PASSWORD_URL = '{% url "admin:change_password" %}';
+        window.UPDATE_ACCOUNT_SETTINGS_URL = '{% url "admin:update_account_settings" %}';
         // Inject Django URL patterns for manageGames.js
         window.LIST_SAVE_FOLDERS_URL_PATTERN = '{% url "admin:list_save_folders" 0 %}';
         window.LOAD_GAME_URL_PATTERN = '{% url "admin:load_game" 0 %}';
@@ -43,6 +44,8 @@
         window.GAME_DETAIL_URL_PATTERN = '{% url "admin:game_detail" 0 %}';
         window.GAME_DELETE_URL_PATTERN = '{% url "admin:game_delete" 0 %}';
         window.BACKUP_ALL_SAVES_URL_PATTERN = '{% url "admin:backup_all_saves" 0 %}';
+        window.OPERATION_QUEUE_STATS_URL = '{% url "admin:operation_queue_stats" %}';
+        window.OPERATION_QUEUE_CLEANUP_URL = '{% url "admin:operation_queue_cleanup" %}';
     </script>
     <script>
         {% include 'SaveNLoad/js/workerCheck.js' %}
@@ -51,6 +54,7 @@
         {% include 'SaveNLoad/js/accountSettings.js' %}
         {% include 'SaveNLoad/js/manageGames.js' %}
         {% include 'SaveNLoad/js/saveLoad.js' %}
+        {% include 'SaveNLoad/js/operationQueueManagement.js' %}
     </script>
 {% endblock %}
 

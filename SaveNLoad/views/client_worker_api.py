@@ -112,28 +112,28 @@ def unregister_client(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 def check_connection(request):
-    """Check if any client worker is connected"""
-    is_connected = ClientWorker.is_worker_connected()
-    worker = ClientWorker.get_any_active_worker()
+    """Check if client worker is connected - only returns info for the requesting client"""
+    # Get client_id from query parameter if provided
+    client_id = request.GET.get('client_id', '').strip()
     
-    # Get all active workers for display
-    all_workers = ClientWorker.get_active_workers()
-    workers_list = [
-        {
-            'client_id': w.client_id,
-            'last_heartbeat': w.last_heartbeat.isoformat(),
-            'is_online': w.is_online()
-        }
-        for w in all_workers
-    ]
-    
-    return JsonResponse({
-        'connected': is_connected,
-        'client_id': worker.client_id if worker and is_connected else None,
-        'last_heartbeat': worker.last_heartbeat.isoformat() if worker and is_connected else None,
-        'all_workers': workers_list,
-        'total_workers': len(workers_list)
-    })
+    if client_id:
+        # Check specific client
+        worker = ClientWorker.get_worker_by_id(client_id)
+        is_connected = worker is not None and worker.is_online()
+        
+        return JsonResponse({
+            'connected': is_connected,
+            'client_id': worker.client_id if worker and is_connected else None,
+            'last_heartbeat': worker.last_heartbeat.isoformat() if worker and is_connected else None,
+        })
+    else:
+        # No client_id provided - just check if any worker is connected (for backward compatibility)
+        # Don't expose other clients' information
+        is_connected = ClientWorker.is_worker_connected()
+        
+        return JsonResponse({
+            'connected': is_connected,
+        })
 
 
 @csrf_exempt
@@ -169,6 +169,7 @@ def get_pending_operations(request, client_id):
                 'game_name': op.game.name,
                 'local_save_path': op.local_save_path,
                 'save_folder_number': op.save_folder_number,
+                'ftp_path': op.ftp_path,
                 'username': op.user.username,
             })
         

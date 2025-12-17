@@ -13,6 +13,9 @@ from SaveNLoad.views.api_helpers import (
 from SaveNLoad.views.rawg_api import search_games as rawg_search_games
 from SaveNLoad.models import Game
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -206,8 +209,8 @@ def delete_game(request, game_id):
 
 @login_required
 @require_http_methods(["POST"])
-def change_password(request):
-    """Change user password"""
+def update_account_settings(request):
+    """Update account settings (email and/or password)"""
     user = get_current_user(request)
     if not user:
         return json_response_error('Unauthorized', status=403)
@@ -216,41 +219,242 @@ def change_password(request):
     if error_response:
         return error_response
     
+    # Sanitize inputs
+    from SaveNLoad.views.input_sanitizer import sanitize_email, validate_password_strength
+    import re
+    
+    # Sanitize email
+    raw_email = data.get('email', '').strip()
+    email = sanitize_email(raw_email) if raw_email else None
+    
+    # If email was provided but sanitization failed, it's invalid
+    if raw_email and not email:
+        return json_response_error('Invalid email format.', status=400)
+    
+    # Sanitize password inputs (strip whitespace, validate length, but don't escape - will be hashed)
     current_password = data.get('current_password', '').strip()
     new_password = data.get('new_password', '').strip()
     confirm_password = data.get('confirm_password', '').strip()
     
-    # Validate inputs
-    if not current_password:
-        return json_response_error('Current password is required.', status=400)
+    # Validate password length (prevent extremely long inputs that could cause issues)
+    if current_password and len(current_password) > 128:
+        return json_response_error('Password is too long (maximum 128 characters).', status=400)
+    if new_password and len(new_password) > 128:
+        return json_response_error('Password is too long (maximum 128 characters).', status=400)
+    if confirm_password and len(confirm_password) > 128:
+        return json_response_error('Password is too long (maximum 128 characters).', status=400)
     
-    if not new_password:
-        return json_response_error('New password is required.', status=400)
+    # Check for null bytes or other dangerous characters in passwords
+    if current_password and '\x00' in current_password:
+        return json_response_error('Invalid characters in password.', status=400)
+    if new_password and '\x00' in new_password:
+        return json_response_error('Invalid characters in password.', status=400)
+    if confirm_password and '\x00' in confirm_password:
+        return json_response_error('Invalid characters in password.', status=400)
     
-    if not confirm_password:
-        return json_response_error('Please confirm your new password.', status=400)
+    messages = []
+    email_changed = False
+    password_changed = False
     
-    # Check current password
-    if not user.check_password(current_password):
-        return json_response_error('Current password is incorrect.', status=400)
+    # Handle email change (email-only updates are allowed)
+    if email:
+        # Email is already sanitized and validated by sanitize_email
+        if email.lower() != user.email.lower():
+            # Check if email is already taken
+            from SaveNLoad.models import SimpleUsers
+            if SimpleUsers.objects.filter(email__iexact=email).exclude(id=user.id).exists():
+                return json_response_error('This email is already in use by another account.', status=400)
+            
+            user.email = email
+            email_changed = True
+            messages.append('Email updated successfully')
     
-    # Validate new password matches confirmation
-    if new_password != confirm_password:
-        return json_response_error('New passwords do not match.', status=400)
+    # Handle password change (only if password fields are provided - password change is optional)
+    if current_password or new_password or confirm_password:
+        # All password fields must be provided
+        if not current_password:
+            return json_response_error('Current password is required to change password.', status=400)
+        
+        if not new_password:
+            return json_response_error('New password is required.', status=400)
+        
+        if not confirm_password:
+            return json_response_error('Please confirm your new password.', status=400)
+        
+        # Check current password
+        if not user.check_password(current_password):
+            return json_response_error('Current password is incorrect.', status=400)
+        
+        # Validate new password matches confirmation
+        if new_password != confirm_password:
+            return json_response_error('New passwords do not match.', status=400)
+        
+        # Validate password strength (already imported above)
+        is_valid, error_msg = validate_password_strength(new_password)
+        if not is_valid:
+            return json_response_error(error_msg, status=400)
+        
+        # Check if new password is different from current
+        if user.check_password(new_password):
+            return json_response_error('New password must be different from current password.', status=400)
+        
+        # Update password
+        user.set_password(new_password)
+        password_changed = True
+        messages.append('Password changed successfully')
     
-    # Validate password strength
-    from SaveNLoad.views.input_sanitizer import validate_password_strength
-    is_valid, error_msg = validate_password_strength(new_password)
-    if not is_valid:
-        return json_response_error(error_msg, status=400)
-    
-    # Check if new password is different from current
-    if user.check_password(new_password):
-        return json_response_error('New password must be different from current password.', status=400)
-    
-    # Update password
-    user.set_password(new_password)
-    user.save()
-    
-    return json_response_success(message='Password changed successfully!')
+    # Save if anything changed
+    if email_changed or password_changed:
+        user.save()
+        message = ' and '.join(messages) + '!'
+        return json_response_success(message=message)
+    else:
+        return json_response_success(message='No changes made.')
 
+
+@login_required
+@require_http_methods(["GET"])
+def operation_queue_stats(request):
+    """Get statistics about the operation queue (Admin only)"""
+    user = get_current_user(request)
+    error_response = check_admin_or_error(user)
+    if error_response:
+        return error_response
+    
+    from SaveNLoad.models.operation_queue import OperationQueue, OperationStatus, OperationType
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    # Get all operations
+    all_operations = OperationQueue.objects.all()
+    total_count = all_operations.count()
+    
+    # Count by status
+    status_counts = {}
+    for status_code, status_label in OperationStatus.CHOICES:
+        status_counts[status_code] = all_operations.filter(status=status_code).count()
+    
+    # Count by type
+    type_counts = {}
+    for type_code, type_label in OperationType.CHOICES:
+        type_counts[type_code] = all_operations.filter(operation_type=type_code).count()
+    
+    # Get oldest and newest operations
+    oldest = all_operations.order_by('created_at').first()
+    newest = all_operations.order_by('-created_at').first()
+    
+    # Count operations older than 30 days
+    thirty_days_ago = timezone.now() - timedelta(days=30)
+    old_count = all_operations.filter(created_at__lt=thirty_days_ago).count()
+    
+    # Count operations older than 7 days
+    seven_days_ago = timezone.now() - timedelta(days=7)
+    week_old_count = all_operations.filter(created_at__lt=seven_days_ago).count()
+    
+    # Count stuck operations (in progress for more than 1 hour)
+    one_hour_ago = timezone.now() - timedelta(hours=1)
+    stuck_count = all_operations.filter(
+        status=OperationStatus.IN_PROGRESS,
+        started_at__lt=one_hour_ago
+    ).count()
+    
+    stats = {
+        'total': total_count,
+        'by_status': {
+            'pending': status_counts.get(OperationStatus.PENDING, 0),
+            'in_progress': status_counts.get(OperationStatus.IN_PROGRESS, 0),
+            'completed': status_counts.get(OperationStatus.COMPLETED, 0),
+            'failed': status_counts.get(OperationStatus.FAILED, 0),
+        },
+        'by_type': {
+            'save': type_counts.get(OperationType.SAVE, 0),
+            'load': type_counts.get(OperationType.LOAD, 0),
+            'list': type_counts.get(OperationType.LIST, 0),
+            'delete': type_counts.get(OperationType.DELETE, 0),
+        },
+        'oldest_operation': oldest.created_at.isoformat() if oldest else None,
+        'newest_operation': newest.created_at.isoformat() if newest else None,
+        'old_count_30_days': old_count,
+        'old_count_7_days': week_old_count,
+        'stuck_count': stuck_count,
+    }
+    
+    return json_response_success(data=stats)
+
+
+@login_required
+@require_http_methods(["POST"])
+def operation_queue_cleanup(request):
+    """Cleanup operation queue (Admin only)"""
+    user = get_current_user(request)
+    error_response = check_admin_or_error(user)
+    if error_response:
+        return error_response
+    
+    from SaveNLoad.models.operation_queue import OperationQueue, OperationStatus
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    data, error_response = parse_json_body(request)
+    if error_response:
+        return error_response
+    
+    cleanup_type = data.get('type', '').strip()
+    
+    # CRITICAL SAFETY: Only delete OperationQueue records - this does NOT affect:
+    # - SaveFolder records (completely independent model, no relationship)
+    # - Game.last_played (separate field on Game model)
+    # - FTP files (operations are just queue records, not the actual saves)
+    # - Any other models
+    # The ForeignKey CASCADE only works one way: deleting a Game/User deletes operations, NOT the reverse
+    # OperationQueue and SaveFolder are completely independent - no ForeignKey between them
+    
+    if cleanup_type == 'completed':
+        # Delete all completed operations - ONLY OperationQueue records
+        deleted_count, deleted_objects = OperationQueue.objects.filter(status=OperationStatus.COMPLETED).delete()
+        # Verify only OperationQueue was deleted (safety check)
+        if 'SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1:
+            logger.warning(f"Unexpected objects deleted: {deleted_objects}")
+        return json_response_success(
+            message=f'Deleted {deleted_count} completed operation(s)',
+            data={'deleted_count': deleted_count}
+        )
+    
+    elif cleanup_type == 'failed':
+        # Delete all failed operations - ONLY OperationQueue records
+        deleted_count, deleted_objects = OperationQueue.objects.filter(status=OperationStatus.FAILED).delete()
+        if 'SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1:
+            logger.warning(f"Unexpected objects deleted: {deleted_objects}")
+        return json_response_success(
+            message=f'Deleted {deleted_count} failed operation(s)',
+            data={'deleted_count': deleted_count}
+        )
+    
+    elif cleanup_type == 'old':
+        # Delete operations older than 30 days - ONLY OperationQueue records
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        deleted_count, deleted_objects = OperationQueue.objects.filter(created_at__lt=thirty_days_ago).delete()
+        if 'SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1:
+            logger.warning(f"Unexpected objects deleted: {deleted_objects}")
+        return json_response_success(
+            message=f'Deleted {deleted_count} old operation(s) (30+ days)',
+            data={'deleted_count': deleted_count}
+        )
+    
+    elif cleanup_type == 'all':
+        # Delete all operations - ONLY OperationQueue records
+        deleted_count, deleted_objects = OperationQueue.objects.all().delete()
+        # Safety check: verify only OperationQueue was deleted
+        if 'SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1:
+            logger.error(f"CRITICAL: Unexpected objects deleted during cleanup: {deleted_objects}")
+            return json_response_error(
+                f'Cleanup deleted unexpected objects: {deleted_objects}. Aborted to prevent data loss.',
+                status=500
+            )
+        return json_response_success(
+            message=f'Deleted all {deleted_count} operation(s)',
+            data={'deleted_count': deleted_count}
+        )
+    
+    else:
+        return json_response_error('Invalid cleanup type. Must be: completed, failed, old, or all', status=400)

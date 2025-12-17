@@ -15,6 +15,7 @@ class SaveFolder(models.Model):
     user = models.ForeignKey(SimpleUsers, on_delete=models.CASCADE, related_name='save_folders')
     game = models.ForeignKey(Game, on_delete=models.CASCADE, related_name='save_folders')
     folder_number = models.IntegerField(help_text="Save folder number (1-10)")
+    ftp_path = models.CharField(max_length=500, blank=True, null=True, help_text="Full FTP path (e.g., /username/gamename/save_1)")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -31,10 +32,25 @@ class SaveFolder(models.Model):
     def __str__(self):
         return f"{self.user.username}/{self.game.name}/save_{self.folder_number}"
     
+    def save(self, *args, **kwargs):
+        """Override save to auto-populate ftp_path if missing"""
+        if not self.ftp_path:
+            self.ftp_path = self._generate_ftp_path(self.user.username, self.game.name, self.folder_number)
+        super().save(*args, **kwargs)
+    
     @property
     def folder_name(self) -> str:
         """Get the folder name (e.g., 'save_1')"""
         return f"save_{self.folder_number}"
+    
+    @staticmethod
+    def _generate_ftp_path(username: str, game_name: str, folder_number: int) -> str:
+        """Generate the full FTP path for a save folder"""
+        # Sanitize game name (matching ftp_client.py logic)
+        safe_game_name = "".join(c for c in game_name if c.isalnum() or c in (' ', '-', '_')).strip()
+        safe_game_name = safe_game_name.replace(' ', '_')
+        # Generate full path: /username/gamename/save_1
+        return f"/{username}/{safe_game_name}/save_{folder_number}"
     
     @classmethod
     def get_or_create_next(cls, user: SimpleUsers, game: Game) -> 'SaveFolder':
@@ -49,9 +65,10 @@ class SaveFolder(models.Model):
         if len(existing_numbers) >= cls.MAX_SAVE_FOLDERS:
             oldest_folder = cls.objects.filter(user=user, game=game).order_by('created_at').first()
             if oldest_folder:
-                # Reset created_at for reuse
+                # Reset created_at for reuse and update FTP path (in case game name changed)
                 oldest_folder.created_at = timezone.now()
-                oldest_folder.save(update_fields=['created_at'])
+                oldest_folder.ftp_path = cls._generate_ftp_path(user.username, game.name, oldest_folder.folder_number)
+                oldest_folder.save(update_fields=['created_at', 'ftp_path'])
                 return oldest_folder
         
         # Find the next available number
@@ -61,11 +78,15 @@ class SaveFolder(models.Model):
                 next_number = i
                 break
         
+        # Generate FTP path
+        ftp_path = cls._generate_ftp_path(user.username, game.name, next_number)
+        
         # Create new save folder
         save_folder = cls.objects.create(
             user=user,
             game=game,
-            folder_number=next_number
+            folder_number=next_number,
+            ftp_path=ftp_path
         )
         return save_folder
     

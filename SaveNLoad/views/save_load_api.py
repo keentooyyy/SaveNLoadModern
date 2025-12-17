@@ -14,11 +14,9 @@ from SaveNLoad.views.api_helpers import (
     json_response_success
 )
 from SaveNLoad.models import Game
-from SaveNLoad.workers import FTPWorker
 import json
 import os
 import logging
-import ftplib
 import ftputil
 import zipfile
 import tempfile
@@ -27,38 +25,6 @@ from pathlib import Path
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
-
-
-def _delete_directory_recursive(ftp: ftplib.FTP, current_path: str):
-    """Recursively delete all files and subdirectories in the current FTP directory"""
-    items = []
-    ftp.retrlines('LIST', items.append)
-    
-    for item_info in items:
-        parts = item_info.split()
-        if len(parts) >= 9:
-            name = ' '.join(parts[8:]) if len(parts) > 8 else parts[-1]
-            # Skip . and ..
-            if name in ('.', '..'):
-                continue
-            
-            if item_info.startswith('d'):
-                # It's a directory - recursively delete it
-                try:
-                    ftp.cwd(name)
-                    _delete_directory_recursive(ftp, f"{current_path}/{name}")
-                    ftp.cwd('..')
-                    ftp.rmd(name)
-                    logger.info(f"Deleted directory {name} from {current_path}")
-                except ftplib.error_perm as e:
-                    logger.warning(f"Could not delete directory {name}: {e}")
-            else:
-                # It's a file - delete it
-                try:
-                    ftp.delete(name)
-                    logger.info(f"Deleted file {name} from {current_path}")
-                except ftplib.error_perm as e:
-                    logger.warning(f"Could not delete file {name}: {e}")
 
 
 @login_required
@@ -100,13 +66,14 @@ def save_game(request, game_id):
     from SaveNLoad.models.save_folder import SaveFolder
     save_folder = SaveFolder.get_or_create_next(user, game)
     
-    # Create operation in queue with save folder number
+    # Create operation in queue with save folder number and FTP path
     operation = OperationQueue.create_operation(
         operation_type=OperationType.SAVE,
         user=user,
         game=game,
         local_save_path=local_save_path,
         save_folder_number=save_folder.folder_number,
+        ftp_path=save_folder.ftp_path,
         client_worker=client_worker
     )
     
@@ -151,12 +118,17 @@ def load_game(request, game_id):
     
     save_folder_number = data.get('save_folder_number')  # Optional
     
-    # If no save_folder_number specified, use the latest one
+    # Get the save folder to get ftp_path
+    from SaveNLoad.models.save_folder import SaveFolder
+    save_folder = None
     if save_folder_number is None:
-        from SaveNLoad.models.save_folder import SaveFolder
-        latest_folder = SaveFolder.get_latest(user, game)
-        if latest_folder:
-            save_folder_number = latest_folder.folder_number
+        # If no save_folder_number specified, use the latest one
+        save_folder = SaveFolder.get_latest(user, game)
+        if save_folder:
+            save_folder_number = save_folder.folder_number
+    else:
+        # Get the specific save folder
+        save_folder = SaveFolder.get_by_number(user, game, save_folder_number)
     
     # Get client worker or return error
     client_id = data.get('client_id')
@@ -164,13 +136,14 @@ def load_game(request, game_id):
     if error_response:
         return error_response
     
-    # Create operation in queue
+    # Create operation in queue with FTP path
     operation = OperationQueue.create_operation(
         operation_type=OperationType.LOAD,
         user=user,
         game=game,
         local_save_path=local_save_path,
         save_folder_number=save_folder_number,
+        ftp_path=save_folder.ftp_path if save_folder else None,
         client_worker=client_worker
     )
     
@@ -180,77 +153,6 @@ def load_game(request, game_id):
         'operation_id': operation.id,
         'client_id': client_worker.client_id
     })
-    
-    try:
-        worker = FTPWorker()
-        
-        # List all files in the save folder
-        success, files, message = worker.list_saves(
-            username=user.username,
-            game_name=game.name,
-            save_folder_number=save_folder_number
-        )
-        
-        if not success or not files:
-            return JsonResponse({
-                'success': False,
-                'error': f'No save files found: {message}'
-            }, status=404)
-        
-        # Download all files
-        downloaded_files = []
-        failed_files = []
-        
-        # Ensure local directory exists
-        if os.path.isdir(local_save_path) or not os.path.exists(local_save_path):
-            os.makedirs(local_save_path, exist_ok=True)
-        
-        for file_info in files:
-            remote_filename = file_info['name']
-            # If local path is a directory, use the filename
-            # If local path is a file, use it directly (for single file saves)
-            if os.path.isdir(local_save_path):
-                local_file = os.path.join(local_save_path, remote_filename)
-                # Handle nested paths
-                if '/' in remote_filename:
-                    nested_dir = os.path.join(local_save_path, os.path.dirname(remote_filename))
-                    os.makedirs(nested_dir, exist_ok=True)
-            else:
-                local_file = local_save_path
-            
-            success, message = worker.download_save(
-                username=user.username,
-                game_name=game.name,
-                remote_filename=remote_filename,
-                local_file_path=local_file,
-                save_folder_number=save_folder_number
-            )
-            
-            if success:
-                downloaded_files.append(remote_filename)
-            else:
-                failed_files.append({'file': remote_filename, 'error': message})
-        
-        if failed_files:
-            return JsonResponse({
-                'success': False,
-                'message': f'Downloaded {len(downloaded_files)} file(s), {len(failed_files)} failed',
-                'downloaded_files': downloaded_files,
-                'failed_files': failed_files
-            }, status=207)  # Multi-Status
-        
-        return JsonResponse({
-            'success': True,
-            'message': f'Successfully downloaded {len(downloaded_files)} file(s)',
-            'downloaded_files': downloaded_files
-        })
-                
-    except Exception as e:
-        logger.error(f"Load operation failed: {e}")
-        return JsonResponse({
-            'success': False,
-            'error': f'Load operation failed: {str(e)}'
-        }, status=500)
 
 
 @login_required
@@ -297,7 +199,8 @@ def delete_save_folder(request, game_id, folder_number):
         return error_response
     
     from SaveNLoad.models.save_folder import SaveFolder
-    from SaveNLoad.workers import FTPWorker
+    from SaveNLoad.models.client_worker import ClientWorker
+    from SaveNLoad.models.operation_queue import OperationQueue, OperationType, OperationStatus
     
     try:
         # Get the save folder from database
@@ -305,65 +208,47 @@ def delete_save_folder(request, game_id, folder_number):
         if not save_folder:
             return json_response_error('Save folder not found', status=404)
         
-        # Delete from FTP server
-        worker = FTPWorker()
-        base_path = worker._get_user_game_path(user.username, game.name)
-        save_folder_name = f"save_{folder_number}"
+        # Get client worker
+        client_worker = ClientWorker.get_any_active_worker()
+        if not client_worker:
+            return json_response_error('No active client worker available', status=503)
         
-        ftp = None
-        ftp_deletion_success = True
-        try:
-            ftp = worker._get_connection()
-            save_folder_path = f"{base_path}/{save_folder_name}"
-            
-            # Navigate to base path
-            try:
-                ftp.cwd(base_path)
-            except ftplib.error_perm:
-                # Base path doesn't exist, nothing to delete - this is fine
-                logger.info(f"Base path {base_path} doesn't exist on FTP, nothing to delete")
-            else:
-                # Recursively delete all files and subdirectories in the save folder
-                try:
-                    ftp.cwd(save_folder_name)
-                    _delete_directory_recursive(ftp, save_folder_path)
-                    
-                    # Go back to base path and delete the folder itself
-                    ftp.cwd('..')
-                    try:
-                        ftp.rmd(save_folder_name)
-                        logger.info(f"Deleted save folder {save_folder_name}")
-                    except ftplib.error_perm as e:
-                        logger.warning(f"Could not delete folder {save_folder_name}: {e}")
-                        ftp_deletion_success = False
-                except ftplib.error_perm:
-                    # Folder doesn't exist on FTP, that's okay
-                    logger.info(f"Save folder {save_folder_name} doesn't exist on FTP")
-            
-        except Exception as e:
-            logger.error(f"Failed to delete save folder from FTP: {e}")
-            ftp_deletion_success = False
-        finally:
-            if ftp:
-                try:
-                    ftp.quit()
-                except:
-                    try:
-                        ftp.close()
-                    except:
-                        pass
+        # Create DELETE operation (with client_worker set but status PENDING)
+        operation = OperationQueue.create_operation(
+            operation_type=OperationType.DELETE,
+            user=user,
+            game=game,
+            local_save_path='',  # Not needed for delete
+            save_folder_number=folder_number,
+            ftp_path=save_folder.ftp_path,
+            client_worker=client_worker
+        )
+        
+        # Wait for operation to be picked up and completed (poll with timeout)
+        import time
+        timeout = 60  # 60 seconds timeout for delete
+        start_time = time.time()
+        
+        # Wait for operation to move from PENDING to IN_PROGRESS to COMPLETED/FAILED
+        while operation.status in [OperationStatus.PENDING, OperationStatus.IN_PROGRESS]:
+            if time.time() - start_time > timeout:
+                # Delete from database anyway
+                save_folder.delete()
+                return json_response_error('Delete operation timed out, but folder removed from database', status=504)
+            time.sleep(0.5)
+            operation.refresh_from_db()
         
         # Delete from database
         save_folder.delete()
         
-        # Return appropriate message based on FTP deletion success
-        if ftp_deletion_success:
+        if operation.status == OperationStatus.COMPLETED:
             return json_response_success(
                 message=f'Save folder {folder_number} deleted successfully'
             )
         else:
+            error_msg = operation.error_message or 'Delete operation failed'
             return json_response_success(
-                message=f'Save folder {folder_number} deleted (some FTP cleanup may have failed)'
+                message=f'Save folder {folder_number} deleted from database (FTP deletion may have failed: {error_msg})'
             )
         
     except Exception as e:
@@ -412,8 +297,12 @@ def list_save_folders(request, game_id):
 @require_http_methods(["GET"])
 def list_saves(request, game_id):
     """
-    List all available saves for a game
+    List all available saves for a game - uses client worker
     """
+    from SaveNLoad.models.client_worker import ClientWorker
+    from SaveNLoad.models.operation_queue import OperationQueue, OperationType, OperationStatus
+    from SaveNLoad.models.save_folder import SaveFolder
+    
     user = get_current_user(request)
     if not user:
         return json_response_error('Unauthorized', status=403)
@@ -430,20 +319,58 @@ def list_saves(request, game_id):
         except ValueError:
             save_folder_number = None
     
+    # If no save_folder_number, use latest
+    if save_folder_number is None:
+        latest_folder = SaveFolder.get_latest(user, game)
+        if latest_folder:
+            save_folder_number = latest_folder.folder_number
+        else:
+            return json_response_error('No save folders found', status=404)
+    
+    # Get save folder to get ftp_path
+    save_folder = SaveFolder.get_by_number(user, game, save_folder_number)
+    if not save_folder:
+        return json_response_error('Save folder not found', status=404)
+    
+    # Get client worker
+    client_worker = ClientWorker.get_any_active_worker()
+    if not client_worker:
+        return json_response_error('No active client worker available', status=503)
+    
     try:
-        worker = FTPWorker()
-        success, files, message = worker.list_saves(
-            username=user.username,
-            game_name=game.name,
-            save_folder_number=save_folder_number
+        # Create LIST operation (with client_worker set but status PENDING)
+        operation = OperationQueue.create_operation(
+            operation_type=OperationType.LIST,
+            user=user,
+            game=game,
+            local_save_path='',  # Not needed for list
+            save_folder_number=save_folder_number,
+            ftp_path=save_folder.ftp_path,
+            client_worker=client_worker
         )
         
-        if not success:
-            return json_response_error(message, status=500)
+        # Wait for operation to be picked up and completed (poll with timeout)
+        import time
+        timeout = 30  # 30 seconds timeout
+        start_time = time.time()
         
-        return json_response_success(
-            data={'files': files, 'message': message}
-        )
+        # Wait for operation to move from PENDING to IN_PROGRESS to COMPLETED/FAILED
+        while operation.status in [OperationStatus.PENDING, OperationStatus.IN_PROGRESS]:
+            if time.time() - start_time > timeout:
+                return json_response_error('List operation timed out', status=504)
+            time.sleep(0.5)
+            operation.refresh_from_db()
+        
+        if operation.status == OperationStatus.COMPLETED:
+            result_data = operation.result_data or {}
+            files = result_data.get('files', [])
+            message = result_data.get('message', 'List completed')
+            return json_response_success(
+                data={'files': files, 'message': message}
+            )
+        else:
+            error_msg = operation.error_message or 'List operation failed'
+            return json_response_error(error_msg, status=500)
         
     except Exception as e:
         logger.error(f"List saves failed: {e}")
@@ -455,7 +382,6 @@ def list_saves(request, game_id):
 def backup_all_saves(request, game_id):
     """
     Backup all save files for a game into a zip file
-    Downloads all files from all save folders and creates a zip archive
     """
     user = get_current_user(request)
     if not user:
@@ -466,21 +392,23 @@ def backup_all_saves(request, game_id):
     if error_response:
         return error_response
     
-    # Create a temporary zip file in memory
-    zip_buffer = io.BytesIO()
-    
     try:
-        worker = FTPWorker()
-        base_path = worker._get_user_game_path(user.username, game.name)
+        # Get FTP credentials from environment variables
+        ftp_host = os.getenv('FTP_HOST')
+        ftp_port = int(os.getenv('FTP_PORT', '21'))
+        ftp_username = os.getenv('FTP_USERNAME')
+        ftp_password = os.getenv('FTP_PASSWORD')
         
-        # Use ftputil for more robust FTP operations
-        ftp_host = getattr(settings, 'FTP_HOST', None)
-        ftp_port = getattr(settings, 'FTP_PORT', None)
-        ftp_username = getattr(settings, 'FTP_USERNAME', None)
-        ftp_password = getattr(settings, 'FTP_PASSWORD', None)
-        
-        if not all([ftp_host, ftp_port, ftp_username, ftp_password]):
+        if not all([ftp_host, ftp_username, ftp_password]):
             return json_response_error('FTP credentials not configured', status=500)
+        
+        # Generate base path for user's game (matching SaveFolder logic)
+        safe_game_name = "".join(c for c in game.name if c.isalnum() or c in (' ', '-', '_')).strip()
+        safe_game_name = safe_game_name.replace(' ', '_')
+        base_path = f"{user.username}/{safe_game_name}"
+        
+        # Create zip buffer in memory
+        zip_buffer = io.BytesIO()
         
         # Create ftputil session
         # ftputil.FTPHost doesn't accept port directly, use session factory for custom port

@@ -134,12 +134,14 @@ STATICFILES_DIRS = [
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# FTP Configuration for save file management
-FTP_HOST = os.getenv('FTP_HOST')
-FTP_PORT = int(os.getenv('FTP_PORT', '21')) if os.getenv('FTP_PORT') else 21
-FTP_USERNAME = os.getenv('FTP_USERNAME')
-FTP_PASSWORD = os.getenv('FTP_PASSWORD')
-FTP_TIMEOUT = int(os.getenv('FTP_TIMEOUT', '30')) if os.getenv('FTP_TIMEOUT') else 30
+# Email Configuration (Gmail SMTP)
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.getenv('GMAIL_USER')  # Your Gmail address
+EMAIL_HOST_PASSWORD = os.getenv('GMAIL_APP_PASSWORD')  # Gmail App Password (not regular password)
+DEFAULT_FROM_EMAIL = os.getenv('GMAIL_USER', 'noreply@savenload.com')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field

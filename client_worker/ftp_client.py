@@ -65,8 +65,39 @@ class FTPClient:
         return f"{username}/{safe_game_name}"
     
     def _navigate_to_save_folder(self, ftp_host: ftputil.FTPHost, username: str, game_name: str, 
-                                  folder_number: int) -> str:
-        """Navigate to a specific save folder, creating directories if needed"""
+                                  folder_number: int, ftp_path: Optional[str] = None) -> str:
+        """Navigate to a specific save folder, creating directories if needed
+        
+        Args:
+            ftp_host: FTP connection
+            username: Username (used if ftp_path not provided)
+            game_name: Game name (used if ftp_path not provided)
+            folder_number: Folder number (used if ftp_path not provided)
+            ftp_path: Full FTP path (e.g., /username/gamename/save_1). If provided, uses this directly.
+        
+        Returns:
+            Full path to the save folder
+        """
+        # Use ftp_path directly if provided
+        if ftp_path:
+            save_folder_path = ftp_path
+            # Ensure the path exists
+            if not ftp_host.path.exists(save_folder_path) or not ftp_host.path.isdir(save_folder_path):
+                try:
+                    # Create directory structure
+                    ftp_host.makedirs(save_folder_path)
+                    print(f"INFO: Created save folder: {save_folder_path}")
+                except Exception as e:
+                    # Might already exist, try to navigate
+                    if not ftp_host.path.exists(save_folder_path):
+                        print(f"ERROR: Failed to create save folder {save_folder_path}: {e}")
+                        raise
+            # Navigate to save folder
+            ftp_host.chdir(save_folder_path)
+            print(f"DEBUG: Navigated to save folder: {save_folder_path}")
+            return save_folder_path
+        
+        # Fallback to constructing path (backward compatibility)
         base_path = self._get_user_game_path(username, game_name)
         save_folder_name = f"save_{folder_number}"
         save_folder_path = f"/{base_path}/{save_folder_name}"
@@ -96,12 +127,12 @@ class FTPClient:
         return save_folder_path
     
     def create_directory(self, username: str, game_name: str, folder_number: int, 
-                        remote_dir_path: str) -> Tuple[bool, str]:
+                        remote_dir_path: str, ftp_path: Optional[str] = None) -> Tuple[bool, str]:
         """Create a directory structure on FTP server (for empty directories)"""
         ftp_host = None
         try:
             ftp_host = self._get_connection()
-            save_folder_path = self._navigate_to_save_folder(ftp_host, username, game_name, folder_number)
+            save_folder_path = self._navigate_to_save_folder(ftp_host, username, game_name, folder_number, ftp_path)
             
             # Handle nested paths: create directory structure
             if '/' in remote_dir_path or '\\' in remote_dir_path:
@@ -143,7 +174,7 @@ class FTPClient:
                 ftp_host.close()
     
     def upload_save(self, username: str, game_name: str, local_file_path: str, 
-                   folder_number: int, remote_filename: Optional[str] = None) -> Tuple[bool, str]:
+                   folder_number: int, remote_filename: Optional[str] = None, ftp_path: Optional[str] = None) -> Tuple[bool, str]:
         """Upload a save file to FTP server - 1:1 binary transfer, preserves exact directory structure"""
         if not os.path.exists(local_file_path):
             return False, f"Local file not found: {local_file_path}"
@@ -154,7 +185,7 @@ class FTPClient:
         ftp_host = None
         try:
             ftp_host = self._get_connection()
-            save_folder_path = self._navigate_to_save_folder(ftp_host, username, game_name, folder_number)
+            save_folder_path = self._navigate_to_save_folder(ftp_host, username, game_name, folder_number, ftp_path)
             
             # Handle nested paths: if remote_filename contains path separators, create directory structure
             if '/' in remote_filename or '\\' in remote_filename:
@@ -209,12 +240,12 @@ class FTPClient:
                 ftp_host.close()
     
     def download_save(self, username: str, game_name: str, remote_filename: str, 
-                     local_file_path: str, folder_number: int) -> Tuple[bool, str]:
+                     local_file_path: str, folder_number: int, ftp_path: Optional[str] = None) -> Tuple[bool, str]:
         """Download a save file from FTP server - 1:1 binary transfer, no modifications"""
         ftp_host = None
         try:
             ftp_host = self._get_connection()
-            save_folder_path = self._navigate_to_save_folder(ftp_host, username, game_name, folder_number)
+            save_folder_path = self._navigate_to_save_folder(ftp_host, username, game_name, folder_number, ftp_path)
             
             # Handle nested paths: if remote_filename contains path separators, navigate to directory
             if '/' in remote_filename or '\\' in remote_filename:
@@ -307,12 +338,12 @@ class FTPClient:
         return files, directories
     
     def list_saves(self, username: str, game_name: str, 
-                  folder_number: int) -> Tuple[bool, List[dict], List[str], str]:
+                  folder_number: int, ftp_path: Optional[str] = None) -> Tuple[bool, List[dict], List[str], str]:
         """List all save files and directories recursively in a specific save folder"""
         ftp_host = None
         try:
             ftp_host = self._get_connection()
-            save_folder_path = self._navigate_to_save_folder(ftp_host, username, game_name, folder_number)
+            save_folder_path = self._navigate_to_save_folder(ftp_host, username, game_name, folder_number, ftp_path)
             print(f"INFO: Listing files recursively in: {save_folder_path}")
             
             # Recursively list all files and directories
