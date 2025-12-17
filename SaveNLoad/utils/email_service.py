@@ -31,6 +31,11 @@ def send_otp_email(email: str, otp_code: str, username: str = None) -> bool:
             logger.error("Email configuration is missing. Please set GMAIL_USER and GMAIL_APP_PASSWORD in environment variables.")
             return False
         
+        # Check if password is configured
+        if not settings.EMAIL_HOST_PASSWORD:
+            logger.error("GMAIL_APP_PASSWORD is not set in environment variables. You need a Gmail App Password (not your regular password).")
+            return False
+        
         # Get icon URL from external hosting (imgbb, imgur, etc.)
         # Set EMAIL_ICON_URL in environment variables with the full URL to your hosted icon
         # Example: https://i.ibb.co/xxxxx/icon.png
@@ -74,6 +79,25 @@ def send_otp_email(email: str, otp_code: str, username: str = None) -> bool:
         return True
         
     except Exception as e:
-        logger.error(f"Failed to send OTP email to {email}: {str(e)}")
+        error_msg = str(e)
+        logger.error(f"Failed to send OTP email to {email}: {error_msg}")
+        
+        # Provide helpful error messages for common Gmail issues
+        if "535" in error_msg or "BadCredentials" in error_msg or "Username and Password not accepted" in error_msg:
+            logger.error(
+                "GMAIL AUTHENTICATION ERROR: Gmail rejected the credentials.\n"
+                "SOLUTION:\n"
+                "1. Make sure you're using a Gmail App Password (NOT your regular Gmail password)\n"
+                "2. Enable 2-Step Verification on your Google account\n"
+                "3. Generate an App Password: https://myaccount.google.com/apppasswords\n"
+                "4. Use the 16-character App Password (no spaces) in GMAIL_APP_PASSWORD\n"
+                "5. Make sure GMAIL_USER is your full Gmail address (e.g., yourname@gmail.com)"
+            )
+        elif "534" in error_msg or "Application-specific password required" in error_msg:
+            logger.error(
+                "GMAIL ERROR: Application-specific password required.\n"
+                "Generate an App Password at: https://myaccount.google.com/apppasswords"
+            )
+        
         return False
 
