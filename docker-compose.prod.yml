@@ -24,7 +24,7 @@ services:
       context: .
       dockerfile: Dockerfile.prod
     container_name: savenload_web_prod
-    command: sh -c "python manage.py collectstatic --noinput && python manage.py migrate && python manage.py seed_admin && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --access-logfile - --error-logfile -"
+    command: sh -c "python manage.py collectstatic --noinput && python manage.py migrate && python manage.py seed_admin && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --threads 2 --timeout 120 --keep-alive 5 --access-logfile - --error-logfile -"
     volumes:
       - ./staticfiles:/app/staticfiles
       - ./media:/app/media

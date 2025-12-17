@@ -225,67 +225,103 @@ class ClientWorkerService:
                 def upload_worker():
                     """Worker function: pulls files from queue and uploads them continuously"""
                     worker_results = []
-                    while True:
-                        # Get file from queue
-                        file_info = file_queue.get()
-                        if file_info is None:  # Sentinel - no more files
-                            file_queue.task_done()
-                            break  # Exit loop when sentinel received
-                        
-                        local_file, remote_filename = file_info
-                        try:
-                            # Reuse connection within thread for better performance
-                            success, message = self.ftp_client.upload_save(
-                                username=username,
-                                game_name=game_name,
-                                local_file_path=local_file,
-                                folder_number=save_folder_number,
-                                remote_filename=remote_filename,
-                                ftp_path=ftp_path
-                            )
+                    # Create ONE FTP connection per worker thread and navigate once
+                    worker_ftp_host = None
+                    worker_save_folder_path = None
+                    try:
+                        # Initialize FTP connection for this worker thread (reused for all files)
+                        worker_ftp_host = self.ftp_client._get_connection(reuse=True)
+                        worker_save_folder_path = self.ftp_client._navigate_to_save_folder(
+                            worker_ftp_host, username, game_name, save_folder_number, ftp_path
+                        )
+                    except Exception as e:
+                        print(f"ERROR: Failed to initialize FTP connection for worker: {e}")
+                        # Fall back to per-file connections
+                        worker_ftp_host = None
+                    
+                    try:
+                        while True:
+                            # Get file from queue
+                            file_info = file_queue.get()
+                            if file_info is None:  # Sentinel - no more files
+                                file_queue.task_done()
+                                break  # Exit loop when sentinel received
                             
-                            # Update progress
-                            with progress_lock:
-                                completed_count[0] += 1
-                                current = completed_count[0]
-                                total = total_files[0]
-                                # Show filename (truncate if too long)
-                                display_name = remote_filename if len(remote_filename) <= 60 else remote_filename[:57] + "..."
-                                if success:
-                                    if total > 0:
-                                        print(f"  [{current}/{total}] Uploaded: {display_name}")
-                                        if operation_id:
-                                            self._update_progress(operation_id, current, total, f"Uploaded: {display_name}")
-                                    else:
-                                        print(f"  [{current}] Uploaded: {display_name}")
-                                        if operation_id:
-                                            self._update_progress(operation_id, current, 0, f"Uploaded: {display_name}")
+                            local_file, remote_filename = file_info
+                            try:
+                                # Reuse connection within thread for better performance
+                                if worker_ftp_host and worker_save_folder_path:
+                                    # Use pre-initialized connection (FAST PATH)
+                                    success, message = self.ftp_client.upload_save(
+                                        username=username,
+                                        game_name=game_name,
+                                        local_file_path=local_file,
+                                        folder_number=save_folder_number,
+                                        remote_filename=remote_filename,
+                                        ftp_path=ftp_path,
+                                        ftp_host=worker_ftp_host,
+                                        save_folder_path=worker_save_folder_path
+                                    )
                                 else:
-                                    # Show error immediately - upload_save returned success=False
-                                    error_msg = message if message else "Upload failed"
-                                    if total > 0:
-                                        print(f"  [{current}/{total}] FAILED: {display_name}")
-                                        print(f"      Error: {error_msg}")
-                                        if operation_id:
-                                            self._update_progress(operation_id, current, total, f"Failed: {display_name}")
+                                    # Fallback: create connection per file (SLOW PATH)
+                                    success, message = self.ftp_client.upload_save(
+                                        username=username,
+                                        game_name=game_name,
+                                        local_file_path=local_file,
+                                        folder_number=save_folder_number,
+                                        remote_filename=remote_filename,
+                                        ftp_path=ftp_path
+                                    )
+                                
+                                # Update progress
+                                with progress_lock:
+                                    completed_count[0] += 1
+                                    current = completed_count[0]
+                                    total = total_files[0]
+                                    # Show filename (truncate if too long)
+                                    display_name = remote_filename if len(remote_filename) <= 60 else remote_filename[:57] + "..."
+                                    if success:
+                                        if total > 0:
+                                            print(f"  [{current}/{total}] Uploaded: {display_name}")
+                                            if operation_id:
+                                                self._update_progress(operation_id, current, total, f"Uploaded: {display_name}")
+                                        else:
+                                            print(f"  [{current}] Uploaded: {display_name}")
+                                            if operation_id:
+                                                self._update_progress(operation_id, current, 0, f"Uploaded: {display_name}")
                                     else:
-                                        print(f"  [{current}] FAILED: {display_name}")
-                                        print(f"      Error: {error_msg}")
-                                        if operation_id:
-                                            self._update_progress(operation_id, current, 0, f"Failed: {display_name}")
-                            
-                            file_queue.task_done()
-                            worker_results.append((success, remote_filename, message))
-                        except Exception as e:
-                            with progress_lock:
-                                completed_count[0] += 1
-                                current = completed_count[0]
-                                total = total_files[0]
-                                print(f"  [{current}/{total if total > 0 else '?'}] ERROR uploading {remote_filename}: {e}")
-                                if operation_id:
-                                    self._update_progress(operation_id, current, total if total > 0 else 0, f"Error: {remote_filename}")
-                            file_queue.task_done()
-                            worker_results.append((False, remote_filename, str(e)))
+                                        # Show error immediately - upload_save returned success=False
+                                        error_msg = message if message else "Upload failed"
+                                        if total > 0:
+                                            print(f"  [{current}/{total}] FAILED: {display_name}")
+                                            print(f"      Error: {error_msg}")
+                                            if operation_id:
+                                                self._update_progress(operation_id, current, total, f"Failed: {display_name}")
+                                        else:
+                                            print(f"  [{current}] FAILED: {display_name}")
+                                            print(f"      Error: {error_msg}")
+                                            if operation_id:
+                                                self._update_progress(operation_id, current, 0, f"Failed: {display_name}")
+                                
+                                file_queue.task_done()
+                                worker_results.append((success, remote_filename, message))
+                            except Exception as e:
+                                with progress_lock:
+                                    completed_count[0] += 1
+                                    current = completed_count[0]
+                                    total = total_files[0]
+                                    print(f"  [{current}/{total if total > 0 else '?'}] ERROR uploading {remote_filename}: {e}")
+                                    if operation_id:
+                                        self._update_progress(operation_id, current, total if total > 0 else 0, f"Error: {remote_filename}")
+                                file_queue.task_done()
+                                worker_results.append((False, remote_filename, str(e)))
+                    finally:
+                        # Clean up worker's FTP connection
+                        if worker_ftp_host:
+                            try:
+                                worker_ftp_host.close()
+                            except:
+                                pass
                     
                     return worker_results
                 
@@ -503,67 +539,103 @@ class ClientWorkerService:
             def download_worker():
                 """Worker function: pulls files from queue and downloads them continuously"""
                 worker_results = []
-                while True:
-                    # Get file from queue
-                    file_info = file_queue.get()
-                    if file_info is None:  # Sentinel - no more files
-                        file_queue.task_done()
-                        break  # Exit loop when sentinel received
-                    
-                    remote_filename, local_file = file_info
-                    try:
-                        # Reuse connection within thread for better performance
-                        success, message = self.ftp_client.download_save(
-                            username=username,
-                            game_name=game_name,
-                            remote_filename=remote_filename,
-                            local_file_path=local_file,
-                            folder_number=save_folder_number,
-                            ftp_path=ftp_path
-                        )
+                # Create ONE FTP connection per worker thread and navigate once
+                worker_ftp_host = None
+                worker_save_folder_path = None
+                try:
+                    # Initialize FTP connection for this worker thread (reused for all files)
+                    worker_ftp_host = self.ftp_client._get_connection(reuse=True)
+                    worker_save_folder_path = self.ftp_client._navigate_to_save_folder(
+                        worker_ftp_host, username, game_name, save_folder_number, ftp_path
+                    )
+                except Exception as e:
+                    print(f"ERROR: Failed to initialize FTP connection for worker: {e}")
+                    # Fall back to per-file connections
+                    worker_ftp_host = None
+                
+                try:
+                    while True:
+                        # Get file from queue
+                        file_info = file_queue.get()
+                        if file_info is None:  # Sentinel - no more files
+                            file_queue.task_done()
+                            break  # Exit loop when sentinel received
                         
-                        # Update progress
-                        with progress_lock:
-                            completed_count[0] += 1
-                            current = completed_count[0]
-                            total = total_files[0]
-                            # Show filename (truncate if too long)
-                            display_name = remote_filename if len(remote_filename) <= 60 else remote_filename[:57] + "..."
-                            if success:
-                                if total > 0:
-                                    print(f"  [{current}/{total}] Downloaded: {display_name}")
-                                    if operation_id:
-                                        self._update_progress(operation_id, current, total, f"Downloaded: {display_name}")
-                                else:
-                                    print(f"  [{current}] Downloaded: {display_name}")
-                                    if operation_id:
-                                        self._update_progress(operation_id, current, 0, f"Downloaded: {display_name}")
+                        remote_filename, local_file = file_info
+                        try:
+                            # Reuse connection within thread for better performance
+                            if worker_ftp_host and worker_save_folder_path:
+                                # Use pre-initialized connection (FAST PATH)
+                                success, message = self.ftp_client.download_save(
+                                    username=username,
+                                    game_name=game_name,
+                                    remote_filename=remote_filename,
+                                    local_file_path=local_file,
+                                    folder_number=save_folder_number,
+                                    ftp_path=ftp_path,
+                                    ftp_host=worker_ftp_host,
+                                    save_folder_path=worker_save_folder_path
+                                )
                             else:
-                                # Show error immediately
-                                error_msg = message if message else "Download failed"
-                                if total > 0:
-                                    print(f"  [{current}/{total}] FAILED: {display_name}")
-                                    print(f"      Error: {error_msg}")
-                                    if operation_id:
-                                        self._update_progress(operation_id, current, total, f"Failed: {display_name}")
+                                # Fallback: create connection per file (SLOW PATH)
+                                success, message = self.ftp_client.download_save(
+                                    username=username,
+                                    game_name=game_name,
+                                    remote_filename=remote_filename,
+                                    local_file_path=local_file,
+                                    folder_number=save_folder_number,
+                                    ftp_path=ftp_path
+                                )
+                            
+                            # Update progress
+                            with progress_lock:
+                                completed_count[0] += 1
+                                current = completed_count[0]
+                                total = total_files[0]
+                                # Show filename (truncate if too long)
+                                display_name = remote_filename if len(remote_filename) <= 60 else remote_filename[:57] + "..."
+                                if success:
+                                    if total > 0:
+                                        print(f"  [{current}/{total}] Downloaded: {display_name}")
+                                        if operation_id:
+                                            self._update_progress(operation_id, current, total, f"Downloaded: {display_name}")
+                                    else:
+                                        print(f"  [{current}] Downloaded: {display_name}")
+                                        if operation_id:
+                                            self._update_progress(operation_id, current, 0, f"Downloaded: {display_name}")
                                 else:
-                                    print(f"  [{current}] FAILED: {display_name}")
-                                    print(f"      Error: {error_msg}")
-                                    if operation_id:
-                                        self._update_progress(operation_id, current, 0, f"Failed: {display_name}")
-                        
-                        file_queue.task_done()
-                        worker_results.append((success, remote_filename, message))
-                    except Exception as e:
-                        with progress_lock:
-                            completed_count[0] += 1
-                            current = completed_count[0]
-                            total = total_files[0]
-                            print(f"  [{current}/{total if total > 0 else '?'}] ERROR downloading {remote_filename}: {e}")
-                            if operation_id:
-                                self._update_progress(operation_id, current, total if total > 0 else 0, f"Error: {remote_filename}")
-                        file_queue.task_done()
-                        worker_results.append((False, remote_filename, str(e)))
+                                    # Show error immediately
+                                    error_msg = message if message else "Download failed"
+                                    if total > 0:
+                                        print(f"  [{current}/{total}] FAILED: {display_name}")
+                                        print(f"      Error: {error_msg}")
+                                        if operation_id:
+                                            self._update_progress(operation_id, current, total, f"Failed: {display_name}")
+                                    else:
+                                        print(f"  [{current}] FAILED: {display_name}")
+                                        print(f"      Error: {error_msg}")
+                                        if operation_id:
+                                            self._update_progress(operation_id, current, 0, f"Failed: {display_name}")
+                            
+                            file_queue.task_done()
+                            worker_results.append((success, remote_filename, message))
+                        except Exception as e:
+                            with progress_lock:
+                                completed_count[0] += 1
+                                current = completed_count[0]
+                                total = total_files[0]
+                                print(f"  [{current}/{total if total > 0 else '?'}] ERROR downloading {remote_filename}: {e}")
+                                if operation_id:
+                                    self._update_progress(operation_id, current, total if total > 0 else 0, f"Error: {remote_filename}")
+                            file_queue.task_done()
+                            worker_results.append((False, remote_filename, str(e)))
+                finally:
+                    # Clean up worker's FTP connection
+                    if worker_ftp_host:
+                        try:
+                            worker_ftp_host.close()
+                        except:
+                            pass
                 
                 return worker_results
             
