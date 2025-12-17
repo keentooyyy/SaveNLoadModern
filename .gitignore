@@ -109,3 +109,12 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# PyInstaller
+# Build and distribution directories (already covered by build/ and dist/ above)
+# PyInstaller temporary and backup files
+*.spec.bak
+*.manifest.bak
+# Compiled executables in client_worker (dist/ already covers dist/ directory)
+client_worker/*.exe
+# Keep .spec and .manifest files in version control (they're configuration)

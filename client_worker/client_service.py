@@ -17,7 +17,20 @@ from dotenv import load_dotenv
 from ftp_client import FTPClient
 
 # Load environment variables
-load_dotenv()
+# For standalone exe: load .env from exe directory (portable)
+# For development: load from current directory
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable
+    exe_dir = Path(sys.executable).parent
+    env_path = exe_dir / '.env'
+    if env_path.exists():
+        load_dotenv(env_path)
+    else:
+        # Fallback to current directory
+        load_dotenv()
+else:
+    # Running as script
+    load_dotenv()
 
 
 class ClientWorkerService:
