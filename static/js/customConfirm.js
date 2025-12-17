@@ -6,6 +6,35 @@
 (function() {
     'use strict';
 
+    // Helper function to get the next z-index for modal stacking
+    function getNextModalZIndex() {
+        // Bootstrap default: modal = 1050, backdrop = 1040
+        let maxZIndex = 1050;
+        
+        // Find all existing modals and backdrops
+        const existingModals = document.querySelectorAll('.modal.show, .modal[style*="z-index"]');
+        const existingBackdrops = document.querySelectorAll('.modal-backdrop');
+        
+        // Check modal z-indexes
+        existingModals.forEach(modal => {
+            const zIndex = parseInt(window.getComputedStyle(modal).zIndex) || 0;
+            if (zIndex > maxZIndex) {
+                maxZIndex = zIndex;
+            }
+        });
+        
+        // Check backdrop z-indexes
+        existingBackdrops.forEach(backdrop => {
+            const zIndex = parseInt(window.getComputedStyle(backdrop).zIndex) || 0;
+            if (zIndex > maxZIndex) {
+                maxZIndex = zIndex;
+            }
+        });
+        
+        // Return next z-index (increment by 10 for proper stacking)
+        return maxZIndex + 10;
+    }
+
     // Create modal HTML structure using safe DOM manipulation
     function createConfirmModal() {
         const modal = document.createElement('div');
@@ -138,6 +167,18 @@
             modalElement.addEventListener('hidden.bs.modal', function handler() {
                 modalElement.removeEventListener('hidden.bs.modal', handler);
                 resolve(false);
+            }, { once: true });
+
+            // Get next z-index for proper stacking (ensure it's on top)
+            const nextZIndex = getNextModalZIndex();
+            modalElement.style.zIndex = nextZIndex;
+
+            // Set backdrop z-index after modal is shown (Bootstrap creates backdrop dynamically)
+            modalElement.addEventListener('shown.bs.modal', function() {
+                const backdrop = document.querySelector('.modal-backdrop:last-of-type');
+                if (backdrop) {
+                    backdrop.style.zIndex = (nextZIndex - 10).toString();
+                }
             }, { once: true });
 
             // Show modal

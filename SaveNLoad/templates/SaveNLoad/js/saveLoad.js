@@ -7,6 +7,35 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
+    // Helper function to get the next z-index for modal stacking
+    function getNextModalZIndex() {
+        // Bootstrap default: modal = 1050, backdrop = 1040
+        let maxZIndex = 1050;
+        
+        // Find all existing modals and backdrops
+        const existingModals = document.querySelectorAll('.modal.show, .modal[style*="z-index"]');
+        const existingBackdrops = document.querySelectorAll('.modal-backdrop');
+        
+        // Check modal z-indexes
+        existingModals.forEach(modal => {
+            const zIndex = parseInt(window.getComputedStyle(modal).zIndex) || 0;
+            if (zIndex > maxZIndex) {
+                maxZIndex = zIndex;
+            }
+        });
+        
+        // Check backdrop z-indexes
+        existingBackdrops.forEach(backdrop => {
+            const zIndex = parseInt(window.getComputedStyle(backdrop).zIndex) || 0;
+            if (zIndex > maxZIndex) {
+                maxZIndex = zIndex;
+            }
+        });
+        
+        // Return next z-index (increment by 10 for proper stacking)
+        return maxZIndex + 10;
+    }
+
     // Poll operation status until completion
     async function pollOperationStatus(operationId, btn, originalIcon, originalText) {
         const maxAttempts = 300; // 300 attempts = 5 minutes max (1 second intervals)
@@ -80,6 +109,10 @@ document.addEventListener('DOMContentLoaded', function () {
         modalDialog.appendChild(modalContent);
         modalBackdrop.appendChild(modalDialog);
         
+        // Get next z-index for proper stacking
+        const nextZIndex = getNextModalZIndex();
+        modalBackdrop.style.zIndex = nextZIndex;
+        
         // Add modal to body
         document.body.appendChild(modalBackdrop);
         
@@ -88,6 +121,15 @@ document.addEventListener('DOMContentLoaded', function () {
             backdrop: 'static',
             keyboard: false
         });
+        
+        // Set backdrop z-index after modal is shown (Bootstrap creates backdrop dynamically)
+        modal._element.addEventListener('shown.bs.modal', function() {
+            const backdrop = document.querySelector('.modal-backdrop:last-of-type');
+            if (backdrop) {
+                backdrop.style.zIndex = (nextZIndex - 10).toString();
+            }
+        }, { once: true });
+        
         modal.show();
         
         const updateProgress = (progressData) => {
@@ -525,6 +567,10 @@ document.addEventListener('DOMContentLoaded', function () {
         modalDialog.appendChild(modalContent);
         modalBackdrop.appendChild(modalDialog);
         
+        // Get next z-index for proper stacking
+        const nextZIndex = getNextModalZIndex();
+        modalBackdrop.style.zIndex = nextZIndex;
+        
         // Add modal to body
         document.body.appendChild(modalBackdrop);
         
@@ -533,6 +579,15 @@ document.addEventListener('DOMContentLoaded', function () {
             backdrop: 'static',
             keyboard: false
         });
+        
+        // Set backdrop z-index after modal is shown (Bootstrap creates backdrop dynamically)
+        modal._element.addEventListener('shown.bs.modal', function() {
+            const backdrop = document.querySelector('.modal-backdrop:last-of-type');
+            if (backdrop) {
+                backdrop.style.zIndex = (nextZIndex - 10).toString();
+            }
+        }, { once: true });
+        
         modal.show();
         
         const updateProgress = (progressData) => {
