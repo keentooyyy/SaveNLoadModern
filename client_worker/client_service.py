@@ -231,8 +231,7 @@ class ClientWorkerService:
                     worker_results = []
                     # SMB doesn't need connection pooling - smbclient handles it automatically
                     
-                    try:
-                        while True:
+                    while True:
                             # Get file from queue
                             file_info = file_queue.get()
                             if file_info is None:  # Sentinel - no more files
@@ -293,8 +292,8 @@ class ClientWorkerService:
                                         self._update_progress(operation_id, current, total if total > 0 else 0, f"Error: {remote_filename}")
                                 file_queue.task_done()
                                 worker_results.append((False, remote_filename, str(e)))
-                    
-                    return worker_results
+                
+                return worker_results
                 
                 # Check if we found any files
                 # Wait a moment for collector to start finding files
@@ -508,30 +507,30 @@ class ClientWorkerService:
             processor_thread = threading.Thread(target=file_processor, daemon=True)
             processor_thread.start()
             
-                def download_worker():
-                    """Worker function: pulls files from queue and downloads them continuously"""
-                    worker_results = []
-                    # SMB doesn't need connection pooling - smbclient handles it automatically
-                    
-                    try:
-                        while True:
-                            # Get file from queue
-                            file_info = file_queue.get()
-                            if file_info is None:  # Sentinel - no more files
-                                file_queue.task_done()
-                                break  # Exit loop when sentinel received
-                            
-                            remote_filename, local_file = file_info
-                            try:
-                                # SMB is fast - no need for connection pooling
-                                success, message = self.smb_client.download_save(
-                                    username=username,
-                                    game_name=game_name,
-                                    remote_filename=remote_filename,
-                                    local_file_path=local_file,
-                                    folder_number=save_folder_number,
-                                    ftp_path=ftp_path
-                                )
+            def download_worker():
+                """Worker function: pulls files from queue and downloads them continuously"""
+                worker_results = []
+                # SMB doesn't need connection pooling - smbclient handles it automatically
+                
+                try:
+                    while True:
+                        # Get file from queue
+                        file_info = file_queue.get()
+                        if file_info is None:  # Sentinel - no more files
+                            file_queue.task_done()
+                            break  # Exit loop when sentinel received
+                        
+                        remote_filename, local_file = file_info
+                        try:
+                            # SMB is fast - no need for connection pooling
+                            success, message = self.smb_client.download_save(
+                                username=username,
+                                game_name=game_name,
+                                remote_filename=remote_filename,
+                                local_file_path=local_file,
+                                folder_number=save_folder_number,
+                                ftp_path=ftp_path
+                            )
                             
                             # Update progress
                             with progress_lock:
@@ -573,10 +572,12 @@ class ClientWorkerService:
                                 print(f"  [{current}/{total if total > 0 else '?'}] ERROR downloading {remote_filename}: {e}")
                                 if operation_id:
                                     self._update_progress(operation_id, current, total if total > 0 else 0, f"Error: {remote_filename}")
-                                file_queue.task_done()
-                                worker_results.append((False, remote_filename, str(e)))
-                    
-                    return worker_results
+                            file_queue.task_done()
+                            worker_results.append((False, remote_filename, str(e)))
+                except Exception as e:
+                    print(f"Error in download_worker: {e}")
+                
+                return worker_results
             
             # Wait a moment for processor to start
             time.sleep(0.1)

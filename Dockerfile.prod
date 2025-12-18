@@ -15,7 +15,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy package files and install dependencies
-COPY package.json package-lock.json /app/
+COPY package.json /app/
 RUN npm install
 
 # Copy project files (needed for static/scss before building)

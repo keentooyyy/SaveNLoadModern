@@ -41,11 +41,16 @@ class SMBClient:
         self.port = port
         
         # Register credentials with smbclient
+        # Note: domain is not supported by smbclient.register_session
+        # If domain is needed, format username as DOMAIN\username
+        auth_username = username
+        if domain:
+            auth_username = f"{domain}\\{username}"
+        
         smbclient.register_session(
             server,
-            username=username,
+            username=auth_username,
             password=password,
-            domain=domain,
             port=port
         )
         
