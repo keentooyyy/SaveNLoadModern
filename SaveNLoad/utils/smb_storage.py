@@ -1,6 +1,6 @@
 """
 SMB/CIFS Storage Utility for Django Backend
-Replaces FTP for much faster file operations on LAN
+SMB/CIFS storage backend for fast file operations on LAN
 """
 import os
 import io
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class SMBStorage:
     """SMB/CIFS storage backend for save files
     
-    Much faster than FTP - can achieve 100+ MB/s on gigabit LAN
+    Fast SMB/CIFS storage - can achieve 100+ MB/s on gigabit LAN
     """
     
     def __init__(self):

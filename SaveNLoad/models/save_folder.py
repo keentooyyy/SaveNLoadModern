@@ -15,7 +15,7 @@ class SaveFolder(models.Model):
     user = models.ForeignKey(SimpleUsers, on_delete=models.CASCADE, related_name='save_folders')
     game = models.ForeignKey(Game, on_delete=models.CASCADE, related_name='save_folders')
     folder_number = models.IntegerField(help_text="Save folder number (1-10)")
-    ftp_path = models.CharField(max_length=500, blank=True, null=True, help_text="Full SMB path (e.g., /username/gamename/save_1) - kept as ftp_path for backward compatibility")
+    smb_path = models.CharField(max_length=500, blank=True, null=True, help_text="Full SMB path (e.g., username\\gamename\\save_1) - Windows path format with backslashes")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -33,9 +33,9 @@ class SaveFolder(models.Model):
         return f"{self.user.username}/{self.game.name}/save_{self.folder_number}"
     
     def save(self, *args, **kwargs):
-        """Override save to auto-populate ftp_path if missing"""
-        if not self.ftp_path:
-            self.ftp_path = self._generate_ftp_path(self.user.username, self.game.name, self.folder_number)
+        """Override save to auto-populate smb_path if missing"""
+        if not self.smb_path:
+            self.smb_path = self._generate_smb_path(self.user.username, self.game.name, self.folder_number)
         super().save(*args, **kwargs)
     
     @property
@@ -44,13 +44,13 @@ class SaveFolder(models.Model):
         return f"save_{self.folder_number}"
     
     @staticmethod
-    def _generate_ftp_path(username: str, game_name: str, folder_number: int) -> str:
-        """Generate the full SMB path for a save folder (kept as _generate_ftp_path for backward compatibility)"""
-        # Sanitize game name (matching ftp_client.py logic)
+    def _generate_smb_path(username: str, game_name: str, folder_number: int) -> str:
+        """Generate the full SMB path for a save folder in Windows format (backslashes)"""
+        # Sanitize game name
         safe_game_name = "".join(c for c in game_name if c.isalnum() or c in (' ', '-', '_')).strip()
         safe_game_name = safe_game_name.replace(' ', '_')
-        # Generate full path: /username/gamename/save_1
-        return f"/{username}/{safe_game_name}/save_{folder_number}"
+        # Generate full path in SMB/Windows format: username\gamename\save_1
+        return f"{username}\\{safe_game_name}\\save_{folder_number}"
     
     @classmethod
     def get_or_create_next(cls, user: SimpleUsers, game: Game) -> 'SaveFolder':
@@ -67,8 +67,8 @@ class SaveFolder(models.Model):
             if oldest_folder:
                 # Reset created_at for reuse and update SMB path (in case game name changed)
                 oldest_folder.created_at = timezone.now()
-                oldest_folder.ftp_path = cls._generate_ftp_path(user.username, game.name, oldest_folder.folder_number)
-                oldest_folder.save(update_fields=['created_at', 'ftp_path'])
+                oldest_folder.smb_path = cls._generate_smb_path(user.username, game.name, oldest_folder.folder_number)
+                oldest_folder.save(update_fields=['created_at', 'smb_path'])
                 return oldest_folder
         
         # Find the next available number
@@ -79,14 +79,14 @@ class SaveFolder(models.Model):
                 break
         
         # Generate SMB path
-        ftp_path = cls._generate_ftp_path(user.username, game.name, next_number)
+        smb_path = cls._generate_smb_path(user.username, game.name, next_number)
         
         # Create new save folder
         save_folder = cls.objects.create(
             user=user,
             game=game,
             folder_number=next_number,
-            ftp_path=ftp_path
+            smb_path=smb_path
         )
         return save_folder
     

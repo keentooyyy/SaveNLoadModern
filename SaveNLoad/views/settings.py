@@ -410,7 +410,7 @@ def operation_queue_cleanup(request):
     # CRITICAL SAFETY: Only delete OperationQueue records - this does NOT affect:
     # - SaveFolder records (completely independent model, no relationship)
     # - Game.last_played (separate field on Game model)
-    # - FTP files (operations are just queue records, not the actual saves)
+    # - SMB files (operations are just queue records, not the actual saves)
     # - Any other models
     # The ForeignKey CASCADE only works one way: deleting a Game/User deletes operations, NOT the reverse
     # OperationQueue and SaveFolder are completely independent - no ForeignKey between them

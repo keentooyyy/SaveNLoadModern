@@ -169,7 +169,7 @@ def get_pending_operations(request, client_id):
                 'game_name': op.game.name,
                 'local_save_path': op.local_save_path,
                 'save_folder_number': op.save_folder_number,
-                'ftp_path': op.ftp_path,
+                'smb_path': op.smb_path,
                 'username': op.user.username,
             })
         
@@ -239,7 +239,7 @@ def complete_operation(request, operation_id):
                     )
                     if save_folder:
                         save_folder.delete()
-                        logger.info(f"Deleted save folder {operation.save_folder_number} from database after successful FTP deletion")
+                        logger.info(f"Deleted save folder {operation.save_folder_number} from database after successful SMB deletion")
                 except Exception as e:
                     logger.warning(f"Failed to delete save folder from database after operation: {e}")
         else:

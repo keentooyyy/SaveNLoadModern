@@ -3,7 +3,7 @@ Django management command to create a default admin user from environment variab
 Usage: python manage.py seed_admin
 """
 from django.core.management.base import BaseCommand
-from django.db import IntegrityError
+from django.db import IntegrityError, OperationalError, ProgrammingError
 from SaveNLoad.models.user import SimpleUsers, UserRole
 import os
 import logging
@@ -39,6 +39,22 @@ class Command(BaseCommand):
         if not admin_password:
             print('DEFAULT_ADMIN_PASSWORD environment variable is not set')
             return
+
+        # Check if database tables exist (migrations may not have been run)
+        try:
+            # Try a simple query to check if table exists
+            SimpleUsers.objects.first()
+        except (OperationalError, ProgrammingError) as e:
+            error_msg = str(e).lower()
+            if 'does not exist' in error_msg or 'relation' in error_msg:
+                print('ERROR: Database tables do not exist. Please run migrations first:')
+                print('  python manage.py makemigrations')
+                print('  python manage.py migrate')
+                logger.error(f'Database tables do not exist: {str(e)}')
+                return
+            else:
+                # Re-raise if it's a different database error
+                raise
 
         # Check if admin user already exists
         try:

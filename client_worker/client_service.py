@@ -120,7 +120,7 @@ class ClientWorkerService:
     
     
     def save_game(self, game_id: int, local_save_path: str, 
-                 username: str, game_name: str, save_folder_number: int, ftp_path: Optional[str] = None,
+                 username: str, game_name: str, save_folder_number: int, smb_path: Optional[str] = None,
                  operation_id: Optional[int] = None) -> Dict[str, Any]:
         """Save game - backup from local PC to SMB"""
         print(f"Backing up save files...")
@@ -151,7 +151,7 @@ class ClientWorkerService:
                 scanning_done = [False]
                 files_found = [False]  # Track if we found any files
                 
-                MAX_WORKERS = 10  # Fixed worker count like FileZilla
+                MAX_WORKERS = 10  # Balanced worker count (SMB has credit limits per connection)
                 
                 def file_collector():
                     """Producer thread: walks directory and feeds files to queue"""
@@ -219,7 +219,7 @@ class ClientWorkerService:
                                     game_name=game_name,
                                     folder_number=save_folder_number,
                                     remote_dir_path=remote_dir_path,
-                                    ftp_path=ftp_path
+                                    smb_path=smb_path
                                 )
                                 dirs_created += 1
                             except Exception:
@@ -253,7 +253,7 @@ class ClientWorkerService:
                                 local_file_path=local_file,
                                 folder_number=save_folder_number,
                                 remote_filename=remote_filename,
-                                ftp_path=ftp_path
+                                smb_path=smb_path
                             )
                             
                             # Update progress
@@ -386,7 +386,7 @@ class ClientWorkerService:
                     local_file_path=local_save_path,
                     folder_number=save_folder_number,
                     remote_filename=os.path.basename(local_save_path),
-                    ftp_path=ftp_path
+                    smb_path=smb_path
                 )
                 
                 if success:
@@ -401,7 +401,7 @@ class ClientWorkerService:
             return {'success': False, 'error': f'Save operation failed: {str(e)}'}
     
     def load_game(self, game_id: int, local_save_path: str,
-                 username: str, game_name: str, save_folder_number: int, ftp_path: Optional[str] = None,
+                 username: str, game_name: str, save_folder_number: int, smb_path: Optional[str] = None,
                  operation_id: Optional[int] = None) -> Dict[str, Any]:
         """Load game - download from SMB to local PC"""
         print(f"Preparing to download save files...")
@@ -411,7 +411,7 @@ class ClientWorkerService:
                 username=username,
                 game_name=game_name,
                 folder_number=save_folder_number,
-                ftp_path=ftp_path
+                smb_path=smb_path
             )
             
             if not success:
@@ -535,7 +535,7 @@ class ClientWorkerService:
                                 remote_filename=remote_filename,
                                 local_file_path=local_file,
                                 folder_number=save_folder_number,
-                                ftp_path=ftp_path
+                                smb_path=smb_path
                             )
                             
                             # Update progress
@@ -658,7 +658,7 @@ class ClientWorkerService:
             return {'success': False, 'error': f'Load operation failed: {str(e)}'}
     
     def list_saves(self, game_id: int, username: str, game_name: str, 
-                  save_folder_number: int, ftp_path: Optional[str] = None) -> Dict[str, Any]:
+                  save_folder_number: int, smb_path: Optional[str] = None) -> Dict[str, Any]:
         """List all save files in a save folder"""
         print(f"Listing save files...")
         
@@ -667,7 +667,7 @@ class ClientWorkerService:
                 username=username,
                 game_name=game_name,
                 folder_number=save_folder_number,
-                ftp_path=ftp_path
+                smb_path=smb_path
             )
             
             if not success:
@@ -688,15 +688,15 @@ class ClientWorkerService:
             return {'success': False, 'error': f'List operation failed: {str(e)}'}
     
     def delete_save_folder(self, game_id: int, username: str, game_name: str,
-                          save_folder_number: int, ftp_path: Optional[str] = None,
+                          save_folder_number: int, smb_path: Optional[str] = None,
                           operation_id: Optional[int] = None) -> Dict[str, Any]:
-        """Delete a save folder from FTP - FORCE DELETE (always deletes everything)"""
+        """Delete a save folder from SMB - FORCE DELETE (always deletes everything)"""
         print(f"Deleting save folder (force delete - will delete all contents)...")
         
-        if not ftp_path:
+        if not smb_path:
             return {
                 'success': False,
-                'error': 'FTP path is required for delete operation'
+                'error': 'SMB path is required for delete operation'
             }
         
         try:
@@ -705,7 +705,7 @@ class ClientWorkerService:
                 username=username,
                 game_name=game_name,
                 folder_number=save_folder_number,
-                ftp_path=ftp_path
+                smb_path=smb_path
             )
             
             if not success:
@@ -739,7 +739,7 @@ class ClientWorkerService:
             items_to_delete.append({
                 'type': 'directory',
                 'path': '',
-                'full_path': ftp_path
+                'full_path': smb_path
             })
             
             if not items_to_delete:
@@ -808,11 +808,17 @@ class ClientWorkerService:
                         if item['full_path']:
                             full_path = item['full_path']
                         else:
-                            # Construct full path from base ftp_path
+                            # Construct full path from base smb_path
                             if item_path:
-                                full_path = f"{ftp_path.rstrip('/')}/{item_path.lstrip('/')}"
+                                # Normalize to backslashes for SMB
+                                smb_path_normalized = smb_path.replace('/', '\\').strip('\\')
+                                item_path_normalized = item_path.replace('/', '\\').strip('\\')
+                                if smb_path_normalized:
+                                    full_path = f"{smb_path_normalized}\\{item_path_normalized}"
+                                else:
+                                    full_path = item_path_normalized
                             else:
-                                full_path = ftp_path
+                                full_path = smb_path.replace('/', '\\').strip('\\')
                         
                         # Delete the item
                         if item_type == 'file':
@@ -1113,7 +1119,7 @@ class ClientWorkerService:
         username = operation.get('username')
         game_name = operation.get('game_name')
         save_folder_number = operation.get('save_folder_number')
-        ftp_path = operation.get('ftp_path')
+        smb_path = operation.get('smb_path')
         
         op_type_display = op_type.capitalize()
         print(f"\nProcessing: {op_type_display} operation for {game_name}")
@@ -1124,13 +1130,13 @@ class ClientWorkerService:
             return
         
         if op_type == 'save':
-            result = self.save_game(game_id, local_path, username, game_name, save_folder_number, ftp_path, operation_id)
+            result = self.save_game(game_id, local_path, username, game_name, save_folder_number, smb_path, operation_id)
         elif op_type == 'load':
-            result = self.load_game(game_id, local_path, username, game_name, save_folder_number, ftp_path, operation_id)
+            result = self.load_game(game_id, local_path, username, game_name, save_folder_number, smb_path, operation_id)
         elif op_type == 'list':
-            result = self.list_saves(game_id, username, game_name, save_folder_number, ftp_path)
+            result = self.list_saves(game_id, username, game_name, save_folder_number, smb_path)
         elif op_type == 'delete':
-            result = self.delete_save_folder(game_id, username, game_name, save_folder_number, ftp_path, operation_id)
+            result = self.delete_save_folder(game_id, username, game_name, save_folder_number, smb_path, operation_id)
         else:
             print(f"Error: Unknown operation type")
             return

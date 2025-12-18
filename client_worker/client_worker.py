@@ -137,7 +137,7 @@ class SaveNLoadClient:
                 }
             else:
                 # Single file upload
-                success, message = self.ftp_client.upload_save(
+                success, message = self.smb_client.upload_save(
                     username=username,
                     game_name=game_name,
                     local_file_path=local_save_path

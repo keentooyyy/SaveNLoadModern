@@ -8,7 +8,7 @@
 
 ## About
 
-SaveNLoadModern is a modern, web-based game save file management system built with Django. It provides a centralized platform for users to save, load, and manage their game progress across multiple games and save slots. The system features a client worker application that runs on user machines to handle local save file operations, FTP integration for cloud storage, and a comprehensive admin dashboard for managing games, users, and operations.
+SaveNLoadModern is a modern, web-based game save file management system built with Django. It provides a centralized platform for users to save, load, and manage their game progress across multiple games and save slots. The system features a client worker application that runs on user machines to handle local save file operations, SMB/CIFS network share integration for fast LAN storage, and a comprehensive admin dashboard for managing games, users, and operations.
 
 ### Key Features
 
@@ -16,7 +16,7 @@ SaveNLoadModern is a modern, web-based game save file management system built wi
 
 - **Client Worker Application**: Standalone Python executable that runs on client PCs to handle save/load operations
 
-- **FTP Cloud Storage**: Secure FTP server integration for storing save files remotely
+- **SMB/CIFS Network Storage**: Fast SMB/CIFS (Windows Network Share) integration for storing save files on LAN (can achieve 100+ MB/s on gigabit networks)
 
 - **User Authentication**: Custom authentication system with role-based access (Admin/User)
 
@@ -34,15 +34,16 @@ SaveNLoadModern is a modern, web-based game save file management system built wi
 
 ## Prerequisites
 
-> **Recommended Deployment Method:** Docker is the recommended deployment method for SaveNLoadModern. Docker containers automatically manage the Django application, PostgreSQL database, and Node.js dependencies. However, FileZilla Server must be installed separately as a standalone service.
+> **Recommended Deployment Method:** Docker is the recommended deployment method for SaveNLoadModern. Docker containers automatically manage the Django application, PostgreSQL database, and Node.js dependencies. However, a Windows Network Share (SMB/CIFS) must be configured separately on a Windows machine or SMB-compatible server.
 
 Before setting up the project, ensure you have the following installed:
 
 **Required:**
 - **[Docker](https://www.docker.com/get-started)** and **Docker Compose** - Primary deployment method for the Django application and database
+- **Windows Machine with Network Sharing** - A Windows PC or server with a shared folder configured for SMB/CIFS access (or Samba on Linux)
 
 **Separate Services (Required, not included in Docker):**
-- **[FileZilla Server](https://filezilla-project.org/download.php?type=server)** - FTP server for storing save files (must be installed separately on the host system or a remote server)
+- **Windows Network Share (SMB/CIFS)** - A shared folder on a Windows machine or SMB-compatible server for storing save files
 - **Gmail Account** - Required for email notifications (requires App Password)
 
 **Optional (for manual setup only):**
@@ -59,7 +60,7 @@ docker-compose --version
 
 ## Project Setup
 
-> **Deployment Recommendation:** Docker is the recommended deployment method for SaveNLoadModern. It automatically handles the Django application, PostgreSQL database, and Node.js dependencies. Note that FileZilla Server must be installed separately as a standalone service, as it is not included in the Docker containers.
+> **Deployment Recommendation:** Docker is the recommended deployment method for SaveNLoadModern. It automatically handles the Django application, PostgreSQL database, and Node.js dependencies. Note that a Windows Network Share (SMB/CIFS) must be configured separately on a Windows machine or SMB-compatible server, as it is not included in the Docker containers.
 
 ### Step 1: Environment Configuration
 
@@ -198,7 +199,7 @@ SaveNLoadModern/
 ├── client_worker/              # Client worker application
 │   ├── client_worker.py        # Main client worker logic
 │   ├── client_service.py       # Service wrapper for Windows
-│   ├── ftp_client.py           # FTP client implementation
+│   ├── smb_client.py            # SMB/CIFS client implementation
 │   ├── build_exe.py            # PyInstaller build script
 │   ├── SaveNLoadClient.spec    # PyInstaller spec file
 │   └── requirements.txt        # Client worker dependencies
@@ -284,15 +285,15 @@ SaveNLoadModern/
 ### Save/Load System
 
 - **Multiple Save Slots**: Support for up to 10 save folders per game per user
-- **FTP Storage**: Save files stored on FTP server for cloud access
+- **SMB/CIFS Storage**: Save files stored on Windows Network Share (SMB/CIFS) for fast LAN access
 - **Operation Queue**: Asynchronous processing of save/load operations
 - **Progress Tracking**: Track operation progress and status
 
 ### Client Worker
 
 - **Standalone Application**: Python executable that runs on client PCs
-- **Save Operations**: Upload local save files to FTP server
-- **Load Operations**: Download save files from FTP to local machine
+- **Save Operations**: Upload local save files to SMB/CIFS network share
+- **Load Operations**: Download save files from SMB/CIFS network share to local machine
 - **API Integration**: Communicates with Django backend via REST API
 - **Session Management**: Maintains authentication with Django server
 
@@ -337,7 +338,7 @@ Users need to configure the client worker with:
 
 - **Server URL**: Django server URL (e.g., `http://192.168.88.101:8000`)
 - **Session Cookie**: Authentication cookie from web login
-- **FTP Credentials**: Set via environment variables or `.env` file
+- **SMB/CIFS Credentials**: Set via environment variables or `.env` file (SMB_SERVER, SMB_SHARE, SMB_USERNAME, SMB_PASSWORD)
 
 ## API Endpoints
 
@@ -385,31 +386,60 @@ POSTGRES_HOST=db  # Use 'localhost' for non-Docker setup
 POSTGRES_PORT=5432
 ```
 
-### FTP Configuration
+### SMB/CIFS Configuration
 
-> **Important:** FileZilla Server is a separate service that must be installed independently on your host system or a remote server. It is not included in the Docker containers. The Django application connects to FileZilla Server via FTP protocol.
+> **Important:** A Windows Network Share (SMB/CIFS) must be configured on a Windows machine or SMB-compatible server. It is not included in the Docker containers. The Django application and client worker connect to the SMB share via the SMB/CIFS protocol.
 
-> **Recommended:** [FileZilla Server](https://filezilla-project.org/download.php?type=server) is recommended for FTP file storage. It provides a free, reliable, and easy-to-configure solution that integrates seamlessly with SaveNLoadModern.
+**Setting up Windows Network Share (Required):**
 
-**Setting up FileZilla Server (Separate Installation Required):**
+1. **Create a Shared Folder on Windows:**
+   - Right-click on the folder you want to share (e.g., `C:\SaveNLoad` or `D:\Saves`)
+   - Select "Properties" → "Sharing" tab
+   - Click "Advanced Sharing"
+   - Check "Share this folder"
+   - Set a Share name (e.g., `n_Saves` or `SaveNLoad`)
+   - Click "Permissions" and grant appropriate access (Read/Write) to the user account
+   - Click "OK" to save
 
-1. Download and install [FileZilla Server](https://filezilla-project.org/download.php?type=server) on your host system or a dedicated FTP server
-2. Launch FileZilla Server Admin and create a user account
-3. Configure a shared folder for save files with appropriate permissions
-4. Note the FTP server hostname/IP address, port, username, and password
+2. **Configure Network and Sharing Center:**
+   - Open **Control Panel** → **Network and Internet** → **Network and Sharing Center**
+   - Click "Change advanced sharing settings" in the left sidebar
+   - Under "Private" network profile (or "All Networks" if needed):
+     - Turn on "Network discovery"
+     - Turn on "File and printer sharing"
+     - Turn on "Turn on sharing so anyone with network access can read and write files in the Public folders" (if using Public folder)
+   - Under "All Networks":
+     - Turn off "Password protected sharing" (if you want easier access) OR
+     - Turn on "Password protected sharing" (recommended for security) and ensure the user account has a password
+   - Click "Save changes"
 
-**Configure FTP Connection in Client Worker:**
+3. **Configure Windows Firewall (if needed):**
+   - Ensure Windows Firewall allows SMB traffic (ports 445, 139)
+   - File and Printer Sharing should be allowed through the firewall
 
-FTP settings are configured in the client worker's `.env` file:
+4. **Note the SMB Share Details:**
+   - **SMB Server**: IP address or hostname of the Windows machine (e.g., `192.168.88.101`)
+   - **SMB Share**: The share name you configured (e.g., `n_Saves`)
+   - **SMB Username**: Windows username with access to the share
+   - **SMB Password**: Password for the Windows user account
+   - **SMB Domain**: Leave empty for workgroup, or specify domain name if on a domain
+   - **SMB Port**: Default is 445 (SMB over TCP/IP)
+
+**Configure SMB Connection in Application:**
+
+SMB settings are configured in the `.env` file (both Django backend and client worker):
 
 ```env
-FTP_HOST=your-ftp-server.com  # IP address or hostname of FileZilla Server
-FTP_PORT=21
-FTP_USERNAME=your-username     # User account created in FileZilla Server
-FTP_PASSWORD=your-password     # Password for the FileZilla Server user
+# SMB/CIFS Configuration (for client worker and backend)
+SMB_SERVER=192.168.88.101        # IP address or hostname of Windows machine
+SMB_SHARE=n_Saves                # Share name configured in Windows
+SMB_USERNAME=administrator       # Windows username with share access
+SMB_PASSWORD=your-password       # Password for the Windows user
+SMB_DOMAIN=                      # Leave empty for workgroup, or domain name
+SMB_PORT=445                     # Default SMB port
 ```
 
-> **Note:** Ensure FileZilla Server is running and accessible from both the Django server and client worker machines. The FTP server can be on the same machine as Docker or on a separate server.
+> **Note:** Ensure the Windows machine with the shared folder is accessible from both the Django server and client worker machines. The SMB share can be on the same machine as Docker or on a separate Windows server. The share must be accessible via UNC path: `\\SERVER_IP\SHARE_NAME`
 
 ### Email Configuration
 
@@ -457,15 +487,19 @@ If you encounter database connection errors:
 4. **Check Port**: Default PostgreSQL port is `5432`
 5. **Check Database Exists**: Create database if it doesn't exist
 
-### FTP Connection Issues
+### SMB/CIFS Connection Issues
 
-If FTP operations fail:
+If SMB operations fail:
 
-1. **Check FTP Server**: Ensure FTP server is accessible (recommended: [FileZilla Server](https://filezilla-project.org/download.php?type=server))
-2. **Check Credentials**: Verify FTP credentials in client worker `.env`
-3. **Check Firewall**: Ensure FTP port (21) is not blocked
-4. **Check Permissions**: Verify FTP user has write permissions
-5. **Check Logs**: Review client worker logs for detailed errors
+1. **Check Windows Share**: Ensure the Windows machine is accessible and the share is properly configured
+2. **Check Network Discovery**: Verify Network Discovery and File Sharing are enabled in Network and Sharing Center
+3. **Check Credentials**: Verify SMB credentials in `.env` file (SMB_SERVER, SMB_SHARE, SMB_USERNAME, SMB_PASSWORD)
+4. **Check Firewall**: Ensure Windows Firewall allows SMB traffic (ports 445, 139) and File and Printer Sharing
+5. **Check Permissions**: Verify Windows user account has Read/Write permissions on the shared folder
+6. **Check UNC Path**: Test accessing the share via UNC path: `\\SERVER_IP\SHARE_NAME` from Windows Explorer
+7. **Check Network**: Ensure client can reach the Windows machine over the network (ping test)
+8. **Check Advanced Sharing Settings**: Verify settings in Control Panel → Network and Internet → Network and Sharing Center → Advanced sharing settings
+9. **Check Logs**: Review client worker and Django logs for detailed errors
 
 ### Email Sending Issues
 
@@ -483,9 +517,11 @@ If client worker fails:
 
 1. **Check Server URL**: Verify Django server is accessible
 2. **Check Session Cookie**: Ensure valid session cookie is provided
-3. **Check SMB Config**: Verify SMB credentials are set in `.env`
-4. **Check Network**: Ensure client can reach server and SMB share
-5. **Check Logs**: Review client worker output for errors
+3. **Check SMB Config**: Verify SMB credentials are set in `.env` (SMB_SERVER, SMB_SHARE, SMB_USERNAME, SMB_PASSWORD)
+4. **Check Windows Share**: Verify the Windows share is accessible via UNC path (`\\SERVER_IP\SHARE_NAME`)
+5. **Check Network**: Ensure client can reach both Django server and Windows SMB share
+6. **Check Network Sharing Settings**: Verify Network Discovery and File Sharing are enabled in Windows Network and Sharing Center
+7. **Check Logs**: Review client worker output for errors
 
 ### Build Errors
 

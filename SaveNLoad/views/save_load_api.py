@@ -76,7 +76,7 @@ def save_game(request, game_id):
     if not save_folder or not save_folder.folder_number:
         return json_response_error('Failed to create save folder', status=500)
     
-    if not save_folder.ftp_path:
+    if not save_folder.smb_path:
         return json_response_error('Save folder path is missing', status=500)
     
     # All validations passed - create operation in queue with save folder number and SMB path
@@ -86,7 +86,7 @@ def save_game(request, game_id):
         game=game,
         local_save_path=local_save_path,
         save_folder_number=save_folder.folder_number,
-        ftp_path=save_folder.ftp_path,
+        smb_path=save_folder.smb_path,
         client_worker=client_worker
     )
     
@@ -135,7 +135,7 @@ def load_game(request, game_id):
     if not local_save_path or not local_save_path.strip():
         return json_response_error('Local save path is required', status=400)
     
-    # Get the save folder to get ftp_path
+    # Get the save folder to get smb_path
     from SaveNLoad.models.save_folder import SaveFolder
     save_folder = None
     if save_folder_number is None:
@@ -160,7 +160,7 @@ def load_game(request, game_id):
     if not save_folder:
         return json_response_error('Save folder not found', status=404)
     
-    if not save_folder.ftp_path:
+    if not save_folder.smb_path:
         return json_response_error('Save folder path is missing', status=500)
     
     # Get client worker or return error
@@ -169,14 +169,14 @@ def load_game(request, game_id):
     if error_response:
         return error_response
     
-    # All validations passed - create operation in queue with FTP path
+    # All validations passed - create operation in queue with SMB path
     operation = OperationQueue.create_operation(
         operation_type=OperationType.LOAD,
         user=user,
         game=game,
         local_save_path=local_save_path,
         save_folder_number=save_folder_number,
-        ftp_path=save_folder.ftp_path,
+        smb_path=save_folder.smb_path,
         client_worker=client_worker
     )
     
@@ -249,7 +249,7 @@ def check_operation_status(request, operation_id):
 @require_http_methods(["DELETE"])
 def delete_save_folder(request, game_id, folder_number):
     """
-    Delete a save folder (from FTP and database)
+    Delete a save folder (from SMB and database)
     """
     user = get_current_user(request)
     if not user:
@@ -274,7 +274,7 @@ def delete_save_folder(request, game_id, folder_number):
         if not save_folder.folder_number:
             return json_response_error('Save folder number is missing', status=500)
         
-        if not save_folder.ftp_path:
+        if not save_folder.smb_path:
             return json_response_error('Save folder path is missing', status=500)
         
         # Get client worker
@@ -289,7 +289,7 @@ def delete_save_folder(request, game_id, folder_number):
             game=game,
             local_save_path='',  # Not needed for delete
             save_folder_number=folder_number,
-            ftp_path=save_folder.ftp_path,
+            smb_path=save_folder.smb_path,
             client_worker=client_worker
         )
         
@@ -380,7 +380,7 @@ def list_saves(request, game_id):
         else:
             return json_response_error('No save folders found', status=404)
     
-    # Get save folder to get ftp_path
+    # Get save folder to get smb_path
     save_folder = SaveFolder.get_by_number(user, game, save_folder_number)
     if not save_folder:
         return json_response_error('Save folder not found', status=404)
@@ -389,8 +389,8 @@ def list_saves(request, game_id):
     if not save_folder.folder_number:
         return json_response_error('Save folder number is missing', status=500)
     
-    if not save_folder.ftp_path:
-        return json_response_error('Save folder FTP path is missing', status=500)
+    if not save_folder.smb_path:
+        return json_response_error('Save folder SMB path is missing', status=500)
     
     # Get client worker
     client_worker = ClientWorker.get_any_active_worker()
@@ -405,7 +405,7 @@ def list_saves(request, game_id):
             game=game,
             local_save_path='',  # Not needed for list
             save_folder_number=save_folder_number,
-            ftp_path=save_folder.ftp_path,
+            smb_path=save_folder.smb_path,
             client_worker=client_worker
         )
         
@@ -581,8 +581,8 @@ def delete_all_saves(request, game_id):
                     invalid_folders.append(save_folder)
                     continue
                 
-                if not save_folder.ftp_path:
-                    logger.warning(f'Save folder {save_folder.id} missing ftp_path, skipping')
+                if not save_folder.smb_path:
+                    logger.warning(f'Save folder {save_folder.id} missing smb_path, skipping')
                     invalid_folders.append(save_folder)
                     continue
                 
@@ -593,7 +593,7 @@ def delete_all_saves(request, game_id):
                     game=game,
                     local_save_path='',  # Not needed for delete
                     save_folder_number=save_folder.folder_number,
-                    ftp_path=save_folder.ftp_path,
+                    smb_path=save_folder.smb_path,
                     client_worker=client_worker
                 )
                 operation_ids.append(operation.id)
