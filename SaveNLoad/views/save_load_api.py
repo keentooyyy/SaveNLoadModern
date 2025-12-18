@@ -573,3 +573,68 @@ def delete_all_saves(request, game_id):
         logger.error(f"Failed to delete all saves: {e}")
         return json_response_error(f'Failed to delete all saves: {str(e)}', status=500)
 
+
+@login_required
+@require_http_methods(["GET"])
+def get_game_save_location(request, game_id):
+    """
+    Get the save file location for a game
+    """
+    user = get_current_user(request)
+    if not user:
+        return json_response_error('Unauthorized', status=403)
+    
+    # Get game or return error
+    game, error_response = get_game_or_error(game_id)
+    if error_response:
+        return error_response
+    
+    return json_response_success(
+        data={
+            'save_file_location': game.save_file_location,
+            'game_name': game.name
+        }
+    )
+
+
+@login_required
+@require_http_methods(["POST"])
+def open_save_location(request, game_id):
+    """
+    Open the save file location for a game - queues operation for client worker
+    """
+    from SaveNLoad.models.client_worker import ClientWorker
+    from SaveNLoad.models.operation_queue import OperationQueue, OperationType
+    
+    user = get_current_user(request)
+    if not user:
+        return json_response_error('Unauthorized', status=403)
+    
+    # Get game or return error
+    game, error_response = get_game_or_error(game_id)
+    if error_response:
+        return error_response
+    
+    # Get client worker or return error
+    client_worker, error_response = get_client_worker_or_error(None)
+    if error_response:
+        return error_response
+    
+    # Create open folder operation in queue
+    operation = OperationQueue.create_operation(
+        operation_type=OperationType.OPEN_FOLDER,
+        user=user,
+        game=game,
+        local_save_path=game.save_file_location,
+        save_folder_number=None,  # Not used for open folder
+        smb_path=None,  # Not used for open folder
+        client_worker=client_worker
+    )
+    
+    return json_response_success(
+        message='Open folder operation queued',
+        data={
+            'operation_id': operation.id,
+            'client_id': client_worker.client_id
+        }
+    )

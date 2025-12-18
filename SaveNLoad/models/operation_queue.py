@@ -30,6 +30,7 @@ class OperationType:
     LIST = 'list'
     DELETE = 'delete'
     BACKUP = 'backup'
+    OPEN_FOLDER = 'open_folder'
     
     CHOICES = [
         (SAVE, 'Save'),
@@ -37,6 +38,7 @@ class OperationType:
         (LIST, 'List'),
         (DELETE, 'Delete'),
         (BACKUP, 'Backup'),
+        (OPEN_FOLDER, 'Open Folder'),
     ]
 
 

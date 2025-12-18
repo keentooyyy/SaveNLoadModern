@@ -345,7 +345,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Add backup and delete buttons at the top
             const buttonContainer = document.createElement('div');
-            buttonContainer.className = 'mb-3 d-flex justify-content-end gap-2';
+            buttonContainer.className = 'mb-3 d-flex justify-content-between align-items-center gap-2';
+            
+            // Open folder button on the left
+            const openFolderButton = document.createElement('button');
+            openFolderButton.className = 'btn btn-info text-white';
+            openFolderButton.type = 'button';
+            const folderIcon = document.createElement('i');
+            folderIcon.className = 'fas fa-folder-open me-2';
+            openFolderButton.appendChild(folderIcon);
+            openFolderButton.appendChild(document.createTextNode('Open Save Location'));
+            openFolderButton.addEventListener('click', function() {
+                openSaveLocation(gameId);
+            });
+            buttonContainer.appendChild(openFolderButton);
+            
+            // Right side button container
+            const rightButtonContainer = document.createElement('div');
+            rightButtonContainer.className = 'd-flex gap-2';
             
             const backupButton = document.createElement('button');
             backupButton.className = 'btn btn-secondary text-white';
@@ -369,7 +386,9 @@ document.addEventListener('DOMContentLoaded', function () {
             deleteButton.addEventListener('click', function() {
                 deleteAllSaves(gameId);
             });
-            buttonContainer.appendChild(deleteButton);
+            rightButtonContainer.appendChild(backupButton);
+            rightButtonContainer.appendChild(deleteButton);
+            buttonContainer.appendChild(rightButtonContainer);
 
             const listGroup = document.createElement('div');
             listGroup.className = 'list-group';
@@ -941,6 +960,132 @@ document.addEventListener('DOMContentLoaded', function () {
             editTab.classList.remove('active', 'text-white');
             editTab.classList.add('text-white-50');
         });
+    }
+
+    /**
+     * Open save file location for a game
+     */
+    async function openSaveLocation(gameId) {
+        if (!window.OPEN_SAVE_LOCATION_URL_PATTERN) {
+            console.error('OPEN_SAVE_LOCATION_URL_PATTERN not defined');
+            return;
+        }
+        
+        // Get CSRF token
+        const csrfInput = document.querySelector('#gameCsrfForm input[name="csrfmiddlewaretoken"]') ||
+            document.querySelector('#gameManageForm input[name="csrfmiddlewaretoken"]');
+        const csrfToken = csrfInput ? csrfInput.value : null;
+        
+        if (!csrfToken) {
+            console.error('CSRF token not found');
+            return;
+        }
+        
+        // Show toast notification helper
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+            toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
+            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            
+            const messageText = document.createTextNode(message);
+            toast.appendChild(messageText);
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.className = 'btn-close';
+            closeBtn.setAttribute('data-bs-dismiss', 'alert');
+            closeBtn.setAttribute('aria-label', 'Close');
+            toast.appendChild(closeBtn);
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 5000);
+        }
+        
+        const url = window.OPEN_SAVE_LOCATION_URL_PATTERN.replace('0', gameId);
+        
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': csrfToken
+                },
+                credentials: 'same-origin'
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok || !data.success) {
+                showToast(data.error || 'Failed to open save location', 'error');
+                return;
+            }
+            
+            // If operation ID is returned, poll for status
+            if (data.operation_id) {
+                const operationId = data.operation_id;
+                
+                // Poll for operation status
+                const pollInterval = 500; // Poll every 500ms
+                const maxAttempts = 60; // Max 30 seconds
+                let attempts = 0;
+                
+                const pollStatus = setInterval(async () => {
+                    attempts++;
+                    
+                    if (attempts > maxAttempts) {
+                        clearInterval(pollStatus);
+                        showToast('Operation timed out. Please check if the folder exists.', 'error');
+                        return;
+                    }
+                    
+                    try {
+                        const statusUrl = window.CHECK_OPERATION_STATUS_URL_PATTERN.replace('0', operationId);
+                        const statusResponse = await fetch(statusUrl, {
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'X-CSRFToken': csrfToken
+                            },
+                            credentials: 'same-origin'
+                        });
+                        
+                        const statusData = await statusResponse.json();
+                        
+                        if (statusData.success && statusData.data) {
+                            if (statusData.data.completed) {
+                                clearInterval(pollStatus);
+                                showToast('Folder opened successfully', 'success');
+                            } else if (statusData.data.failed) {
+                                clearInterval(pollStatus);
+                                // Check if it's a "does not exist" error
+                                const errorMsg = statusData.data.message || statusData.data.error || 'Failed to open folder';
+                                if (errorMsg.includes('does not exist') || errorMsg.includes('not found') || errorMsg.includes('not a directory')) {
+                                    showToast('The folder or directory does not exist', 'error');
+                                } else {
+                                    showToast(errorMsg, 'error');
+                                }
+                            }
+                            // If still in progress, continue polling
+                        }
+                    } catch (error) {
+                        console.error('Error polling operation status:', error);
+                        clearInterval(pollStatus);
+                        showToast('Error checking operation status', 'error');
+                    }
+                }, pollInterval);
+            } else {
+                showToast('Open folder operation queued', 'info');
+            }
+            
+        } catch (error) {
+            console.error('Error opening save location:', error);
+            showToast('Error: Failed to open save location. Please try again.', 'error');
+        }
     }
 
     /**

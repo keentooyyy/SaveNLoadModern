@@ -11,6 +11,8 @@ import threading
 import shutil
 import zipfile
 import tempfile
+import subprocess
+import platform
 from pathlib import Path
 from typing import Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
@@ -415,6 +417,58 @@ class ClientWorkerServiceRclone:
             print(f"Error: Backup operation failed - {str(e)}")
             return {'success': False, 'error': f'Backup operation failed: {str(e)}'}
     
+    def open_folder(self, local_path: str, operation_id: Optional[int] = None) -> Dict[str, Any]:
+        """Open a folder location in the file explorer"""
+        print(f"Opening folder: {local_path}")
+        
+        try:
+            # Check if folder exists
+            if not os.path.exists(local_path):
+                return {
+                    'success': False,
+                    'error': 'Folder or directory does not exist'
+                }
+            
+            # Check if it's actually a directory
+            if not os.path.isdir(local_path):
+                return {
+                    'success': False,
+                    'error': 'Path is not a directory'
+                }
+            
+            # Open folder based on OS
+            system = platform.system()
+            try:
+                if system == 'Windows':
+                    # Use explorer.exe on Windows
+                    subprocess.Popen(['explorer', local_path], shell=False)
+                elif system == 'Darwin':  # macOS
+                    subprocess.Popen(['open', local_path])
+                elif system == 'Linux':
+                    subprocess.Popen(['xdg-open', local_path])
+                else:
+                    return {
+                        'success': False,
+                        'error': f'Unsupported operating system: {system}'
+                    }
+                
+                print(f"Folder opened successfully: {local_path}")
+                return {
+                    'success': True,
+                    'message': 'Folder opened successfully'
+                }
+                
+            except Exception as e:
+                print(f"Error: Failed to open folder - {str(e)}")
+                return {
+                    'success': False,
+                    'error': f'Failed to open folder: {str(e)}'
+                }
+                
+        except Exception as e:
+            print(f"Error: Open folder operation failed - {str(e)}")
+            return {'success': False, 'error': f'Open folder operation failed: {str(e)}'}
+    
     def register_with_server(self, client_id: str) -> bool:
         """Register this client with the Django server"""
         try:
@@ -578,6 +632,8 @@ class ClientWorkerServiceRclone:
             result = self.delete_save_folder(game_id, username, game_name, save_folder_number, remote_path, operation_id)
         elif op_type == 'backup':
             result = self.backup_all_saves(game_id, username, game_name, operation_id)
+        elif op_type == 'open_folder':
+            result = self.open_folder(local_path, operation_id)
         else:
             print(f"Error: Unknown operation type")
             return
