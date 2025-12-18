@@ -14,8 +14,9 @@ RUN apt-get update \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy package files and install dependencies
-COPY package.json package-lock.json /app/
+# Copy package files first for better layer caching
+# package-lock.json is optional (excluded via .dockerignore) - npm will generate it during install if missing
+COPY package.json /app/
 RUN npm install
 
 # Copy project files (needed for static/scss before building)
