@@ -197,12 +197,33 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function searchGames(query) {
+        if (!searchUrl) {
+            console.error('Search URL not configured');
+            showToast('Search functionality not configured', 'error');
+            return;
+        }
+        
         try {
             const response = await fetch(`${searchUrl}?q=${encodeURIComponent(query)}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const data = await response.json();
-            displaySearchResults(data.games);
+            
+            if (data.error) {
+                console.error('Search error from server:', data.error);
+                showToast('Failed to search games: ' + data.error, 'error');
+                displaySearchResults([]);
+                return;
+            }
+            
+            displaySearchResults(data.games || []);
         } catch (error) {
             console.error('Search error:', error);
+            showToast('Error searching games. Please check console for details.', 'error');
+            displaySearchResults([]);
         }
     }
 
@@ -374,6 +395,16 @@ document.addEventListener('DOMContentLoaded', function () {
     // Wire up events
     if (bannerInput) {
         bannerInput.addEventListener('input', handleBannerInput);
+    }
+    
+    // Wire up search input event listener (Enter key only)
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                triggerSearch();
+            }
+        });
     }
 
     // Expose a couple of helpers for inline handlers

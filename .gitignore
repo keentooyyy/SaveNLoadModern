@@ -118,3 +118,4 @@ cython_debug/
 # Compiled executables in client_worker (dist/ already covers dist/ directory)
 client_worker/*.exe
 # Keep .spec and .manifest files in version control (they're configuration)
+FACEBOOK_POST.md

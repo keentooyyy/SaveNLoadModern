@@ -88,6 +88,9 @@ DEFAULT_ADMIN_USERNAME=admin
 DEFAULT_ADMIN_EMAIL=admin@example.com
 DEFAULT_ADMIN_PASSWORD=admin123
 
+# RAWG API (Required for game search)
+RAWG=your-rawg-api-key-here
+
 # FTP Configuration (for client worker)
 FTP_HOST=your-ftp-server.com
 FTP_PORT=21
@@ -420,7 +423,15 @@ EMAIL_ICON_URL=https://your-domain.com/static/images/icon.png
 
 ### RAWG API
 
-The application uses RAWG API for game information. No API key is required for basic usage, but you can configure one in `SaveNLoad/views/rawg_api.py` for higher rate limits.
+The application uses RAWG API for game information. **An API key is required** for game search functionality. 
+
+To get a free API key:
+1. Visit [RAWG API](https://rawg.io/apidocs)
+2. Sign up for a free account
+3. Get your API key from the dashboard
+4. Add it to your `.env` file as `RAWG=your_api_key_here`
+
+The API key must be set in your environment variables (or `.env` file) for the game search feature to work.
 
 ## Development Notes
 

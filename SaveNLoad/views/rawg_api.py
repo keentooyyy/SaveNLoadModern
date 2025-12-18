@@ -8,9 +8,12 @@ def get_popular_games(limit: int = 10) -> List[Dict]:
     """
     Fetch popular games from RAWG API.
     Returns a list of games with title and cover image.
+    Requires RAWG API key in RAWG environment variable.
     """
     api_key = os.getenv('RAWG')
+    
     if not api_key:
+        print("RAWG API key not found. Please set the RAWG environment variable.")
         return []
     
     try:
@@ -49,11 +52,25 @@ def get_popular_games(limit: int = 10) -> List[Dict]:
         
         return games
     
+    except requests.exceptions.HTTPError as e:
+        if hasattr(e, 'response') and e.response is not None:
+            if e.response.status_code == 401:
+                print("RAWG API: Unauthorized - Invalid or missing API key. Please check your RAWG environment variable.")
+            else:
+                print(f"Error fetching games from RAWG API: {e}")
+                print(f"Response status: {e.response.status_code}")
+                print(f"Response body: {e.response.text[:200]}")
+        return []
     except requests.exceptions.RequestException as e:
         print(f"Error fetching games from RAWG API: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"Response status: {e.response.status_code}")
+            print(f"Response body: {e.response.text[:200]}")
         return []
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        print(f"Unexpected error in get_popular_games: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
@@ -61,9 +78,12 @@ def search_game(query: str) -> Optional[Dict]:
     """
     Search for a specific game by name.
     Returns the best matching game with title and cover image.
+    Requires RAWG API key in RAWG environment variable.
     """
     api_key = os.getenv('RAWG')
+    
     if not api_key:
+        print("RAWG API key not found. Please set the RAWG environment variable.")
         return None
     
     try:
@@ -97,11 +117,25 @@ def search_game(query: str) -> Optional[Dict]:
         
         return None
     
+    except requests.exceptions.HTTPError as e:
+        if hasattr(e, 'response') and e.response is not None:
+            if e.response.status_code == 401:
+                print("RAWG API: Unauthorized - Invalid or missing API key. Please check your RAWG environment variable.")
+            else:
+                print(f"Error searching game in RAWG API: {e}")
+                print(f"Response status: {e.response.status_code}")
+                print(f"Response body: {e.response.text[:200]}")
+        return None
     except requests.exceptions.RequestException as e:
         print(f"Error searching game in RAWG API: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"Response status: {e.response.status_code}")
+            print(f"Response body: {e.response.text[:200]}")
         return None
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        print(f"Unexpected error in search_game: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -109,9 +143,12 @@ def search_games(query: str, limit: int = 10) -> List[Dict]:
     """
     Search RAWG for multiple games by name.
     Returns a list of base games (no DLCs) with id, title, and image.
+    Requires RAWG API key in RAWG environment variable.
     """
     api_key = os.getenv('RAWG')
+    
     if not api_key:
+        print("RAWG API key not found. Please set the RAWG environment variable.")
         return []
     
     try:
@@ -153,10 +190,24 @@ def search_games(query: str, limit: int = 10) -> List[Dict]:
         
         return games
     
+    except requests.exceptions.HTTPError as e:
+        if hasattr(e, 'response') and e.response is not None:
+            if e.response.status_code == 401:
+                print("RAWG API: Unauthorized - Invalid or missing API key. Please check your RAWG environment variable.")
+            else:
+                print(f"Error searching games in RAWG API: {e}")
+                print(f"Response status: {e.response.status_code}")
+                print(f"Response body: {e.response.text[:200]}")
+        return []
     except requests.exceptions.RequestException as e:
         print(f"Error searching games in RAWG API: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"Response status: {e.response.status_code}")
+            print(f"Response body: {e.response.text[:200]}")
         return []
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        print(f"Unexpected error in search_games: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 

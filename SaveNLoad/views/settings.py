@@ -112,21 +112,27 @@ def search_game(request):
     if not query:
         return JsonResponse({'games': []})
     
-    games = rawg_search_games(query=query, limit=10)
-    
-    results = []
-    for game in games:
-        results.append(
-            {
-                'id': game.get('id'),
-                'name': game.get('title') or game.get('name') or 'Unknown',
-                'banner': game.get('image') or '',
-                # RAWG doesn't know the local save path – leave empty for manual input
-                'save_file_location': '',
-            }
-        )
-    
-    return JsonResponse({'games': results})
+    try:
+        games = rawg_search_games(query=query, limit=10)
+        
+        results = []
+        for game in games:
+            results.append(
+                {
+                    'id': game.get('id'),
+                    'name': game.get('title') or game.get('name') or 'Unknown',
+                    'banner': game.get('image') or '',
+                    # RAWG doesn't know the local save path – leave empty for manual input
+                    'save_file_location': '',
+                }
+            )
+        
+        return JsonResponse({'games': results})
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in search_game view: {e}", exc_info=True)
+        return JsonResponse({'games': [], 'error': 'Failed to search games'}, status=500)
 
 
 @login_required
