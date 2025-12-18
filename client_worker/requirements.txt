@@ -1,4 +1,3 @@
 requests>=2.31.0
 python-dotenv>=1.0.0
-smbprotocol>=1.10.0
 pyinstaller>=6.0.0

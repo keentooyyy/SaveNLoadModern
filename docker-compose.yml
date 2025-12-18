@@ -39,12 +39,9 @@ services:
       - DEFAULT_ADMIN_EMAIL=${DEFAULT_ADMIN_EMAIL}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD}
       - RAWG=${RAWG}
-      - SMB_SERVER=${SMB_SERVER}
-      - SMB_SHARE=${SMB_SHARE}
-      - SMB_USERNAME=${SMB_USERNAME}
-      - SMB_PASSWORD=${SMB_PASSWORD}
-      - SMB_DOMAIN=${SMB_DOMAIN}
-      - SMB_PORT=${SMB_PORT}
+      - FTP_HOST=${FTP_HOST}
+      - FTP_USERNAME=${FTP_USERNAME}
+      - FTP_PASSWORD=${FTP_PASSWORD}
     depends_on:
       db:
         condition: service_healthy
