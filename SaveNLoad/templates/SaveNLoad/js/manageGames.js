@@ -1189,11 +1189,51 @@ document.addEventListener('DOMContentLoaded', function () {
     
     // Helper function to check if all delete operations are complete
     async function checkAllOperationsComplete(operationIds, gameId) {
-        // Reload the saves list to reflect changes
-        loadSaveFolders(gameId);
+        if (!operationIds || operationIds.length === 0) {
+            loadSaveFolders(gameId);
+            return;
+        }
         
-        // Optional: Check all operation statuses (for debugging)
-        // For now, just reload the list - if saves are gone, operations completed
+        // Check status of all operations
+        const urlPattern = window.CHECK_OPERATION_STATUS_URL_PATTERN;
+        const statusChecks = operationIds.map(async (opId) => {
+            try {
+                const url = urlPattern.replace('/0/', `/${opId}/`);
+                const response = await fetch(url, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                
+                if (!response.ok) {
+                    return { id: opId, status: 'unknown' };
+                }
+                
+                const data = await response.json();
+                return { id: opId, status: data.status || 'unknown' };
+            } catch (error) {
+                console.error(`Error checking operation ${opId}:`, error);
+                return { id: opId, status: 'unknown' };
+            }
+        });
+        
+        const results = await Promise.all(statusChecks);
+        
+        // Check if all operations are complete (completed or failed)
+        const allComplete = results.every(result => 
+            result.status === 'completed' || result.status === 'failed'
+        );
+        
+        // If all are complete, refresh the UI
+        if (allComplete) {
+            // Small delay to ensure backend has processed all deletions
+            setTimeout(() => {
+                loadSaveFolders(gameId);
+            }, 500);
+        } else {
+            // Not all complete yet, check again in a bit
+            setTimeout(() => {
+                checkAllOperationsComplete(operationIds, gameId);
+            }, 2000);
+        }
     }
 });
 

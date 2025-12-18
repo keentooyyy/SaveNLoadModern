@@ -169,7 +169,8 @@ def get_pending_operations(request, client_id):
                 'game_name': op.game.name,
                 'local_save_path': op.local_save_path,
                 'save_folder_number': op.save_folder_number,
-                'smb_path': op.smb_path,
+                'remote_path': op.smb_path,  # Keep smb_path for backward compatibility, but use remote_path
+                'smb_path': op.smb_path,  # Backward compatibility
                 'username': op.user.username,
             })
         

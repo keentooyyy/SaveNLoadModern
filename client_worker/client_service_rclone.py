@@ -8,6 +8,9 @@ import time
 import requests
 import webbrowser
 import threading
+import shutil
+import zipfile
+import tempfile
 from pathlib import Path
 from typing import Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
@@ -30,14 +33,14 @@ else:
 class ClientWorkerServiceRclone:
     """Service that runs on client PC - rclone handles all file operations"""
     
-    def __init__(self, server_url: str, poll_interval: int = 5, remote_name: str = 'smb'):
+    def __init__(self, server_url: str, poll_interval: int = 5, remote_name: str = 'ftp'):
         """
         Initialize client worker service with rclone
         
         Args:
             server_url: Base URL of the Django server
             poll_interval: How often to poll for pending operations (seconds)
-            remote_name: Name of rclone remote (default: 'smb')
+            remote_name: Name of rclone remote (default: 'ftp')
         """
         # Add http:// scheme if missing
         if not server_url.startswith(('http://', 'https://')):
@@ -56,11 +59,8 @@ class ClientWorkerServiceRclone:
         self._heartbeat_thread = None
         self._current_client_id = None
         
-        # Get share name from environment
-        smb_share = os.getenv('SMB_SHARE', 'n_Saves').strip()
-        
         # Setup rclone client - it handles everything
-        self.rclone_client = RcloneClient(remote_name=remote_name, share_name=smb_share)
+        self.rclone_client = RcloneClient(remote_name=remote_name)
         
         print("Client Worker Service (Rclone) ready")
     
@@ -87,7 +87,7 @@ class ClientWorkerServiceRclone:
             return False
     
     def save_game(self, game_id: int, local_save_path: str, 
-                 username: str, game_name: str, save_folder_number: int, smb_path: Optional[str] = None,
+                 username: str, game_name: str, save_folder_number: int, remote_path: Optional[str] = None,
                  operation_id: Optional[int] = None) -> Dict[str, Any]:
         """Save game - rclone handles everything with parallel transfers"""
         print(f"Backing up save files...")
@@ -108,7 +108,7 @@ class ClientWorkerServiceRclone:
                     username=username,
                     game_name=game_name,
                     folder_number=save_folder_number,
-                    smb_path=smb_path,
+                    remote_path_custom=remote_path,
                     transfers=10  # Parallel transfers
                 )
                 
@@ -136,7 +136,7 @@ class ClientWorkerServiceRclone:
                     local_file_path=local_save_path,
                     folder_number=save_folder_number,
                     remote_filename=os.path.basename(local_save_path),
-                    smb_path=smb_path
+                    remote_path_custom=remote_path
                 )
                 
                 if success:
@@ -151,15 +151,15 @@ class ClientWorkerServiceRclone:
             return {'success': False, 'error': f'Save operation failed: {str(e)}'}
     
     def load_game(self, game_id: int, local_save_path: str,
-                 username: str, game_name: str, save_folder_number: int, smb_path: Optional[str] = None,
+                 username: str, game_name: str, save_folder_number: int, remote_path: Optional[str] = None,
                  operation_id: Optional[int] = None) -> Dict[str, Any]:
         """Load game - rclone handles everything with parallel transfers"""
         print(f"Preparing to download save files...")
         
         try:
             # Build remote path
-            if smb_path:
-                remote_path_base = smb_path.replace('\\', '/').strip('/')
+            if remote_path:
+                remote_path_base = remote_path.replace('\\', '/').strip('/')
             else:
                 # Build standard path
                 safe_game_name = "".join(c for c in game_name if c.isalnum() or c in (' ', '-', '_')).strip()
@@ -215,7 +215,7 @@ class ClientWorkerServiceRclone:
             return {'success': False, 'error': f'Load operation failed: {str(e)}'}
     
     def list_saves(self, game_id: int, username: str, game_name: str, 
-                  save_folder_number: int, smb_path: Optional[str] = None) -> Dict[str, Any]:
+                  save_folder_number: int, remote_path: Optional[str] = None) -> Dict[str, Any]:
         """List all save files - rclone handles it"""
         print(f"Listing save files...")
         
@@ -224,7 +224,7 @@ class ClientWorkerServiceRclone:
                 username=username,
                 game_name=game_name,
                 folder_number=save_folder_number,
-                smb_path=smb_path
+                remote_path_custom=remote_path
             )
             
             if not success:
@@ -245,20 +245,20 @@ class ClientWorkerServiceRclone:
             return {'success': False, 'error': f'List operation failed: {str(e)}'}
     
     def delete_save_folder(self, game_id: int, username: str, game_name: str,
-                          save_folder_number: int, smb_path: Optional[str] = None,
+                          save_folder_number: int, remote_path: Optional[str] = None,
                           operation_id: Optional[int] = None) -> Dict[str, Any]:
         """Delete save folder - rclone handles it"""
         print(f"Deleting save folder...")
         
-        if not smb_path:
+        if not remote_path:
             return {
                 'success': False,
-                'error': 'SMB path is required for delete operation'
+                'error': 'Remote path is required for delete operation'
             }
         
         try:
             # Let rclone delete it
-            success, message = self.rclone_client.delete_directory(smb_path)
+            success, message = self.rclone_client.delete_directory(remote_path)
             
             if success:
                 print(f"Delete complete")
@@ -276,6 +276,85 @@ class ClientWorkerServiceRclone:
         except Exception as e:
             print(f"Error: Delete operation failed - {str(e)}")
             return {'success': False, 'error': f'Delete operation failed: {str(e)}'}
+    
+    def backup_all_saves(self, game_id: int, username: str, game_name: str,
+                        operation_id: Optional[int] = None) -> Dict[str, Any]:
+        """Backup all saves - download using rclone, zip, and save to Downloads folder"""
+        print(f"Backing up all saves for {game_name}...")
+        
+        try:
+            # Build base remote path
+            safe_game_name = "".join(c for c in game_name if c.isalnum() or c in (' ', '-', '_')).strip()
+            safe_game_name = safe_game_name.replace(' ', '_')
+            remote_path_base = f"{username}/{safe_game_name}"
+            
+            # Create temp directory for downloads
+            temp_dir = tempfile.mkdtemp(prefix='sn_backup_')
+            print(f"Downloading from FTP to temp directory: {temp_dir}")
+            
+            try:
+                # Download all saves using rclone
+                success, message, downloaded_files, failed_files = self.rclone_client.download_directory(
+                    remote_path_base=remote_path_base,
+                    local_dir=temp_dir,
+                    transfers=10
+                )
+                
+                if not success:
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    return {
+                        'success': False,
+                        'error': f'Failed to download saves: {message}'
+                    }
+                
+                # Check if we got any files
+                if not os.listdir(temp_dir):
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    return {
+                        'success': False,
+                        'error': 'No save files found to backup'
+                    }
+                
+                # Create zip file
+                safe_game_name_zip = safe_game_name.replace(' ', '_')
+                zip_filename = f"{safe_game_name_zip}_saves_bak.zip"
+                
+                # Get Downloads folder
+                downloads_path = Path.home() / 'Downloads'
+                if not downloads_path.exists():
+                    downloads_path.mkdir(parents=True, exist_ok=True)
+                
+                zip_path = downloads_path / zip_filename
+                
+                # Create zip file
+                print(f"Creating zip file: {zip_path}")
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    for root, dirs, files in os.walk(temp_dir):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            # Get relative path from temp_dir
+                            arcname = os.path.relpath(file_path, temp_dir)
+                            zipf.write(file_path, arcname)
+                
+                # Clean up temp directory
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                
+                print(f"Backup complete: {zip_path}")
+                return {
+                    'success': True,
+                    'message': f'Backup saved to: {zip_path}',
+                    'zip_path': str(zip_path),
+                    'zip_filename': zip_filename
+                }
+                
+            except Exception as e:
+                # Clean up temp directory on error
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                raise e
+                    
+        except Exception as e:
+            print(f"Error: Backup operation failed - {str(e)}")
+            return {'success': False, 'error': f'Backup operation failed: {str(e)}'}
     
     def register_with_server(self, client_id: str) -> bool:
         """Register this client with the Django server"""
@@ -416,7 +495,7 @@ class ClientWorkerServiceRclone:
         username = operation.get('username')
         game_name = operation.get('game_name')
         save_folder_number = operation.get('save_folder_number')
-        smb_path = operation.get('smb_path')
+        remote_path = operation.get('remote_path')
         
         op_type_display = op_type.capitalize()
         print(f"\nProcessing: {op_type_display} operation for {game_name}")
@@ -426,13 +505,15 @@ class ClientWorkerServiceRclone:
             return
         
         if op_type == 'save':
-            result = self.save_game(game_id, local_path, username, game_name, save_folder_number, smb_path, operation_id)
+            result = self.save_game(game_id, local_path, username, game_name, save_folder_number, remote_path, operation_id)
         elif op_type == 'load':
-            result = self.load_game(game_id, local_path, username, game_name, save_folder_number, smb_path, operation_id)
+            result = self.load_game(game_id, local_path, username, game_name, save_folder_number, remote_path, operation_id)
         elif op_type == 'list':
-            result = self.list_saves(game_id, username, game_name, save_folder_number, smb_path)
+            result = self.list_saves(game_id, username, game_name, save_folder_number, remote_path)
         elif op_type == 'delete':
-            result = self.delete_save_folder(game_id, username, game_name, save_folder_number, smb_path, operation_id)
+            result = self.delete_save_folder(game_id, username, game_name, save_folder_number, remote_path, operation_id)
+        elif op_type == 'backup':
+            result = self.backup_all_saves(game_id, username, game_name, operation_id)
         else:
             print(f"Error: Unknown operation type")
             return
@@ -463,7 +544,7 @@ def main():
     parser.add_argument('--server', default=server_url, 
                        help='Django server URL (defaults to SAVENLOAD_SERVER_URL env var)')
     parser.add_argument('--poll-interval', type=int, default=5, help='Poll interval in seconds')
-    parser.add_argument('--remote', default='smb', help='Rclone remote name (default: smb)')
+    parser.add_argument('--remote', default='ftp', help='Rclone remote name (default: ftp)')
     
     args = parser.parse_args()
     

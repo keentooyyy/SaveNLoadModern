@@ -22,7 +22,7 @@ import tempfile
 import io
 from pathlib import Path
 from django.conf import settings
-from SaveNLoad.utils.smb_storage import get_smb_storage
+from SaveNLoad.utils.ftp_storage import get_ftp_storage
 
 logger = logging.getLogger(__name__)
 
@@ -453,8 +453,8 @@ def backup_all_saves(request, game_id):
         return error_response
     
     try:
-        # Get SMB storage instance
-        smb_storage = get_smb_storage()
+        # Get FTP storage instance
+        ftp_storage = get_ftp_storage()
         
         # Generate base path for user's game (matching SaveFolder logic)
         safe_game_name = "".join(c for c in game.name if c.isalnum() or c in (' ', '-', '_')).strip()
@@ -462,11 +462,11 @@ def backup_all_saves(request, game_id):
         base_path = f"/{user.username}/{safe_game_name}"
         
         # Check if base path exists
-        if not smb_storage.path_exists(base_path):
+        if not ftp_storage.path_exists(base_path):
             return json_response_error(f'Game directory not found on server: {base_path}', status=404)
         
         # List all save folders in base path
-        files_list, dirs_list = smb_storage.list_directory(base_path)
+        files_list, dirs_list = ftp_storage.list_directory(base_path)
         
         # Filter for save folders (save_1, save_2, etc.)
         existing_save_folders = []
@@ -480,7 +480,7 @@ def backup_all_saves(request, game_id):
         if not existing_save_folders:
             return json_response_error('No save folders found on server', status=404)
         
-        # Create zip file using SMB storage
+        # Create zip file using FTP storage
         files_added = 0
         zip_buffer = io.BytesIO()
         
@@ -491,7 +491,7 @@ def backup_all_saves(request, game_id):
                 
                 try:
                     # List all files recursively in this save folder
-                    all_files, all_dirs = smb_storage.list_recursive(save_folder_path)
+                    all_files, all_dirs = ftp_storage.list_recursive(save_folder_path)
                     
                     if not all_files:
                         continue
@@ -500,7 +500,7 @@ def backup_all_saves(request, game_id):
                     for file_info in all_files:
                         try:
                             file_path = f"{save_folder_path}/{file_info['name']}"
-                            file_data = smb_storage.read_file(file_path)
+                            file_data = ftp_storage.read_file(file_path)
                             
                             # Add to zip with folder structure: save_1/filename, save_2/filename, etc.
                             zip_path = f"{save_folder_name}/{file_info['name']}"
