@@ -319,6 +319,8 @@ class RcloneClient:
         remote_full = self._build_remote_path(remote_path)
         
         # Let rclone handle everything - parallel transfers, retries, resume
+        # Note: rclone 'copy' command always overwrites existing files (default behavior)
+        # This is desired for save games - we want the latest save to replace the old one
         command = [
             'copy',
             local_dir,
@@ -375,6 +377,8 @@ class RcloneClient:
         remote_full = self._build_remote_path(remote_path)
         
         # Let rclone handle everything - retries, resume, connection management
+        # Note: rclone 'copy' command always overwrites existing files (default behavior)
+        # This is desired for save games - we want the latest save to replace the old one
         command = [
             'copy',
             local_file_path,
@@ -430,6 +434,8 @@ class RcloneClient:
                 return False, f"Failed to create directory: {local_dir} - {str(e)}"
         
         # Let rclone handle everything - retries, resume, connection management
+        # Note: rclone 'copy' command always overwrites existing files (default behavior)
+        # This is desired for load operations - we want to replace local saves with server saves
         command = [
             'copy',
             remote_full,
@@ -467,6 +473,8 @@ class RcloneClient:
         remote_full = self._build_remote_path(remote_path_base)
         
         # Let rclone handle everything - parallel transfers, retries, resume
+        # Note: rclone 'copy' command always overwrites existing files (default behavior)
+        # This is desired for load operations - we want to replace local saves with server saves
         command = [
             'copy',
             remote_full,

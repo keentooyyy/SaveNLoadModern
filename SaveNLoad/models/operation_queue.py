@@ -45,7 +45,7 @@ class OperationType:
 class OperationQueue(models.Model):
     """Queue of operations waiting to be processed by client workers"""
     
-    operation_type = models.CharField(max_length=10, choices=OperationType.CHOICES)
+    operation_type = models.CharField(max_length=30, choices=OperationType.CHOICES)
     status = models.CharField(max_length=20, choices=OperationStatus.CHOICES, default=OperationStatus.PENDING)
     user = models.ForeignKey(SimpleUsers, on_delete=models.CASCADE)
     game = models.ForeignKey(Game, on_delete=models.CASCADE)
