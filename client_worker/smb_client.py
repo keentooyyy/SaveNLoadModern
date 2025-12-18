@@ -213,37 +213,77 @@ class SMBClient:
             
             # Copy file using SMB (very fast - uses native Windows file copy)
             # Retry on credit exhaustion and file locking errors
+            import time
+            import gc
             max_retries = 5
-            retry_delay = 0.2  # 200ms base delay
+            base_retry_delay = 0.5  # 500ms base delay
             for attempt in range(max_retries):
+                remote_file_handle = None
+                local_file_handle = None
                 try:
-                    with smbclient.open_file(remote_file_path, mode='wb') as remote_file_handle:
-                        with open(local_file_path, 'rb') as local_file_handle:
+                    # Open files with explicit context managers to ensure cleanup
+                    remote_file_handle = smbclient.open_file(remote_file_path, mode='wb')
+                    try:
+                        local_file_handle = open(local_file_path, 'rb')
+                        try:
                             # Use shutil.copyfileobj for efficient copying
                             shutil.copyfileobj(local_file_handle, remote_file_handle, length=1024*1024)  # 1MB chunks
+                        finally:
+                            # Explicitly close local file handle
+                            if local_file_handle:
+                                local_file_handle.close()
+                                local_file_handle = None
+                    finally:
+                        # Explicitly close remote file handle
+                        if remote_file_handle:
+                            remote_file_handle.close()
+                            remote_file_handle = None
+                    
+                    # Force garbage collection to ensure file handles are released
+                    gc.collect()
                     return True, "File uploaded successfully"
+                    
                 except Exception as retry_error:
+                    # Ensure handles are closed even on error
+                    try:
+                        if local_file_handle:
+                            local_file_handle.close()
+                    except:
+                        pass
+                    try:
+                        if remote_file_handle:
+                            remote_file_handle.close()
+                    except:
+                        pass
+                    
+                    # Force cleanup
+                    gc.collect()
+                    
                     error_str = str(retry_error)
                     # Check if it's a retryable error
                     is_retryable = False
+                    retry_delay = base_retry_delay
+                    
                     if 'credits' in error_str.lower():
+                        # Credit exhaustion - need longer delay to allow connection pool to recover
                         is_retryable = True
+                        retry_delay = 1.0 + (attempt * 0.5)  # 1s, 1.5s, 2s, 2.5s, 3s
                     elif 'being used by another process' in error_str or 'c0000043' in error_str:
+                        # File locked - need longer delay to allow file to be released
                         is_retryable = True
+                        retry_delay = 0.5 + (attempt * 0.3)  # 0.5s, 0.8s, 1.1s, 1.4s, 1.7s
                     elif 'access denied' in error_str.lower() and 'c0000022' in error_str:
                         # Sometimes access denied is temporary
                         is_retryable = True
+                        retry_delay = base_retry_delay * (attempt + 1)
                     
                     if is_retryable and attempt < max_retries - 1:
-                        # Wait with exponential backoff
-                        import time
-                        time.sleep(retry_delay * (attempt + 1))
+                        # Wait with calculated delay to allow connections/files to be released
+                        time.sleep(retry_delay)
                         continue
                     else:
                         # Not a retryable error or out of retries, re-raise
                         raise retry_error
-            
-            return True, "File uploaded successfully"
             
         except Exception as e:
             # Include path info in error for debugging
@@ -296,30 +336,72 @@ class SMBClient:
             
             # Copy file using SMB (very fast)
             # Retry on credit exhaustion and file locking errors
+            import time
+            import gc
             max_retries = 5
-            retry_delay = 0.2  # 200ms base delay
+            base_retry_delay = 0.5  # 500ms base delay
             for attempt in range(max_retries):
+                remote_file_handle = None
+                local_file_handle = None
                 try:
-                    with smbclient.open_file(remote_file_path, mode='rb') as remote_file_handle:
-                        with open(local_file_path, 'wb') as local_file_handle:
+                    # Open files with explicit context managers to ensure cleanup
+                    remote_file_handle = smbclient.open_file(remote_file_path, mode='rb')
+                    try:
+                        local_file_handle = open(local_file_path, 'wb')
+                        try:
                             shutil.copyfileobj(remote_file_handle, local_file_handle, length=1024*1024)  # 1MB chunks
+                        finally:
+                            # Explicitly close local file handle
+                            if local_file_handle:
+                                local_file_handle.close()
+                                local_file_handle = None
+                    finally:
+                        # Explicitly close remote file handle
+                        if remote_file_handle:
+                            remote_file_handle.close()
+                            remote_file_handle = None
+                    
+                    # Force garbage collection to ensure file handles are released
+                    gc.collect()
                     return True, "File downloaded successfully"
+                    
                 except Exception as retry_error:
+                    # Ensure handles are closed even on error
+                    try:
+                        if local_file_handle:
+                            local_file_handle.close()
+                    except:
+                        pass
+                    try:
+                        if remote_file_handle:
+                            remote_file_handle.close()
+                    except:
+                        pass
+                    
+                    # Force cleanup
+                    gc.collect()
+                    
                     error_str = str(retry_error)
                     # Check if it's a retryable error
                     is_retryable = False
+                    retry_delay = base_retry_delay
+                    
                     if 'credits' in error_str.lower():
+                        # Credit exhaustion - need longer delay to allow connection pool to recover
                         is_retryable = True
+                        retry_delay = 1.0 + (attempt * 0.5)  # 1s, 1.5s, 2s, 2.5s, 3s
                     elif 'being used by another process' in error_str or 'c0000043' in error_str:
+                        # File locked - need longer delay to allow file to be released
                         is_retryable = True
+                        retry_delay = 0.5 + (attempt * 0.3)  # 0.5s, 0.8s, 1.1s, 1.4s, 1.7s
                     elif 'access denied' in error_str.lower() and 'c0000022' in error_str:
                         # Sometimes access denied is temporary
                         is_retryable = True
+                        retry_delay = base_retry_delay * (attempt + 1)
                     
                     if is_retryable and attempt < max_retries - 1:
-                        # Wait with exponential backoff
-                        import time
-                        time.sleep(retry_delay * (attempt + 1))
+                        # Wait with calculated delay to allow connections/files to be released
+                        time.sleep(retry_delay)
                         continue
                     else:
                         # Not a retryable error or out of retries, re-raise
@@ -409,6 +491,11 @@ class SMBClient:
     
     def delete_file(self, smb_path: str) -> Tuple[bool, str]:
         """Delete a file via SMB"""
+        import time
+        import gc
+        max_retries = 5
+        base_retry_delay = 0.5  # 500ms base delay
+        
         try:
             path = smb_path.replace('/', '\\')
             if not path.startswith('\\'):
@@ -418,14 +505,50 @@ class SMBClient:
             if not smbclient.path.exists(full_path):
                 return True, "File already deleted"
             
-            smbclient.remove(full_path)
-            return True, "File deleted"
+            for attempt in range(max_retries):
+                try:
+                    smbclient.remove(full_path)
+                    # Force cleanup after successful operation
+                    gc.collect()
+                    return True, "File deleted"
+                except Exception as retry_error:
+                    # Force cleanup on error
+                    gc.collect()
+                    
+                    error_str = str(retry_error)
+                    # Check if it's a retryable error
+                    is_retryable = False
+                    retry_delay = base_retry_delay
+                    
+                    if 'credits' in error_str.lower():
+                        # Credit exhaustion - need longer delay to allow connection pool to recover
+                        is_retryable = True
+                        retry_delay = 1.0 + (attempt * 0.5)  # 1s, 1.5s, 2s, 2.5s, 3s
+                    elif 'being used by another process' in error_str or 'c0000043' in error_str:
+                        # File locked - need longer delay to allow file to be released
+                        is_retryable = True
+                        retry_delay = 0.5 + (attempt * 0.3)  # 0.5s, 0.8s, 1.1s, 1.4s, 1.7s
+                    elif 'access denied' in error_str.lower() and 'c0000022' in error_str:
+                        # Sometimes access denied is temporary
+                        is_retryable = True
+                        retry_delay = base_retry_delay * (attempt + 1)
+                    
+                    if is_retryable and attempt < max_retries - 1:
+                        # Wait with calculated delay to allow connections/files to be released
+                        time.sleep(retry_delay)
+                        continue
+                    else:
+                        # Not a retryable error or out of retries, return error
+                        return False, f"Delete failed: {str(retry_error)}"
             
         except Exception as e:
             return False, f"Delete failed: {str(e)}"
     
     def delete_directory(self, smb_path: str) -> Tuple[bool, str]:
         """Delete a directory via SMB (recursively deletes all contents)"""
+        import time
+        import gc
+        
         try:
             path = smb_path.replace('/', '\\')
             if not path.startswith('\\'):
@@ -437,8 +560,8 @@ class SMBClient:
             
             # Recursively delete directory contents first
             # smbclient.rmdir doesn't support recursive=True, so we need to do it manually
-            def delete_recursive(dir_path):
-                """Recursively delete directory contents"""
+            def delete_recursive(dir_path, max_retries=3):
+                """Recursively delete directory contents with retry logic"""
                 try:
                     # List all items in the directory
                     items = smbclient.listdir(dir_path)
@@ -446,18 +569,34 @@ class SMBClient:
                         if item in ('.', '..'):
                             continue
                         item_path = f"{dir_path}\\{item}"
-                        try:
-                            if smbclient.path.isdir(item_path):
-                                # Recursively delete subdirectory
-                                delete_recursive(item_path)
-                                # Delete the now-empty directory
-                                smbclient.rmdir(item_path)
-                            else:
-                                # Delete file
-                                smbclient.remove(item_path)
-                        except Exception as e:
-                            # Continue with other items even if one fails
-                            pass
+                        
+                        # Retry logic for each item
+                        for attempt in range(max_retries):
+                            try:
+                                if smbclient.path.isdir(item_path):
+                                    # Recursively delete subdirectory
+                                    delete_recursive(item_path, max_retries)
+                                    # Delete the now-empty directory
+                                    smbclient.rmdir(item_path)
+                                else:
+                                    # Delete file
+                                    smbclient.remove(item_path)
+                                break  # Success, exit retry loop
+                            except Exception as item_error:
+                                error_str = str(item_error)
+                                # Check if it's a retryable error
+                                is_retryable = ('credits' in error_str.lower() or 
+                                               'being used by another process' in error_str or 
+                                               'c0000043' in error_str or
+                                               ('access denied' in error_str.lower() and 'c0000022' in error_str))
+                                
+                                if is_retryable and attempt < max_retries - 1:
+                                    time.sleep(0.3 + (attempt * 0.2))
+                                    gc.collect()
+                                    continue
+                                else:
+                                    # Not retryable or out of retries, continue with next item
+                                    break
                 except Exception as e:
                     # Directory might be empty or already deleted
                     pass
@@ -465,9 +604,44 @@ class SMBClient:
             # Delete all contents recursively
             delete_recursive(full_path)
             
-            # Delete the directory itself (should be empty now)
-            smbclient.rmdir(full_path)
-            return True, "Directory deleted"
+            # Delete the directory itself (should be empty now) with retry logic
+            max_retries = 5
+            base_retry_delay = 0.5
+            for attempt in range(max_retries):
+                try:
+                    smbclient.rmdir(full_path)
+                    # Force cleanup after successful operation
+                    gc.collect()
+                    return True, "Directory deleted"
+                except Exception as retry_error:
+                    # Force cleanup on error
+                    gc.collect()
+                    
+                    error_str = str(retry_error)
+                    # Check if it's a retryable error
+                    is_retryable = False
+                    retry_delay = base_retry_delay
+                    
+                    if 'credits' in error_str.lower():
+                        # Credit exhaustion - need longer delay to allow connection pool to recover
+                        is_retryable = True
+                        retry_delay = 1.0 + (attempt * 0.5)  # 1s, 1.5s, 2s, 2.5s, 3s
+                    elif 'being used by another process' in error_str or 'c0000043' in error_str:
+                        # File locked - need longer delay to allow file to be released
+                        is_retryable = True
+                        retry_delay = 0.5 + (attempt * 0.3)  # 0.5s, 0.8s, 1.1s, 1.4s, 1.7s
+                    elif 'access denied' in error_str.lower() and 'c0000022' in error_str:
+                        # Sometimes access denied is temporary
+                        is_retryable = True
+                        retry_delay = base_retry_delay * (attempt + 1)
+                    
+                    if is_retryable and attempt < max_retries - 1:
+                        # Wait with calculated delay to allow connections/files to be released
+                        time.sleep(retry_delay)
+                        continue
+                    else:
+                        # Not a retryable error or out of retries, return error
+                        return False, f"Delete failed: {str(retry_error)}"
             
         except Exception as e:
             return False, f"Delete failed: {str(e)}"
