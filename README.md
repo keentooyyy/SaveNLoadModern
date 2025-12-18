@@ -91,11 +91,13 @@ DEFAULT_ADMIN_PASSWORD=admin123
 # RAWG API (Required for game search)
 RAWG=your-rawg-api-key-here
 
-# FTP Configuration (for client worker)
-FTP_HOST=your-ftp-server.com
-FTP_PORT=21
-FTP_USERNAME=your-ftp-username
-FTP_PASSWORD=your-ftp-password
+# SMB/CIFS Configuration (for client worker and backend)
+SMB_SERVER=192.168.88.101
+SMB_SHARE=n_Saves
+SMB_USERNAME=administrator
+SMB_PASSWORD=123
+SMB_DOMAIN=
+SMB_PORT=445
 ```
 
 > **Note:** For Gmail, you need to generate an [App Password](https://support.google.com/accounts/answer/185833) instead of your regular password. For production, set `DEBUG=False` and configure `ALLOWED_HOSTS` appropriately.
@@ -481,8 +483,8 @@ If client worker fails:
 
 1. **Check Server URL**: Verify Django server is accessible
 2. **Check Session Cookie**: Ensure valid session cookie is provided
-3. **Check FTP Config**: Verify FTP credentials are set
-4. **Check Network**: Ensure client can reach server and FTP
+3. **Check SMB Config**: Verify SMB credentials are set in `.env`
+4. **Check Network**: Ensure client can reach server and SMB share
 5. **Check Logs**: Review client worker output for errors
 
 ### Build Errors
@@ -502,7 +504,7 @@ If Docker build fails:
 - **Frontend**: Bootstrap 5.3, JavaScript (Vanilla)
 - **Styling**: Sass/SCSS
 - **Containerization**: Docker, Docker Compose
-- **File Storage**: [FileZilla Server](https://filezilla-project.org/download.php?type=server)
+- **File Storage**: SMB/CIFS (Windows Network Share)
 - **Email Service**: Gmail SMTP
 - **Game API**: RAWG API
 - **Client Worker**: Python 3.12, PyInstaller
@@ -515,7 +517,7 @@ If Docker build fails:
 - **psycopg2-binary**: PostgreSQL adapter
 - **python-dotenv**: Environment variable management
 - **requests**: HTTP library for API calls
-- **ftputil**: FTP client library
+- **smbprotocol**: SMB/CIFS client library
 - **gunicorn**: Production WSGI server
 - **whitenoise**: Static file serving
 
@@ -527,7 +529,7 @@ If Docker build fails:
 ### Client Worker Packages
 
 - **requests**: HTTP client
-- **ftputil**: FTP operations
+- **smbprotocol**: SMB operations
 - **python-dotenv**: Environment variables
 - **PyInstaller**: Executable building
 

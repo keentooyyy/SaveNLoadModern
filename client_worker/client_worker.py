@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 # Add current directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
-from ftp_client import FTPClient
+from smb_client import SMBClient
 
 # Load environment variables
 load_dotenv()
@@ -32,20 +32,24 @@ class SaveNLoadClient:
         self.server_url = server_url.rstrip('/')
         self.session = requests.Session()
         
-        # Setup FTP client
-        ftp_host = os.getenv('FTP_HOST')
-        ftp_port = int(os.getenv('FTP_PORT', '21'))
-        ftp_username = os.getenv('FTP_USERNAME')
-        ftp_password = os.getenv('FTP_PASSWORD')
+        # Setup SMB client
+        smb_server = os.getenv('SMB_SERVER')
+        smb_share = os.getenv('SMB_SHARE', 'SaveNLoad')
+        smb_username = os.getenv('SMB_USERNAME')
+        smb_password = os.getenv('SMB_PASSWORD')
+        smb_domain = os.getenv('SMB_DOMAIN')  # Optional
+        smb_port = int(os.getenv('SMB_PORT', '445'))
         
-        if not all([ftp_host, ftp_username, ftp_password]):
-            raise ValueError("FTP credentials must be set in environment variables")
+        if not all([smb_server, smb_username, smb_password]):
+            raise ValueError("SMB credentials must be set in environment variables (SMB_SERVER, SMB_SHARE, SMB_USERNAME, SMB_PASSWORD)")
         
-        self.ftp_client = FTPClient(
-            host=ftp_host,
-            port=ftp_port,
-            username=ftp_username,
-            password=ftp_password
+        self.smb_client = SMBClient(
+            server=smb_server,
+            share=smb_share,
+            username=smb_username,
+            password=smb_password,
+            domain=smb_domain,
+            port=smb_port
         )
         
         # Set session cookie if provided
@@ -74,7 +78,7 @@ class SaveNLoadClient:
     def save_game(self, game_id: int, local_save_path: str, 
                  username: str, game_name: str) -> Dict[str, Any]:
         """
-        Save game - backup from local PC to FTP
+        Save game - backup from local PC to SMB
         
         Args:
             game_id: Game ID from Django server
@@ -106,7 +110,7 @@ class SaveNLoadClient:
                         rel_path = os.path.relpath(local_file, local_save_path)
                         remote_filename = rel_path.replace('\\', '/')
                         
-                        success, message = self.ftp_client.upload_save(
+                        success, message = self.smb_client.upload_save(
                             username=username,
                             game_name=game_name,
                             local_file_path=local_file,
@@ -151,7 +155,7 @@ class SaveNLoadClient:
     def load_game(self, game_id: int, local_save_path: str,
                  username: str, game_name: str, save_folder_number: Optional[int] = None) -> Dict[str, Any]:
         """
-        Load game - download from FTP to local PC
+        Load game - download from SMB to local PC
         
         Args:
             game_id: Game ID from Django server
@@ -167,13 +171,13 @@ class SaveNLoadClient:
         
         try:
             # List all files in the save folder
-            success, files, message = self.ftp_client.list_saves(
+            success, files, directories, message = self.smb_client.list_saves(
                 username=username,
                 game_name=game_name,
                 save_folder_number=save_folder_number
             )
             
-            if not success or not files:
+            if not success or (not files and not directories):
                 return {
                     'success': False,
                     'error': f'No save files found: {message}'
@@ -225,7 +229,7 @@ class SaveNLoadClient:
                         # Continue anyway, might still work
                         pass
                 
-                success, message = self.ftp_client.download_save(
+                success, message = self.smb_client.download_save(
                     username=username,
                     game_name=game_name,
                     remote_filename=remote_filename,

@@ -14,7 +14,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from queue import Queue
 from dotenv import load_dotenv
-from ftp_client import FTPClient
+from smb_client import SMBClient
 
 # Load environment variables
 # For standalone exe: load .env from exe directory (portable)
@@ -63,20 +63,24 @@ class ClientWorkerService:
         self._current_client_id = None
         
         
-        # Setup FTP client
-        ftp_host = os.getenv('FTP_HOST')
-        ftp_port = int(os.getenv('FTP_PORT', '21'))
-        ftp_username = os.getenv('FTP_USERNAME')
-        ftp_password = os.getenv('FTP_PASSWORD')
+        # Setup SMB client
+        smb_server = os.getenv('SMB_SERVER')
+        smb_share = os.getenv('SMB_SHARE', 'SaveNLoad')
+        smb_username = os.getenv('SMB_USERNAME')
+        smb_password = os.getenv('SMB_PASSWORD')
+        smb_domain = os.getenv('SMB_DOMAIN')  # Optional
+        smb_port = int(os.getenv('SMB_PORT', '445'))
         
-        if not all([ftp_host, ftp_username, ftp_password]):
-            raise ValueError("FTP credentials must be set in environment variables")
+        if not all([smb_server, smb_username, smb_password]):
+            raise ValueError("SMB credentials must be set in environment variables (SMB_SERVER, SMB_SHARE, SMB_USERNAME, SMB_PASSWORD)")
         
-        self.ftp_client = FTPClient(
-            host=ftp_host,
-            port=ftp_port,
-            username=ftp_username,
-            password=ftp_password
+        self.smb_client = SMBClient(
+            server=smb_server,
+            share=smb_share,
+            username=smb_username,
+            password=smb_password,
+            domain=smb_domain,
+            port=smb_port
         )
         
         print("Client Worker Service ready")
@@ -112,7 +116,7 @@ class ClientWorkerService:
     def save_game(self, game_id: int, local_save_path: str, 
                  username: str, game_name: str, save_folder_number: int, ftp_path: Optional[str] = None,
                  operation_id: Optional[int] = None) -> Dict[str, Any]:
-        """Save game - backup from local PC to FTP"""
+        """Save game - backup from local PC to SMB"""
         print(f"Backing up save files...")
         
         if not os.path.exists(local_save_path):
@@ -204,7 +208,7 @@ class ClientWorkerService:
                         try:
                             remote_dir_path = dir_queue.get(timeout=1)
                             try:
-                                self.ftp_client.create_directory(
+                                self.smb_client.create_directory(
                                     username=username,
                                     game_name=game_name,
                                     folder_number=save_folder_number,
@@ -225,19 +229,7 @@ class ClientWorkerService:
                 def upload_worker():
                     """Worker function: pulls files from queue and uploads them continuously"""
                     worker_results = []
-                    # Create ONE FTP connection per worker thread and navigate once
-                    worker_ftp_host = None
-                    worker_save_folder_path = None
-                    try:
-                        # Initialize FTP connection for this worker thread (reused for all files)
-                        worker_ftp_host = self.ftp_client._get_connection(reuse=True)
-                        worker_save_folder_path = self.ftp_client._navigate_to_save_folder(
-                            worker_ftp_host, username, game_name, save_folder_number, ftp_path
-                        )
-                    except Exception as e:
-                        print(f"ERROR: Failed to initialize FTP connection for worker: {e}")
-                        # Fall back to per-file connections
-                        worker_ftp_host = None
+                    # SMB doesn't need connection pooling - smbclient handles it automatically
                     
                     try:
                         while True:
@@ -249,29 +241,15 @@ class ClientWorkerService:
                             
                             local_file, remote_filename = file_info
                             try:
-                                # Reuse connection within thread for better performance
-                                if worker_ftp_host and worker_save_folder_path:
-                                    # Use pre-initialized connection (FAST PATH)
-                                    success, message = self.ftp_client.upload_save(
-                                        username=username,
-                                        game_name=game_name,
-                                        local_file_path=local_file,
-                                        folder_number=save_folder_number,
-                                        remote_filename=remote_filename,
-                                        ftp_path=ftp_path,
-                                        ftp_host=worker_ftp_host,
-                                        save_folder_path=worker_save_folder_path
-                                    )
-                                else:
-                                    # Fallback: create connection per file (SLOW PATH)
-                                    success, message = self.ftp_client.upload_save(
-                                        username=username,
-                                        game_name=game_name,
-                                        local_file_path=local_file,
-                                        folder_number=save_folder_number,
-                                        remote_filename=remote_filename,
-                                        ftp_path=ftp_path
-                                    )
+                                # SMB is fast - no need for connection pooling
+                                success, message = self.smb_client.upload_save(
+                                    username=username,
+                                    game_name=game_name,
+                                    local_file_path=local_file,
+                                    folder_number=save_folder_number,
+                                    remote_filename=remote_filename,
+                                    ftp_path=ftp_path
+                                )
                                 
                                 # Update progress
                                 with progress_lock:
@@ -315,13 +293,6 @@ class ClientWorkerService:
                                         self._update_progress(operation_id, current, total if total > 0 else 0, f"Error: {remote_filename}")
                                 file_queue.task_done()
                                 worker_results.append((False, remote_filename, str(e)))
-                    finally:
-                        # Clean up worker's FTP connection
-                        if worker_ftp_host:
-                            try:
-                                worker_ftp_host.close()
-                            except:
-                                pass
                     
                     return worker_results
                 
@@ -404,11 +375,12 @@ class ClientWorkerService:
             else:
                 # Single file upload
                 print(f"Uploading single file: {os.path.basename(local_save_path)}")
-                success, message = self.ftp_client.upload_save(
+                success, message = self.smb_client.upload_save(
                     username=username,
                     game_name=game_name,
                     local_file_path=local_save_path,
                     folder_number=save_folder_number,
+                    remote_filename=os.path.basename(local_save_path),
                     ftp_path=ftp_path
                 )
                 
@@ -426,11 +398,11 @@ class ClientWorkerService:
     def load_game(self, game_id: int, local_save_path: str,
                  username: str, game_name: str, save_folder_number: int, ftp_path: Optional[str] = None,
                  operation_id: Optional[int] = None) -> Dict[str, Any]:
-        """Load game - download from FTP to local PC"""
+        """Load game - download from SMB to local PC"""
         print(f"Preparing to download save files...")
         
         try:
-            success, files, directories, message = self.ftp_client.list_saves(
+            success, files, directories, message = self.smb_client.list_saves(
                 username=username,
                 game_name=game_name,
                 folder_number=save_folder_number,
@@ -536,49 +508,23 @@ class ClientWorkerService:
             processor_thread = threading.Thread(target=file_processor, daemon=True)
             processor_thread.start()
             
-            def download_worker():
-                """Worker function: pulls files from queue and downloads them continuously"""
-                worker_results = []
-                # Create ONE FTP connection per worker thread and navigate once
-                worker_ftp_host = None
-                worker_save_folder_path = None
-                try:
-                    # Initialize FTP connection for this worker thread (reused for all files)
-                    worker_ftp_host = self.ftp_client._get_connection(reuse=True)
-                    worker_save_folder_path = self.ftp_client._navigate_to_save_folder(
-                        worker_ftp_host, username, game_name, save_folder_number, ftp_path
-                    )
-                except Exception as e:
-                    print(f"ERROR: Failed to initialize FTP connection for worker: {e}")
-                    # Fall back to per-file connections
-                    worker_ftp_host = None
-                
-                try:
-                    while True:
-                        # Get file from queue
-                        file_info = file_queue.get()
-                        if file_info is None:  # Sentinel - no more files
-                            file_queue.task_done()
-                            break  # Exit loop when sentinel received
-                        
-                        remote_filename, local_file = file_info
-                        try:
-                            # Reuse connection within thread for better performance
-                            if worker_ftp_host and worker_save_folder_path:
-                                # Use pre-initialized connection (FAST PATH)
-                                success, message = self.ftp_client.download_save(
-                                    username=username,
-                                    game_name=game_name,
-                                    remote_filename=remote_filename,
-                                    local_file_path=local_file,
-                                    folder_number=save_folder_number,
-                                    ftp_path=ftp_path,
-                                    ftp_host=worker_ftp_host,
-                                    save_folder_path=worker_save_folder_path
-                                )
-                            else:
-                                # Fallback: create connection per file (SLOW PATH)
-                                success, message = self.ftp_client.download_save(
+                def download_worker():
+                    """Worker function: pulls files from queue and downloads them continuously"""
+                    worker_results = []
+                    # SMB doesn't need connection pooling - smbclient handles it automatically
+                    
+                    try:
+                        while True:
+                            # Get file from queue
+                            file_info = file_queue.get()
+                            if file_info is None:  # Sentinel - no more files
+                                file_queue.task_done()
+                                break  # Exit loop when sentinel received
+                            
+                            remote_filename, local_file = file_info
+                            try:
+                                # SMB is fast - no need for connection pooling
+                                success, message = self.smb_client.download_save(
                                     username=username,
                                     game_name=game_name,
                                     remote_filename=remote_filename,
@@ -627,17 +573,10 @@ class ClientWorkerService:
                                 print(f"  [{current}/{total if total > 0 else '?'}] ERROR downloading {remote_filename}: {e}")
                                 if operation_id:
                                     self._update_progress(operation_id, current, total if total > 0 else 0, f"Error: {remote_filename}")
-                            file_queue.task_done()
-                            worker_results.append((False, remote_filename, str(e)))
-                finally:
-                    # Clean up worker's FTP connection
-                    if worker_ftp_host:
-                        try:
-                            worker_ftp_host.close()
-                        except:
-                            pass
-                
-                return worker_results
+                                file_queue.task_done()
+                                worker_results.append((False, remote_filename, str(e)))
+                    
+                    return worker_results
             
             # Wait a moment for processor to start
             time.sleep(0.1)
@@ -717,7 +656,7 @@ class ClientWorkerService:
         print(f"Listing save files...")
         
         try:
-            success, files, directories, message = self.ftp_client.list_saves(
+            success, files, directories, message = self.smb_client.list_saves(
                 username=username,
                 game_name=game_name,
                 folder_number=save_folder_number,
@@ -755,7 +694,7 @@ class ClientWorkerService:
         
         try:
             # First, list all items to delete
-            success, files, directories, message = self.ftp_client.list_saves(
+            success, files, directories, message = self.smb_client.list_saves(
                 username=username,
                 game_name=game_name,
                 folder_number=save_folder_number,
@@ -871,11 +810,11 @@ class ClientWorkerService:
                         # Delete the item
                         if item_type == 'file':
                             # Delete file using delete_file helper
-                            success, message = self.ftp_client.delete_file(full_path)
+                            success, message = self.smb_client.delete_file(full_path)
                         else:
                             # Delete directory using delete_directory helper
                             # Since we're deleting in order (deepest first), directories should be empty
-                            success, message = self.ftp_client.delete_directory(full_path)
+                            success, message = self.smb_client.delete_directory(full_path)
                         
                         # Update progress
                         with progress_lock:

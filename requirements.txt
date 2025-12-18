@@ -2,7 +2,7 @@ Django>=6.0
 psycopg2-binary>=2.9.9
 python-dotenv>=1.0.0
 requests>=2.31.0
-ftputil>=5.0.0
+smbprotocol>=1.10.0
 
 # Production dependencies
 gunicorn>=21.2.0

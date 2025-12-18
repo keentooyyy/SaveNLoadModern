@@ -1,5 +1,5 @@
 """
-Save Folder model for tracking save folders on FTP server
+Save Folder model for tracking save folders on SMB/CIFS server
 """
 from django.db import models
 from django.utils import timezone
@@ -8,14 +8,14 @@ from SaveNLoad.models.game import Game
 
 
 class SaveFolder(models.Model):
-    """Tracks save folders for user+game combinations on FTP server"""
+    """Tracks save folders for user+game combinations on SMB/CIFS server"""
     
     MAX_SAVE_FOLDERS = 10
     
     user = models.ForeignKey(SimpleUsers, on_delete=models.CASCADE, related_name='save_folders')
     game = models.ForeignKey(Game, on_delete=models.CASCADE, related_name='save_folders')
     folder_number = models.IntegerField(help_text="Save folder number (1-10)")
-    ftp_path = models.CharField(max_length=500, blank=True, null=True, help_text="Full FTP path (e.g., /username/gamename/save_1)")
+    ftp_path = models.CharField(max_length=500, blank=True, null=True, help_text="Full SMB path (e.g., /username/gamename/save_1) - kept as ftp_path for backward compatibility")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -45,7 +45,7 @@ class SaveFolder(models.Model):
     
     @staticmethod
     def _generate_ftp_path(username: str, game_name: str, folder_number: int) -> str:
-        """Generate the full FTP path for a save folder"""
+        """Generate the full SMB path for a save folder (kept as _generate_ftp_path for backward compatibility)"""
         # Sanitize game name (matching ftp_client.py logic)
         safe_game_name = "".join(c for c in game_name if c.isalnum() or c in (' ', '-', '_')).strip()
         safe_game_name = safe_game_name.replace(' ', '_')
@@ -65,7 +65,7 @@ class SaveFolder(models.Model):
         if len(existing_numbers) >= cls.MAX_SAVE_FOLDERS:
             oldest_folder = cls.objects.filter(user=user, game=game).order_by('created_at').first()
             if oldest_folder:
-                # Reset created_at for reuse and update FTP path (in case game name changed)
+                # Reset created_at for reuse and update SMB path (in case game name changed)
                 oldest_folder.created_at = timezone.now()
                 oldest_folder.ftp_path = cls._generate_ftp_path(user.username, game.name, oldest_folder.folder_number)
                 oldest_folder.save(update_fields=['created_at', 'ftp_path'])
@@ -78,7 +78,7 @@ class SaveFolder(models.Model):
                 next_number = i
                 break
         
-        # Generate FTP path
+        # Generate SMB path
         ftp_path = cls._generate_ftp_path(user.username, game.name, next_number)
         
         # Create new save folder

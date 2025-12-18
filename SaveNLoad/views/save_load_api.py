@@ -17,12 +17,12 @@ from SaveNLoad.models import Game
 import json
 import os
 import logging
-import ftputil
 import zipfile
 import tempfile
 import io
 from pathlib import Path
 from django.conf import settings
+from SaveNLoad.utils.smb_storage import get_smb_storage
 
 logger = logging.getLogger(__name__)
 
@@ -77,9 +77,9 @@ def save_game(request, game_id):
         return json_response_error('Failed to create save folder', status=500)
     
     if not save_folder.ftp_path:
-        return json_response_error('Save folder FTP path is missing', status=500)
+        return json_response_error('Save folder path is missing', status=500)
     
-    # All validations passed - create operation in queue with save folder number and FTP path
+    # All validations passed - create operation in queue with save folder number and SMB path
     operation = OperationQueue.create_operation(
         operation_type=OperationType.SAVE,
         user=user,
@@ -156,12 +156,12 @@ def load_game(request, game_id):
     if save_folder_number is None:
         return json_response_error('Save folder number is required', status=400)
     
-    # Validate save_folder exists and has ftp_path
+    # Validate save_folder exists and has path
     if not save_folder:
         return json_response_error('Save folder not found', status=404)
     
     if not save_folder.ftp_path:
-        return json_response_error('Save folder FTP path is missing', status=500)
+        return json_response_error('Save folder path is missing', status=500)
     
     # Get client worker or return error
     client_id = data.get('client_id')
@@ -275,7 +275,7 @@ def delete_save_folder(request, game_id, folder_number):
             return json_response_error('Save folder number is missing', status=500)
         
         if not save_folder.ftp_path:
-            return json_response_error('Save folder FTP path is missing', status=500)
+            return json_response_error('Save folder path is missing', status=500)
         
         # Get client worker
         client_worker = ClientWorker.get_any_active_worker()
@@ -453,129 +453,66 @@ def backup_all_saves(request, game_id):
         return error_response
     
     try:
-        # Get FTP credentials from environment variables
-        ftp_host = os.getenv('FTP_HOST')
-        ftp_port = int(os.getenv('FTP_PORT', '21'))
-        ftp_username = os.getenv('FTP_USERNAME')
-        ftp_password = os.getenv('FTP_PASSWORD')
-        
-        if not all([ftp_host, ftp_username, ftp_password]):
-            return json_response_error('FTP credentials not configured', status=500)
+        # Get SMB storage instance
+        smb_storage = get_smb_storage()
         
         # Generate base path for user's game (matching SaveFolder logic)
         safe_game_name = "".join(c for c in game.name if c.isalnum() or c in (' ', '-', '_')).strip()
         safe_game_name = safe_game_name.replace(' ', '_')
-        base_path = f"{user.username}/{safe_game_name}"
+        base_path = f"/{user.username}/{safe_game_name}"
         
-        # Create zip buffer in memory
+        # Check if base path exists
+        if not smb_storage.path_exists(base_path):
+            return json_response_error(f'Game directory not found on server: {base_path}', status=404)
+        
+        # List all save folders in base path
+        files_list, dirs_list = smb_storage.list_directory(base_path)
+        
+        # Filter for save folders (save_1, save_2, etc.)
+        existing_save_folders = []
+        for item in dirs_list:
+            if item.startswith('save_') and item[5:].isdigit():
+                existing_save_folders.append(item)
+        
+        # Sort by number
+        existing_save_folders.sort(key=lambda x: int(x.split('_')[1]))
+        
+        if not existing_save_folders:
+            return json_response_error('No save folders found on server', status=404)
+        
+        # Create zip file using SMB storage
+        files_added = 0
         zip_buffer = io.BytesIO()
         
-        # Create ftputil session with proper error handling
-        try:
-            # ftputil.FTPHost doesn't accept port directly, use session factory for custom port
-            if ftp_port != 21:
-                session_factory = ftputil.session.session_factory(port=ftp_port)
-                ftp_host_obj = ftputil.FTPHost(ftp_host, ftp_username, ftp_password, session_factory=session_factory)
-            else:
-                ftp_host_obj = ftputil.FTPHost(ftp_host, ftp_username, ftp_password)
-        except Exception as e:
-            error_msg = str(e)
-            logger.error(f"FTP connection failed: {error_msg}")
-            # Check for authentication errors
-            if '530' in error_msg or 'Not logged in' in error_msg or 'password' in error_msg.lower():
-                return json_response_error('FTP authentication failed. Please check FTP credentials in server configuration.', status=500)
-            return json_response_error(f'Failed to connect to FTP server: {error_msg}', status=500)
-        
-        try:
-            # Check if base path exists
-            full_base_path = f"/{base_path}"
-            if not ftp_host_obj.path.exists(full_base_path):
-                return json_response_error(f'Game directory not found on server: {base_path}', status=404)
-            
-            # List all save folders in base path
-            try:
-                ftp_host_obj.chdir(full_base_path)
-                items = ftp_host_obj.listdir('.')
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Iterate through each save folder
+            for save_folder_name in existing_save_folders:
+                save_folder_path = f"{base_path}/{save_folder_name}"
                 
-                # Filter for save folders (save_1, save_2, etc.)
-                existing_save_folders = []
-                for item in items:
-                    item_path = ftp_host_obj.path.join(full_base_path, item)
-                    if ftp_host_obj.path.isdir(item_path) and item.startswith('save_') and item[5:].isdigit():
-                        existing_save_folders.append(item)
-                
-                # Sort by number
-                existing_save_folders.sort(key=lambda x: int(x.split('_')[1]))
-                
-                if not existing_save_folders:
-                    return json_response_error('No save folders found on server', status=404)
-                
-            except Exception as e:
-                return json_response_error(f'Failed to access game directory: {str(e)}', status=500)
-            
-            # Create zip file using ftputil for robust file operations
-            files_added = 0
-            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                # Iterate through each save folder that exists on FTP
-                for save_folder_name in existing_save_folders:
-                    save_folder_path = ftp_host_obj.path.join(full_base_path, save_folder_name)
+                try:
+                    # List all files recursively in this save folder
+                    all_files, all_dirs = smb_storage.list_recursive(save_folder_path)
                     
-                    try:
-                        # Check if save folder exists and is a directory
-                        if not ftp_host_obj.path.exists(save_folder_path) or not ftp_host_obj.path.isdir(save_folder_path):
-                            continue
-                        
-                        # Change to save folder
-                        ftp_host_obj.chdir(save_folder_path)
-                        
-                        # List all files in this folder (recursively)
-                        def list_files_recursive(current_path, base_path):
-                            """Recursively list all files in a directory"""
-                            files = []
-                            try:
-                                for item in ftp_host_obj.listdir(current_path):
-                                    item_path = ftp_host_obj.path.join(current_path, item)
-                                    if ftp_host_obj.path.isfile(item_path):
-                                        # Get relative path by removing base_path prefix
-                                        if item_path.startswith(base_path):
-                                            rel_path = item_path[len(base_path):].lstrip('/')
-                                        else:
-                                            rel_path = item
-                                        files.append(rel_path)
-                                    elif ftp_host_obj.path.isdir(item_path):
-                                        # Recursively get files from subdirectories
-                                        files.extend(list_files_recursive(item_path, base_path))
-                            except Exception:
-                                pass
-                            return files
-                        
-                        all_files = list_files_recursive(save_folder_path, save_folder_path)
-                        
-                        if not all_files:
-                            continue
-                        
-                        # Download each file
-                        for filename in all_files:
-                            try:
-                                # Use ftputil to download file to memory
-                                file_data = io.BytesIO()
-                                with ftp_host_obj.open(filename, 'rb') as remote_file:
-                                    file_data.write(remote_file.read())
-                                
-                                file_data.seek(0)
-                                
-                                # Add to zip with folder structure: save_1/filename, save_2/filename, etc.
-                                # Handle nested paths (replace backslashes with forward slashes for zip)
-                                zip_path = f"{save_folder_name}/{filename.replace(chr(92), '/')}"
-                                zip_file.writestr(zip_path, file_data.read())
-                                files_added += 1
-                            except Exception:
-                                continue
-                    
-                    except Exception:
+                    if not all_files:
                         continue
-        finally:
-            ftp_host_obj.close()
+                    
+                    # Download each file and add to zip
+                    for file_info in all_files:
+                        try:
+                            file_path = f"{save_folder_path}/{file_info['name']}"
+                            file_data = smb_storage.read_file(file_path)
+                            
+                            # Add to zip with folder structure: save_1/filename, save_2/filename, etc.
+                            zip_path = f"{save_folder_name}/{file_info['name']}"
+                            zip_file.writestr(zip_path, file_data)
+                            files_added += 1
+                        except Exception as e:
+                            logger.debug(f"Failed to add file {file_info['name']} to zip: {e}")
+                            continue
+                
+                except Exception as e:
+                    logger.debug(f"Failed to process save folder {save_folder_name}: {e}")
+                    continue
         
         logger.info(f"Backup complete. Total files added: {files_added}")
         if files_added == 0:
@@ -605,7 +542,7 @@ def backup_all_saves(request, game_id):
 @require_http_methods(["DELETE"])
 def delete_all_saves(request, game_id):
     """
-    Delete all save folders for a game (from FTP and database)
+    Delete all save folders for a game (from SMB and database)
     """
     user = get_current_user(request)
     if not user:
