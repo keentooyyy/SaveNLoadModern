@@ -8,7 +8,7 @@
 
 ## About
 
-SaveNLoadModern is a modern, web-based game save file management system built with Django. It provides a centralized platform for users to save, load, and manage their game progress across multiple games and save slots. The system features a client worker application that runs on user machines to handle local save file operations, SMB/CIFS network share integration for fast LAN storage, and a comprehensive admin dashboard for managing games, users, and operations.
+SaveNLoadModern is a modern, web-based game save file management system built with Django. It provides a centralized platform for users to save, load, and manage their game progress across multiple games and save slots. The system features a client worker application that runs on user machines to handle local save file operations, FTP storage integration using rclone for reliable file transfers, and a comprehensive admin dashboard for managing games, users, and operations.
 
 ### Key Features
 
@@ -16,7 +16,7 @@ SaveNLoadModern is a modern, web-based game save file management system built wi
 
 - **Client Worker Application**: Standalone Python executable that runs on client PCs to handle save/load operations
 
-- **SMB/CIFS Network Storage**: Fast SMB/CIFS (Windows Network Share) integration for storing save files on LAN (can achieve 100+ MB/s on gigabit networks)
+- **FTP Storage**: FTP storage integration using rclone for reliable file transfers with progress tracking and parallel transfers
 
 - **User Authentication**: Custom authentication system with role-based access (Admin/User)
 
@@ -40,10 +40,10 @@ Before setting up the project, ensure you have the following installed:
 
 **Required:**
 - **[Docker](https://www.docker.com/get-started)** and **Docker Compose** - Primary deployment method for the Django application and database
-- **Windows Machine with Network Sharing** - A Windows PC or server with a shared folder configured for SMB/CIFS access (or Samba on Linux)
+- **FTP Server** - An FTP server for storing save files (can be on the same machine or separate server)
 
 **Separate Services (Required, not included in Docker):**
-- **Windows Network Share (SMB/CIFS)** - A shared folder on a Windows machine or SMB-compatible server for storing save files
+- **FTP Server** - An FTP server accessible from both the Django server and client worker machines
 - **Gmail Account** - Required for email notifications (requires App Password)
 
 **Optional (for manual setup only):**
@@ -92,13 +92,10 @@ DEFAULT_ADMIN_PASSWORD=admin123
 # RAWG API (Required for game search)
 RAWG=your-rawg-api-key-here
 
-# SMB/CIFS Configuration (for client worker and backend)
-SMB_SERVER=192.168.88.101
-SMB_SHARE=n_Saves
-SMB_USERNAME=administrator
-SMB_PASSWORD=123
-SMB_DOMAIN=
-SMB_PORT=445
+# FTP Configuration (for client worker and backend)
+FTP_HOST=192.168.88.101
+FTP_USERNAME=savenload
+FTP_PASSWORD=your-ftp-password
 ```
 
 > **Note:** For Gmail, you need to generate an [App Password](https://support.google.com/accounts/answer/185833) instead of your regular password. For production, set `DEBUG=False` and configure `ALLOWED_HOSTS` appropriately.
@@ -197,9 +194,11 @@ The application will be available at `http://localhost:8000`
 ```
 SaveNLoadModern/
 ├── client_worker/              # Client worker application
-│   ├── client_worker.py        # Main client worker logic
-│   ├── client_service.py       # Service wrapper for Windows
-│   ├── smb_client.py            # SMB/CIFS client implementation
+│   ├── client_service_rclone.py # Main client worker service
+│   ├── rclone_client.py         # Rclone-based FTP client
+│   ├── rclone/                  # Rclone executable and config
+│   │   ├── rclone.exe          # Rclone Windows executable
+│   │   └── rclone.conf         # Rclone FTP configuration
 │   ├── build_exe.py            # PyInstaller build script
 │   ├── SaveNLoadClient.spec    # PyInstaller spec file
 │   └── requirements.txt        # Client worker dependencies
@@ -242,7 +241,8 @@ SaveNLoadModern/
 │   │   └── base.html          # Base template
 │   │
 │   ├── utils/                  # Utility functions
-│   │   └── email_service.py   # Email sending utilities
+│   │   ├── email_service.py   # Email sending utilities
+│   │   └── ftp_storage.py     # FTP storage backend using rclone
 │   │
 │   └── management/             # Management commands
 │       └── commands/           # Custom commands
@@ -285,17 +285,22 @@ SaveNLoadModern/
 ### Save/Load System
 
 - **Multiple Save Slots**: Support for up to 10 save folders per game per user
-- **SMB/CIFS Storage**: Save files stored on Windows Network Share (SMB/CIFS) for fast LAN access
+- **FTP Storage**: Save files stored on FTP server using rclone for reliable transfers
 - **Operation Queue**: Asynchronous processing of save/load operations
-- **Progress Tracking**: Track operation progress and status
+- **Progress Tracking**: Real-time progress tracking with file counts and transfer speeds
+- **Empty Save Validation**: Automatic validation to prevent saving empty directories or files
+- **Backup Operations**: Download all saves, zip them, and save to local Downloads folder
 
 ### Client Worker
 
 - **Standalone Application**: Python executable that runs on client PCs
-- **Save Operations**: Upload local save files to SMB/CIFS network share
-- **Load Operations**: Download save files from SMB/CIFS network share to local machine
+- **Rclone Integration**: Uses rclone for fast, reliable FTP file transfers with parallel workers
+- **Save Operations**: Upload local save files to FTP server with progress tracking
+- **Load Operations**: Download save files from FTP server to local machine with progress tracking
+- **Backup Operations**: Download all saves for a game, zip them, and save to Downloads folder
 - **API Integration**: Communicates with Django backend via REST API
 - **Session Management**: Maintains authentication with Django server
+- **Real-time Progress**: Sends real-time progress updates to web UI during transfers
 
 ### Admin Dashboard
 
@@ -338,7 +343,8 @@ Users need to configure the client worker with:
 
 - **Server URL**: Django server URL (e.g., `http://192.168.88.101:8000`)
 - **Session Cookie**: Authentication cookie from web login
-- **SMB/CIFS Credentials**: Set via environment variables or `.env` file (SMB_SERVER, SMB_SHARE, SMB_USERNAME, SMB_PASSWORD)
+- **FTP Credentials**: Configured in `rclone/rclone.conf` file (host, user, pass)
+- **Rclone Executable**: `rclone.exe` must be in `rclone/` folder alongside the executable
 
 ## API Endpoints
 
@@ -386,60 +392,45 @@ POSTGRES_HOST=db  # Use 'localhost' for non-Docker setup
 POSTGRES_PORT=5432
 ```
 
-### SMB/CIFS Configuration
+### FTP Configuration
 
-> **Important:** A Windows Network Share (SMB/CIFS) must be configured on a Windows machine or SMB-compatible server. It is not included in the Docker containers. The Django application and client worker connect to the SMB share via the SMB/CIFS protocol.
+> **Important:** An FTP server must be configured and accessible from both the Django server and client worker machines. The Django application and client worker use rclone to connect to the FTP server.
 
-**Setting up Windows Network Share (Required):**
+**Setting up FTP Server:**
 
-1. **Create a Shared Folder on Windows:**
-   - Right-click on the folder you want to share (e.g., `C:\SaveNLoad` or `D:\Saves`)
-   - Select "Properties" → "Sharing" tab
-   - Click "Advanced Sharing"
-   - Check "Share this folder"
-   - Set a Share name (e.g., `n_Saves` or `SaveNLoad`)
-   - Click "Permissions" and grant appropriate access (Read/Write) to the user account
-   - Click "OK" to save
+1. **Install and Configure FTP Server:**
+   - Use any FTP server software (e.g., FileZilla Server, vsftpd, Windows IIS FTP)
+   - Create a user account with read/write permissions
+   - Configure the FTP server to listen on port 21 (default) or your preferred port
+   - Ensure firewall allows FTP traffic (ports 21 for control, and passive mode ports if enabled)
 
-2. **Configure Network and Sharing Center:**
-   - Open **Control Panel** → **Network and Internet** → **Network and Sharing Center**
-   - Click "Change advanced sharing settings" in the left sidebar
-   - Under "Private" network profile (or "All Networks" if needed):
-     - Turn on "Network discovery"
-     - Turn on "File and printer sharing"
-     - Turn on "Turn on sharing so anyone with network access can read and write files in the Public folders" (if using Public folder)
-   - Under "All Networks":
-     - Turn off "Password protected sharing" (if you want easier access) OR
-     - Turn on "Password protected sharing" (recommended for security) and ensure the user account has a password
-   - Click "Save changes"
+2. **Note the FTP Server Details:**
+   - **FTP Host**: IP address or hostname of the FTP server (e.g., `192.168.88.101`)
+   - **FTP Username**: Username for FTP access
+   - **FTP Password**: Password for the FTP user account
 
-3. **Configure Windows Firewall (if needed):**
-   - Ensure Windows Firewall allows SMB traffic (ports 445, 139)
-   - File and Printer Sharing should be allowed through the firewall
+**Configure FTP Connection in Application:**
 
-4. **Note the SMB Share Details:**
-   - **SMB Server**: IP address or hostname of the Windows machine (e.g., `192.168.88.101`)
-   - **SMB Share**: The share name you configured (e.g., `n_Saves`)
-   - **SMB Username**: Windows username with access to the share
-   - **SMB Password**: Password for the Windows user account
-   - **SMB Domain**: Leave empty for workgroup, or specify domain name if on a domain
-   - **SMB Port**: Default is 445 (SMB over TCP/IP)
+FTP settings are configured in two places:
 
-**Configure SMB Connection in Application:**
-
-SMB settings are configured in the `.env` file (both Django backend and client worker):
-
+1. **Django Backend** - Set in `.env` file:
 ```env
-# SMB/CIFS Configuration (for client worker and backend)
-SMB_SERVER=192.168.88.101        # IP address or hostname of Windows machine
-SMB_SHARE=n_Saves                # Share name configured in Windows
-SMB_USERNAME=administrator       # Windows username with share access
-SMB_PASSWORD=your-password       # Password for the Windows user
-SMB_DOMAIN=                      # Leave empty for workgroup, or domain name
-SMB_PORT=445                     # Default SMB port
+# FTP Configuration (for Django backend)
+FTP_HOST=192.168.88.101
+FTP_USERNAME=savenload
+FTP_PASSWORD=your-ftp-password
 ```
 
-> **Note:** Ensure the Windows machine with the shared folder is accessible from both the Django server and client worker machines. The SMB share can be on the same machine as Docker or on a separate Windows server. The share must be accessible via UNC path: `\\SERVER_IP\SHARE_NAME`
+2. **Client Worker** - Configured in `client_worker/rclone/rclone.conf`:
+```ini
+[ftp]
+type = ftp
+host = 192.168.88.101
+user = savenload
+pass = your-ftp-password
+```
+
+> **Note:** Ensure the FTP server is accessible from both the Django server and client worker machines. The FTP server can be on the same machine as Docker or on a separate server. The rclone executable (`rclone.exe`) and configuration file (`rclone.conf`) must be in the `client_worker/rclone/` directory.
 
 ### Email Configuration
 
@@ -487,18 +478,18 @@ If you encounter database connection errors:
 4. **Check Port**: Default PostgreSQL port is `5432`
 5. **Check Database Exists**: Create database if it doesn't exist
 
-### SMB/CIFS Connection Issues
+### FTP Connection Issues
 
-If SMB operations fail:
+If FTP operations fail:
 
-1. **Check Windows Share**: Ensure the Windows machine is accessible and the share is properly configured
-2. **Check Network Discovery**: Verify Network Discovery and File Sharing are enabled in Network and Sharing Center
-3. **Check Credentials**: Verify SMB credentials in `.env` file (SMB_SERVER, SMB_SHARE, SMB_USERNAME, SMB_PASSWORD)
-4. **Check Firewall**: Ensure Windows Firewall allows SMB traffic (ports 445, 139) and File and Printer Sharing
-5. **Check Permissions**: Verify Windows user account has Read/Write permissions on the shared folder
-6. **Check UNC Path**: Test accessing the share via UNC path: `\\SERVER_IP\SHARE_NAME` from Windows Explorer
-7. **Check Network**: Ensure client can reach the Windows machine over the network (ping test)
-8. **Check Advanced Sharing Settings**: Verify settings in Control Panel → Network and Internet → Network and Sharing Center → Advanced sharing settings
+1. **Check FTP Server**: Ensure the FTP server is running and accessible
+2. **Check Network**: Ensure client can reach the FTP server over the network (ping test)
+3. **Check Credentials**: Verify FTP credentials in `.env` file (FTP_HOST, FTP_USERNAME, FTP_PASSWORD) and `rclone.conf`
+4. **Check Firewall**: Ensure firewall allows FTP traffic (port 21 for control, and passive mode ports if enabled)
+5. **Check Permissions**: Verify FTP user account has Read/Write permissions on the FTP directory
+6. **Check Rclone**: Ensure `rclone.exe` is in `client_worker/rclone/` directory and `rclone.conf` is properly configured
+7. **Check Rclone Config**: Verify `rclone.conf` has correct FTP settings (host, user, pass)
+8. **Test FTP Connection**: Test FTP connection manually using an FTP client or rclone command line
 9. **Check Logs**: Review client worker and Django logs for detailed errors
 
 ### Email Sending Issues
@@ -517,11 +508,12 @@ If client worker fails:
 
 1. **Check Server URL**: Verify Django server is accessible
 2. **Check Session Cookie**: Ensure valid session cookie is provided
-3. **Check SMB Config**: Verify SMB credentials are set in `.env` (SMB_SERVER, SMB_SHARE, SMB_USERNAME, SMB_PASSWORD)
-4. **Check Windows Share**: Verify the Windows share is accessible via UNC path (`\\SERVER_IP\SHARE_NAME`)
-5. **Check Network**: Ensure client can reach both Django server and Windows SMB share
-6. **Check Network Sharing Settings**: Verify Network Discovery and File Sharing are enabled in Windows Network and Sharing Center
-7. **Check Logs**: Review client worker output for errors
+3. **Check Rclone**: Verify `rclone.exe` exists in `client_worker/rclone/` directory
+4. **Check Rclone Config**: Verify `rclone.conf` has correct FTP settings (host, user, pass)
+5. **Check FTP Server**: Verify the FTP server is accessible and credentials are correct
+6. **Check Network**: Ensure client can reach both Django server and FTP server
+7. **Check Environment Variables**: Verify FTP credentials are set in `.env` file (FTP_HOST, FTP_USERNAME, FTP_PASSWORD)
+8. **Check Logs**: Review client worker output for errors
 
 ### Build Errors
 
@@ -540,7 +532,7 @@ If Docker build fails:
 - **Frontend**: Bootstrap 5.3, JavaScript (Vanilla)
 - **Styling**: Sass/SCSS
 - **Containerization**: Docker, Docker Compose
-- **File Storage**: SMB/CIFS (Windows Network Share)
+- **File Storage**: FTP (using rclone)
 - **Email Service**: Gmail SMTP
 - **Game API**: RAWG API
 - **Client Worker**: Python 3.12, PyInstaller
@@ -553,7 +545,6 @@ If Docker build fails:
 - **psycopg2-binary**: PostgreSQL adapter
 - **python-dotenv**: Environment variable management
 - **requests**: HTTP library for API calls
-- **smbprotocol**: SMB/CIFS client library
 - **gunicorn**: Production WSGI server
 - **whitenoise**: Static file serving
 
@@ -565,9 +556,9 @@ If Docker build fails:
 ### Client Worker Packages
 
 - **requests**: HTTP client
-- **smbprotocol**: SMB operations
 - **python-dotenv**: Environment variables
 - **PyInstaller**: Executable building
+- **rclone**: External executable for FTP operations (included in `rclone/` directory)
 
 ## Production Deployment
 
