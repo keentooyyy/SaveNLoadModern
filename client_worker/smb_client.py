@@ -176,21 +176,30 @@ class SMBClient:
             else:
                 remote_full_path = self._get_full_path(username, game_name, folder_number, remote_dir)
             
-            # Create directory structure if needed
-            if remote_dir:
-                try:
-                    # Extract directory part (everything except the filename)
-                    dir_path = remote_full_path
-                    smbclient.makedirs(dir_path, exist_ok=True)
-                except Exception as e:
-                    # Directory might already exist
-                    pass
-            
             # Build full file path - append filename to directory path
             if remote_file:
                 remote_file_path = remote_full_path + '\\' + remote_file
             else:
                 remote_file_path = remote_full_path
+            
+            # Always create the full directory structure if needed (including base save folder)
+            # Extract directory part - this is the directory that will contain the file
+            # For files: directory is parent of file path
+            # For directories: directory is the path itself
+            if remote_file:
+                # We have a filename, so get the parent directory
+                remote_dir_path = os.path.dirname(remote_file_path)
+            else:
+                # No filename, so the path itself is the directory
+                remote_dir_path = remote_file_path
+            
+            # Always create the directory structure (makedirs creates all parent dirs too)
+            if remote_dir_path:
+                try:
+                    smbclient.makedirs(remote_dir_path, exist_ok=True)
+                except Exception as dir_error:
+                    # If directory creation fails, return error instead of continuing
+                    return False, f"Failed to create SMB directory: {remote_dir_path} - {str(dir_error)}"
             
             # Debug: Verify path doesn't contain control characters
             if '\n' in remote_file_path or '\r' in remote_file_path:
@@ -277,10 +286,13 @@ class SMBClient:
             if not smbclient.path.exists(remote_file_path):
                 return False, "File not found"
             
-            # Create local directory if needed
+            # Always create local directory structure if needed (including all parent directories)
             local_dir = os.path.dirname(local_file_path)
-            if local_dir:
-                os.makedirs(local_dir, exist_ok=True)
+            if local_dir:  # Only create if there's a directory path (not root/current dir)
+                try:
+                    os.makedirs(local_dir, exist_ok=True)
+                except OSError as dir_error:
+                    return False, f"Failed to create directory: {local_dir} - {str(dir_error)}"
             
             # Copy file using SMB (very fast)
             # Retry on credit exhaustion and file locking errors
