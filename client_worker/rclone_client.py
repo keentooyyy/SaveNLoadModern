@@ -8,8 +8,9 @@ import json
 import threading
 import tempfile
 import time
+import re
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Callable
 
 
 class RcloneClient:
@@ -57,13 +58,15 @@ class RcloneClient:
         print(f"  Config: {self.config_path}")
         print(f"  Remote: {remote_name}")
     
-    def _run_rclone(self, command: List[str], timeout: Optional[int] = None, silent: bool = False) -> Tuple[bool, str, str]:
+    def _run_rclone(self, command: List[str], timeout: Optional[int] = None, silent: bool = False,
+                   progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str, str]:
         """Run rclone command and return success, stdout, stderr
         
         Args:
             command: rclone command arguments
             timeout: Optional timeout in seconds
             silent: If True, don't print output (still captures it)
+            progress_callback: Optional callback(current, total, message) for progress updates
         """
         log_file = None
         try:
@@ -89,6 +92,39 @@ class RcloneClient:
             )
             
             stdout_lines = []
+            last_progress = {'current': 0, 'total': 0, 'message': ''}
+            
+            def parse_progress(line: str) -> Optional[Tuple[int, int, str]]:
+                """Parse rclone progress from output line
+                
+                Returns: (current, total, message) or None if no progress found
+                """
+                # Pattern 1: "Transferred: 105 / 109, 96%" (file count)
+                file_count_match = re.search(r'Transferred:\s+(\d+)\s+/\s+(\d+),?\s*(\d+)%?', line)
+                if file_count_match:
+                    current = int(file_count_match.group(1))
+                    total = int(file_count_match.group(2))
+                    percentage = int(file_count_match.group(3)) if file_count_match.group(3) else 0
+                    message = f"{percentage}% - {current}/{total} files"
+                    return (current, total, message)
+                
+                # Pattern 2: "Transferred: 17.725 MiB / 17.725 MiB, 100%, 2.532 MiB/s, ETA 0s" (bytes)
+                byte_match = re.search(r'Transferred:\s+[\d.]+\s+\w+\s+/\s+[\d.]+\s+\w+,\s+(\d+)%', line)
+                if byte_match:
+                    percentage = int(byte_match.group(1))
+                    # Extract speed if available
+                    speed_match = re.search(r'([\d.]+\s+\w+/s)', line)
+                    speed = speed_match.group(1) if speed_match else ''
+                    message = f"{percentage}%{f' @ {speed}' if speed else ''}"
+                    # Use percentage to estimate current/total if we don't have file count
+                    if last_progress['total'] > 0:
+                        current = int((percentage / 100) * last_progress['total'])
+                        return (current, last_progress['total'], message)
+                    else:
+                        # No file count yet, use percentage as current with 100 as total
+                        return (percentage, 100, message)
+                
+                return None
             
             # Read and print stdout in real-time (raw rclone output)
             def read_stdout():
@@ -96,6 +132,24 @@ class RcloneClient:
                     if line:
                         line_stripped = line.rstrip()
                         stdout_lines.append(line)
+                        
+                        # Parse progress if callback provided
+                        if progress_callback:
+                            progress = parse_progress(line_stripped)
+                            if progress:
+                                current, total, message = progress
+                                # Only update if progress changed (avoid spam)
+                                if (current != last_progress['current'] or 
+                                    total != last_progress['total'] or 
+                                    message != last_progress['message']):
+                                    last_progress['current'] = current
+                                    last_progress['total'] = total
+                                    last_progress['message'] = message
+                                    try:
+                                        progress_callback(current, total, message)
+                                    except Exception:
+                                        pass  # Don't fail on progress callback errors
+                        
                         if line_stripped and not silent:
                             print(f"  {line_stripped}")
             
@@ -192,7 +246,7 @@ class RcloneClient:
     
     def upload_directory(self, local_dir: str, username: str, game_name: str,
                         folder_number: int, remote_path_custom: Optional[str] = None,
-                        transfers: int = 10) -> Tuple[bool, str, List[str], List[dict]]:
+                        transfers: int = 10, progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str, List[str], List[dict]]:
         """Upload entire directory - rclone handles everything with parallel transfers
         
         Args:
@@ -228,7 +282,7 @@ class RcloneClient:
             '--progress',  # Show detailed progress for each file
         ]
         
-        success, stdout, stderr = self._run_rclone(command, timeout=3600)
+        success, stdout, stderr = self._run_rclone(command, timeout=3600, progress_callback=progress_callback)
         
         if success:
             # Parse output to get file list (rclone doesn't provide this directly, but we can infer from stats)
@@ -239,7 +293,7 @@ class RcloneClient:
     
     def upload_save(self, username: str, game_name: str, local_file_path: str,
                    folder_number: int, remote_filename: Optional[str] = None,
-                   remote_path_custom: Optional[str] = None) -> Tuple[bool, str]:
+                   remote_path_custom: Optional[str] = None, progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str]:
         """Upload a save file - rclone handles everything (retries, resume, etc.)
         
         Args:
@@ -279,7 +333,7 @@ class RcloneClient:
             '--progress',  # Show detailed progress
         ]
         
-        success, stdout, stderr = self._run_rclone(command, timeout=600)
+        success, stdout, stderr = self._run_rclone(command, timeout=600, progress_callback=progress_callback)
         
         if success:
             return True, "File uploaded successfully"
@@ -289,7 +343,7 @@ class RcloneClient:
     
     def download_save(self, username: str, game_name: str, remote_filename: str,
                      local_file_path: str, folder_number: int, 
-                     remote_path_custom: Optional[str] = None) -> Tuple[bool, str]:
+                     remote_path_custom: Optional[str] = None, progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str]:
         """Download a save file - rclone handles everything (retries, resume, etc.)
         
         Args:
@@ -331,7 +385,7 @@ class RcloneClient:
             '--progress',  # Show detailed progress
         ]
         
-        success, stdout, stderr = self._run_rclone(command, timeout=600)
+        success, stdout, stderr = self._run_rclone(command, timeout=600, progress_callback=progress_callback)
         
         if success:
             return True, "File downloaded successfully"
@@ -340,7 +394,7 @@ class RcloneClient:
             return False, error_msg
     
     def download_directory(self, remote_path_base: str, local_dir: str,
-                          transfers: int = 10) -> Tuple[bool, str, List[str], List[dict]]:
+                          transfers: int = 10, progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str, List[str], List[dict]]:
         """Download entire directory - rclone handles everything with parallel transfers
         
         Args:
@@ -370,7 +424,7 @@ class RcloneClient:
             '--progress',  # Show detailed progress for each file
         ]
         
-        success, stdout, stderr = self._run_rclone(command, timeout=3600)
+        success, stdout, stderr = self._run_rclone(command, timeout=3600, progress_callback=progress_callback)
         
         if success:
             return True, "Directory downloaded successfully", [], []

@@ -441,8 +441,11 @@ def list_saves(request, game_id):
 @require_http_methods(["GET"])
 def backup_all_saves(request, game_id):
     """
-    Backup all save files for a game into a zip file
+    Backup all save files for a game - queues operation for client worker
     """
+    from SaveNLoad.models.client_worker import ClientWorker
+    from SaveNLoad.models.operation_queue import OperationQueue, OperationType
+    
     user = get_current_user(request)
     if not user:
         return json_response_error('Unauthorized', status=403)
@@ -452,90 +455,31 @@ def backup_all_saves(request, game_id):
     if error_response:
         return error_response
     
-    try:
-        # Get FTP storage instance
-        ftp_storage = get_ftp_storage()
-        
-        # Generate base path for user's game (matching SaveFolder logic)
-        safe_game_name = "".join(c for c in game.name if c.isalnum() or c in (' ', '-', '_')).strip()
-        safe_game_name = safe_game_name.replace(' ', '_')
-        base_path = f"/{user.username}/{safe_game_name}"
-        
-        # Check if base path exists
-        if not ftp_storage.path_exists(base_path):
-            return json_response_error(f'Game directory not found on server: {base_path}', status=404)
-        
-        # List all save folders in base path
-        files_list, dirs_list = ftp_storage.list_directory(base_path)
-        
-        # Filter for save folders (save_1, save_2, etc.)
-        existing_save_folders = []
-        for item in dirs_list:
-            if item.startswith('save_') and item[5:].isdigit():
-                existing_save_folders.append(item)
-        
-        # Sort by number
-        existing_save_folders.sort(key=lambda x: int(x.split('_')[1]))
-        
-        if not existing_save_folders:
-            return json_response_error('No save folders found on server', status=404)
-        
-        # Create zip file using FTP storage
-        files_added = 0
-        zip_buffer = io.BytesIO()
-        
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            # Iterate through each save folder
-            for save_folder_name in existing_save_folders:
-                save_folder_path = f"{base_path}/{save_folder_name}"
-                
-                try:
-                    # List all files recursively in this save folder
-                    all_files, all_dirs = ftp_storage.list_recursive(save_folder_path)
-                    
-                    if not all_files:
-                        continue
-                    
-                    # Download each file and add to zip
-                    for file_info in all_files:
-                        try:
-                            file_path = f"{save_folder_path}/{file_info['name']}"
-                            file_data = ftp_storage.read_file(file_path)
-                            
-                            # Add to zip with folder structure: save_1/filename, save_2/filename, etc.
-                            zip_path = f"{save_folder_name}/{file_info['name']}"
-                            zip_file.writestr(zip_path, file_data)
-                            files_added += 1
-                        except Exception as e:
-                            logger.debug(f"Failed to add file {file_info['name']} to zip: {e}")
-                            continue
-                
-                except Exception as e:
-                    logger.debug(f"Failed to process save folder {save_folder_name}: {e}")
-                    continue
-        
-        logger.info(f"Backup complete. Total files added: {files_added}")
-        if files_added == 0:
-            logger.warning(f"No files were added to backup zip for game {game.name}")
-            return json_response_error('No files found in save folders to backup', status=404)
-        
-        # Prepare zip file for download
-        zip_buffer.seek(0)
-        
-        # Create safe filename
-        safe_game_name = "".join(c for c in game.name if c.isalnum() or c in (' ', '-', '_')).rstrip()
-        zip_filename = f"{safe_game_name}_saves_bak.zip"
-        
-        # Create HTTP response with zip file
-        response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
-        response['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
-        response['Content-Length'] = len(zip_buffer.getvalue())
-        
-        return response
-        
-    except Exception as e:
-        logger.error(f"Failed to create backup: {e}")
-        return json_response_error(f'Failed to create backup: {str(e)}', status=500)
+    # Get client worker or return error
+    client_worker, error_response = get_client_worker_or_error(None)
+    if error_response:
+        return error_response
+    
+    # Create backup operation in queue
+    # Backup doesn't need local_save_path or save_folder_number, but we need to provide local_save_path
+    # Use a placeholder since backup saves to Downloads folder
+    operation = OperationQueue.create_operation(
+        operation_type=OperationType.BACKUP,
+        user=user,
+        game=game,
+        local_save_path='',  # Not used for backup
+        save_folder_number=None,  # Not used for backup
+        smb_path=None,  # Not used for backup
+        client_worker=client_worker
+    )
+    
+    return json_response_success(
+        message='Backup operation queued',
+        data={
+            'operation_id': operation.id,
+            'client_id': client_worker.client_id
+        }
+    )
 
 
 @login_required

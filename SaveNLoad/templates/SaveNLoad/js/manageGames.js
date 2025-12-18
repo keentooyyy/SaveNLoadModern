@@ -952,83 +952,200 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         
-        const url = window.BACKUP_ALL_SAVES_URL_PATTERN.replace('0', gameId);
+        // Get CSRF token
+        const csrfInput = document.querySelector('#gameCsrfForm input[name="csrfmiddlewaretoken"]') ||
+            document.querySelector('#gameManageForm input[name="csrfmiddlewaretoken"]');
+        const csrfToken = csrfInput ? csrfInput.value : null;
         
-        // Show loading toast
-        function showToast(message, type = 'info') {
-            const toast = document.createElement('div');
-            const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-            toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
-            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-            
-            const messageText = document.createTextNode(message);
-            toast.appendChild(messageText);
-            
-            const closeBtn = document.createElement('button');
-            closeBtn.type = 'button';
-            closeBtn.className = 'btn-close';
-            closeBtn.setAttribute('data-bs-dismiss', 'alert');
-            closeBtn.setAttribute('aria-label', 'Close');
-            toast.appendChild(closeBtn);
-            
-            document.body.appendChild(toast);
-
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    toast.remove();
-                }
-            }, 5000);
+        if (!csrfToken) {
+            console.error('CSRF token not found');
+            return;
         }
         
+        const url = window.BACKUP_ALL_SAVES_URL_PATTERN.replace('0', gameId);
+        
         try {
-            showToast('Creating backup... Please wait.', 'info');
-            
             const response = await fetch(url, {
                 method: 'GET',
                 headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': csrfToken
+                },
+                credentials: 'same-origin'
             });
             
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-                showToast(errorData.error || 'Failed to create backup', 'error');
+            const data = await response.json();
+            
+            if (!response.ok || !data.success) {
+                function showToast(message, type = 'info') {
+                    const toast = document.createElement('div');
+                    const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+                    toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
+                    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+                    
+                    const messageText = document.createTextNode(message);
+                    toast.appendChild(messageText);
+                    
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn-close';
+                    closeBtn.setAttribute('data-bs-dismiss', 'alert');
+                    closeBtn.setAttribute('aria-label', 'Close');
+                    toast.appendChild(closeBtn);
+                    
+                    document.body.appendChild(toast);
+
+                    setTimeout(() => {
+                        if (toast.parentNode) {
+                            toast.remove();
+                        }
+                    }, 5000);
+                }
+                showToast(data.error || 'Failed to create backup', 'error');
                 return;
             }
             
-            // Check if response is a zip file
-            const contentType = response.headers.get('content-type');
-            if (contentType && contentType.includes('application/zip')) {
-                // Get filename from Content-Disposition header
-                const contentDisposition = response.headers.get('content-disposition');
-                let filename = 'saves_backup.zip';
-                if (contentDisposition) {
-                    const filenameMatch = contentDisposition.match(/filename="(.+)"/);
-                    if (filenameMatch) {
-                        filename = filenameMatch[1];
+            // If operation ID is returned, show progress modal and poll
+            if (data.operation_id) {
+                const operationId = data.operation_id;
+                
+                // Show progress modal and poll for status
+                const modalData = createProgressModal(operationId, 'Backing Up All Saves', 'backup');
+                pollOperationStatus(
+                    operationId,
+                    modalData,
+                    () => {
+                        // On completion, check result for zip file path
+                        checkBackupResult(operationId);
+                    },
+                    () => {
+                        function showToast(message, type = 'info') {
+                            const toast = document.createElement('div');
+                            const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+                            toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
+                            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+                            
+                            const messageText = document.createTextNode(message);
+                            toast.appendChild(messageText);
+                            
+                            const closeBtn = document.createElement('button');
+                            closeBtn.type = 'button';
+                            closeBtn.className = 'btn-close';
+                            closeBtn.setAttribute('data-bs-dismiss', 'alert');
+                            closeBtn.setAttribute('aria-label', 'Close');
+                            toast.appendChild(closeBtn);
+                            
+                            document.body.appendChild(toast);
+
+                            setTimeout(() => {
+                                if (toast.parentNode) {
+                                    toast.remove();
+                                }
+                            }, 5000);
+                        }
+                        showToast('Backup failed', 'error');
                     }
-                }
-                
-                // Download the zip file
-                const blob = await response.blob();
-                const downloadUrl = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = downloadUrl;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(downloadUrl);
-                
-                showToast('Backup downloaded successfully!', 'success');
+                );
             } else {
-                // Not a zip file, might be an error JSON
-                const data = await response.json();
-                showToast(data.error || 'Failed to create backup', 'error');
+                // Fallback: no operation ID, show toast
+                function showToast(message, type = 'info') {
+                    const toast = document.createElement('div');
+                    const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+                    toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
+                    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+                    
+                    const messageText = document.createTextNode(message);
+                    toast.appendChild(messageText);
+                    
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn-close';
+                    closeBtn.setAttribute('data-bs-dismiss', 'alert');
+                    closeBtn.setAttribute('aria-label', 'Close');
+                    toast.appendChild(closeBtn);
+                    
+                    document.body.appendChild(toast);
+
+                    setTimeout(() => {
+                        if (toast.parentNode) {
+                            toast.remove();
+                        }
+                    }, 5000);
+                }
+                showToast(data.message || 'Backup operation queued', 'info');
             }
+            
         } catch (error) {
             console.error('Error creating backup:', error);
+            function showToast(message, type = 'info') {
+                const toast = document.createElement('div');
+                const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+                toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
+                toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+                
+                const messageText = document.createTextNode(message);
+                toast.appendChild(messageText);
+                
+                const closeBtn = document.createElement('button');
+                closeBtn.type = 'button';
+                closeBtn.className = 'btn-close';
+                closeBtn.setAttribute('data-bs-dismiss', 'alert');
+                closeBtn.setAttribute('aria-label', 'Close');
+                toast.appendChild(closeBtn);
+                
+                document.body.appendChild(toast);
+
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.remove();
+                    }
+                }, 5000);
+            }
             showToast('Error: Failed to create backup. Please try again.', 'error');
+        }
+    }
+    
+    // Helper function to check backup result and show download info
+    async function checkBackupResult(operationId) {
+        try {
+            const urlPattern = window.CHECK_OPERATION_STATUS_URL_PATTERN;
+            const url = urlPattern.replace('/0/', `/${operationId}/`);
+            const response = await fetch(url, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.result_data && data.result_data.zip_path) {
+                    function showToast(message, type = 'info') {
+                        const toast = document.createElement('div');
+                        const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+                        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
+                        toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+                        
+                        const messageText = document.createTextNode(message);
+                        toast.appendChild(messageText);
+                        
+                        const closeBtn = document.createElement('button');
+                        closeBtn.type = 'button';
+                        closeBtn.className = 'btn-close';
+                        closeBtn.setAttribute('data-bs-dismiss', 'alert');
+                        closeBtn.setAttribute('aria-label', 'Close');
+                        toast.appendChild(closeBtn);
+                        
+                        document.body.appendChild(toast);
+
+                        setTimeout(() => {
+                            if (toast.parentNode) {
+                                toast.remove();
+                            }
+                        }, 5000);
+                    }
+                    showToast(`Backup complete! Saved to: ${data.result_data.zip_path}`, 'success');
+                }
+            }
+        } catch (error) {
+            console.error('Error checking backup result:', error);
         }
     }
 

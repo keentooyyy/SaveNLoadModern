@@ -102,6 +102,11 @@ class ClientWorkerServiceRclone:
             if os.path.isdir(local_save_path):
                 print("Starting upload (rclone handling all transfers with parallel workers)...")
                 
+                # Create progress callback if operation_id is available
+                progress_callback = None
+                if operation_id:
+                    progress_callback = lambda current, total, msg: self._update_progress(operation_id, current, total, msg)
+                
                 # Just call rclone - it handles everything
                 success, message, uploaded_files, failed_files = self.rclone_client.upload_directory(
                     local_dir=local_save_path,
@@ -109,7 +114,8 @@ class ClientWorkerServiceRclone:
                     game_name=game_name,
                     folder_number=save_folder_number,
                     remote_path_custom=remote_path,
-                    transfers=10  # Parallel transfers
+                    transfers=10,  # Parallel transfers
+                    progress_callback=progress_callback
                 )
                 
                 if success:
@@ -130,13 +136,20 @@ class ClientWorkerServiceRclone:
             else:
                 # Single file upload
                 print(f"Uploading single file: {os.path.basename(local_save_path)}")
+                
+                # Create progress callback if operation_id is available
+                progress_callback = None
+                if operation_id:
+                    progress_callback = lambda current, total, msg: self._update_progress(operation_id, current, total, msg)
+                
                 success, message = self.rclone_client.upload_save(
                     username=username,
                     game_name=game_name,
                     local_file_path=local_save_path,
                     folder_number=save_folder_number,
                     remote_filename=os.path.basename(local_save_path),
-                    remote_path_custom=remote_path
+                    remote_path_custom=remote_path,
+                    progress_callback=progress_callback
                 )
                 
                 if success:
@@ -187,11 +200,17 @@ class ClientWorkerServiceRclone:
             
             print("Starting download (rclone handling all transfers with parallel workers)...")
             
+            # Create progress callback if operation_id is available
+            progress_callback = None
+            if operation_id:
+                progress_callback = lambda current, total, msg: self._update_progress(operation_id, current, total, msg)
+            
             # Just call rclone - it handles everything
             success, message, downloaded_files, failed_files = self.rclone_client.download_directory(
                 remote_path_base=remote_path_base,
                 local_dir=local_save_path,
-                transfers=10  # Parallel transfers
+                transfers=10,  # Parallel transfers
+                progress_callback=progress_callback
             )
             
             if success:
@@ -293,11 +312,17 @@ class ClientWorkerServiceRclone:
             print(f"Downloading from FTP to temp directory: {temp_dir}")
             
             try:
+                # Create progress callback if operation_id is available
+                progress_callback = None
+                if operation_id:
+                    progress_callback = lambda current, total, msg: self._update_progress(operation_id, current, total, msg)
+                
                 # Download all saves using rclone
                 success, message, downloaded_files, failed_files = self.rclone_client.download_directory(
                     remote_path_base=remote_path_base,
                     local_dir=temp_dir,
-                    transfers=10
+                    transfers=10,
+                    progress_callback=progress_callback
                 )
                 
                 if not success:
@@ -502,6 +527,11 @@ class ClientWorkerServiceRclone:
         
         if op_type in ['save', 'load', 'list', 'delete'] and save_folder_number is None:
             print(f"Error: Operation missing required information")
+            return
+        
+        # Backup doesn't require save_folder_number
+        if op_type == 'backup' and not username:
+            print(f"Error: Backup operation missing username")
             return
         
         if op_type == 'save':

@@ -29,12 +29,14 @@ class OperationType:
     LOAD = 'load'
     LIST = 'list'
     DELETE = 'delete'
+    BACKUP = 'backup'
     
     CHOICES = [
         (SAVE, 'Save'),
         (LOAD, 'Load'),
         (LIST, 'List'),
         (DELETE, 'Delete'),
+        (BACKUP, 'Backup'),
     ]
 
 
