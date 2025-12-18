@@ -117,5 +117,11 @@ cython_debug/
 *.manifest.bak
 # Compiled executables in client_worker (dist/ already covers dist/ directory)
 client_worker/*.exe
+# Rclone executable and config (contains sensitive credentials)
+client_worker/rclone/rclone.exe
+client_worker/rclone/rclone.conf
+client_worker/rclone/*.txt
+client_worker/rclone/*.html
+client_worker/rclone/*.1
 # Keep .spec and .manifest files in version control (they're configuration)
 FACEBOOK_POST.md

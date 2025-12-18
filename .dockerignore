@@ -24,4 +24,6 @@ htmlcov/
 .pytest_cache/
 # package-lock.json is optional - npm will generate it during build if missing
 package-lock.json
+# Rclone executable and config (not needed in Docker)
+client_worker/rclone/
 

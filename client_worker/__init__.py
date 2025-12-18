@@ -1,5 +1,5 @@
-from client_worker.client_worker import SaveNLoadClient
-from client_worker.ftp_client import FTPClient
+from client_worker.client_service_rclone import ClientWorkerServiceRclone
+from client_worker.rclone_client import RcloneClient
 
-__all__ = ['SaveNLoadClient', 'FTPClient']
+__all__ = ['ClientWorkerServiceRclone', 'RcloneClient']
 

@@ -14,20 +14,19 @@ CLIENT_WORKER_DIR = SPEC_DIR
 block_cipher = None
 
 a = Analysis(
-    [str(CLIENT_WORKER_DIR / 'client_service.py')],
+    [str(CLIENT_WORKER_DIR / 'client_service_rclone.py')],
     pathex=[str(CLIENT_WORKER_DIR)],
-    binaries=[],
+    binaries=[
+        (str(CLIENT_WORKER_DIR / 'rclone' / 'rclone.exe'), 'rclone'),  # Include rclone executable
+    ],
     datas=[
         (str(CLIENT_WORKER_DIR / 'requirements.txt'), '.'),
+        (str(CLIENT_WORKER_DIR / 'rclone' / 'rclone.conf'), 'rclone'),  # Include rclone config
     ],
     hiddenimports=[
         'client_worker',
-        'client_worker.client_service',
-        'client_worker.client_worker',
-        'client_worker.ftp_client',
-        'ftputil',
-        'ftputil.session',
-        'ftputil.session.session_factory',
+        'client_worker.client_service_rclone',
+        'client_worker.rclone_client',
         'requests',
         'requests.packages.urllib3',
         'requests.packages.urllib3.util',
@@ -39,6 +38,8 @@ a = Analysis(
         'webbrowser',
         'platform',
         'uuid',
+        'subprocess',
+        'json',
     ],
     hookspath=[],
     hooksconfig={},
