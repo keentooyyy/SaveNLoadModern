@@ -256,11 +256,11 @@ def complete_operation(request, operation_id):
             
             operation.mark_failed(error_message)
             
-            # Cleanup: If SAVE operation failed due to missing local path, delete the save folder
-            # This prevents orphaned save folders when user provides invalid path
+            # Cleanup: If SAVE operation failed due to missing local path or empty saves, delete the save folder
+            # This prevents orphaned save folders when user provides invalid path or empty saves
             if operation.operation_type == 'save' and operation.save_folder_number:
                 error_lower = error_message.lower() if error_message else ''
-                # Check if error is about local path not existing
+                # Check if error is about local path not existing or empty saves
                 path_errors = [
                     'does not exist',
                     'not found',
@@ -268,7 +268,16 @@ def complete_operation(request, operation_id):
                     'local file not found',
                     'local path does not exist',
                     "don't have any save files",
-                    "haven't played the game"
+                    "haven't played the game",
+                    'empty',
+                    'is empty',
+                    'no files',
+                    'no files were transferred',
+                    'no files to save',
+                    '0 bytes',
+                    'nothing to save',
+                    'contains no valid files',
+                    'appears to be empty'
                 ]
                 if any(err in error_lower for err in path_errors):
                     from SaveNLoad.models.save_folder import SaveFolder
@@ -286,7 +295,7 @@ def complete_operation(request, operation_id):
                             if save_folder.created_at >= time_threshold:
                                 # Delete the save folder
                                 save_folder.delete()
-                                logger.info(f"Deleted save folder {save_folder.folder_number} due to failed save operation (path error: {error_message})")
+                                logger.info(f"Deleted save folder {save_folder.folder_number} due to failed save operation (error: {error_message})")
                     except Exception as e:
                         logger.warning(f"Failed to cleanup save folder after failed operation: {e}")
         

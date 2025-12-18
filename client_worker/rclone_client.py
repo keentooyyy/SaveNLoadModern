@@ -228,6 +228,53 @@ class RcloneClient:
         else:
             return f"{self.remote_name}:/"
     
+    def _parse_bytes_transferred(self, output: str) -> int:
+        """Parse total bytes transferred from rclone output
+        
+        Looks for patterns like:
+        - "Transferred: 0 B / 0 B" (empty)
+        - "Transferred: 17.725 MiB / 17.725 MiB" (with data)
+        - "Transferred: 1.234 KiB / 1.234 KiB"
+        
+        Returns:
+            Total bytes transferred (0 if empty or not found)
+        """
+        if not output:
+            return 0
+        
+        # Pattern: "Transferred: X.XXX Unit / Y.YYY Unit"
+        # We want the second value (total transferred)
+        pattern = r'Transferred:\s+[\d.]+\s+(\w+)\s+/\s+([\d.]+)\s+(\w+)'
+        matches = re.findall(pattern, output)
+        
+        if not matches:
+            # Try simpler pattern: "Transferred: 0 B / 0 B"
+            simple_pattern = r'Transferred:\s+(\d+)\s+B\s+/\s+(\d+)\s+B'
+            simple_matches = re.findall(simple_pattern, output)
+            if simple_matches:
+                # Return the second value (total)
+                return int(simple_matches[-1][1])
+            return 0
+        
+        # Get the last match (most recent stats)
+        last_match = matches[-1]
+        unit = last_match[2].upper()
+        value = float(last_match[1])
+        
+        # Convert to bytes
+        multipliers = {
+            'B': 1,
+            'KB': 1024,
+            'KIB': 1024,
+            'MB': 1024 * 1024,
+            'MIB': 1024 * 1024,
+            'GB': 1024 * 1024 * 1024,
+            'GIB': 1024 * 1024 * 1024,
+        }
+        
+        multiplier = multipliers.get(unit, 1)
+        return int(value * multiplier)
+    
     def _get_full_path(self, username: str, game_name: str, folder_number: int, 
                       remote_path: str = '') -> str:
         """Build full FTP path for save folder"""
@@ -246,7 +293,7 @@ class RcloneClient:
     
     def upload_directory(self, local_dir: str, username: str, game_name: str,
                         folder_number: int, remote_path_custom: Optional[str] = None,
-                        transfers: int = 10, progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str, List[str], List[dict]]:
+                        transfers: int = 10, progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str, List[str], List[dict], int]:
         """Upload entire directory - rclone handles everything with parallel transfers
         
         Args:
@@ -258,10 +305,10 @@ class RcloneClient:
             transfers: Number of parallel transfers (default: 10)
         
         Returns:
-            Tuple of (success, message, uploaded_files, failed_files)
+            Tuple of (success, message, uploaded_files, failed_files, bytes_transferred)
         """
         if not os.path.exists(local_dir):
-            return False, f"Local directory not found: {local_dir}", [], []
+            return False, f"Local directory not found: {local_dir}", [], [], 0
         
         # Build remote path
         if remote_path_custom:
@@ -284,16 +331,19 @@ class RcloneClient:
         
         success, stdout, stderr = self._run_rclone(command, timeout=3600, progress_callback=progress_callback)
         
+        # Parse bytes transferred from output
+        bytes_transferred = self._parse_bytes_transferred(stdout)
+        
         if success:
             # Parse output to get file list (rclone doesn't provide this directly, but we can infer from stats)
-            return True, "Directory uploaded successfully", [], []
+            return True, "Directory uploaded successfully", [], [], bytes_transferred
         else:
             error_msg = stderr.strip() or stdout.strip() or "Upload failed"
-            return False, error_msg, [], []
+            return False, error_msg, [], [], bytes_transferred
     
     def upload_save(self, username: str, game_name: str, local_file_path: str,
                    folder_number: int, remote_filename: Optional[str] = None,
-                   remote_path_custom: Optional[str] = None, progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str]:
+                   remote_path_custom: Optional[str] = None, progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str, int]:
         """Upload a save file - rclone handles everything (retries, resume, etc.)
         
         Args:
@@ -305,10 +355,10 @@ class RcloneClient:
             remote_path_custom: Optional custom remote path
         
         Returns:
-            Tuple of (success, message)
+            Tuple of (success, message, bytes_transferred)
         """
         if not os.path.exists(local_file_path):
-            return False, f"Local file not found: {local_file_path}"
+            return False, f"Local file not found: {local_file_path}", 0
         
         if remote_filename is None:
             remote_filename = os.path.basename(local_file_path)
@@ -335,11 +385,14 @@ class RcloneClient:
         
         success, stdout, stderr = self._run_rclone(command, timeout=600, progress_callback=progress_callback)
         
+        # Parse bytes transferred from output
+        bytes_transferred = self._parse_bytes_transferred(stdout)
+        
         if success:
-            return True, "File uploaded successfully"
+            return True, "File uploaded successfully", bytes_transferred
         else:
             error_msg = stderr.strip() or stdout.strip() or "Upload failed"
-            return False, error_msg
+            return False, error_msg, bytes_transferred
     
     def download_save(self, username: str, game_name: str, remote_filename: str,
                      local_file_path: str, folder_number: int, 

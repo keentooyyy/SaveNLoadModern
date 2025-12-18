@@ -100,6 +100,19 @@ class ClientWorkerServiceRclone:
         
         try:
             if os.path.isdir(local_save_path):
+                # Check if directory is empty
+                file_count = 0
+                for root, dirs, files in os.walk(local_save_path):
+                    file_count += len(files)
+                    if file_count > 0:
+                        break  # Found at least one file, no need to continue
+                
+                if file_count == 0:
+                    return {
+                        'success': False,
+                        'error': 'The save directory is empty. There are no files to save. Make sure you have played the game and saved your progress.'
+                    }
+                
                 print("Starting upload (rclone handling all transfers with parallel workers)...")
                 
                 # Create progress callback if operation_id is available
@@ -108,7 +121,7 @@ class ClientWorkerServiceRclone:
                     progress_callback = lambda current, total, msg: self._update_progress(operation_id, current, total, msg)
                 
                 # Just call rclone - it handles everything
-                success, message, uploaded_files, failed_files = self.rclone_client.upload_directory(
+                success, message, uploaded_files, failed_files, bytes_transferred = self.rclone_client.upload_directory(
                     local_dir=local_save_path,
                     username=username,
                     game_name=game_name,
@@ -119,6 +132,13 @@ class ClientWorkerServiceRclone:
                 )
                 
                 if success:
+                    # Check if anything was actually transferred
+                    if bytes_transferred == 0:
+                        return {
+                            'success': False,
+                            'error': 'No files were transferred. The save directory appears to be empty or contains no valid files to upload.'
+                        }
+                    
                     print(f"Upload complete")
                     return {
                         'success': True,
@@ -134,7 +154,14 @@ class ClientWorkerServiceRclone:
                         'failed_files': failed_files
                     }
             else:
-                # Single file upload
+                # Single file upload - check if file is empty
+                file_size = os.path.getsize(local_save_path)
+                if file_size == 0:
+                    return {
+                        'success': False,
+                        'error': 'The save file is empty (0 bytes). There is nothing to save.'
+                    }
+                
                 print(f"Uploading single file: {os.path.basename(local_save_path)}")
                 
                 # Create progress callback if operation_id is available
@@ -142,7 +169,7 @@ class ClientWorkerServiceRclone:
                 if operation_id:
                     progress_callback = lambda current, total, msg: self._update_progress(operation_id, current, total, msg)
                 
-                success, message = self.rclone_client.upload_save(
+                success, message, bytes_transferred = self.rclone_client.upload_save(
                     username=username,
                     game_name=game_name,
                     local_file_path=local_save_path,
@@ -153,6 +180,13 @@ class ClientWorkerServiceRclone:
                 )
                 
                 if success:
+                    # Check if anything was actually transferred
+                    if bytes_transferred == 0:
+                        return {
+                            'success': False,
+                            'error': 'No data was transferred. The save file appears to be empty.'
+                        }
+                    
                     print(f"Upload complete: {os.path.basename(local_save_path)}")
                     return {'success': True, 'message': message}
                 else:
