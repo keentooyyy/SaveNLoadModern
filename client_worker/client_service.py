@@ -64,15 +64,21 @@ class ClientWorkerService:
         
         
         # Setup SMB client
-        smb_server = os.getenv('SMB_SERVER')
-        smb_share = os.getenv('SMB_SHARE', 'SaveNLoad')
-        smb_username = os.getenv('SMB_USERNAME')
-        smb_password = os.getenv('SMB_PASSWORD')
-        smb_domain = os.getenv('SMB_DOMAIN')  # Optional
+        smb_server = os.getenv('SMB_SERVER', '').strip()
+        smb_share = os.getenv('SMB_SHARE', 'SaveNLoad').strip()
+        smb_username = os.getenv('SMB_USERNAME', '').strip()
+        smb_password = os.getenv('SMB_PASSWORD', '').strip()
+        smb_domain = os.getenv('SMB_DOMAIN', '').strip() if os.getenv('SMB_DOMAIN') else None
         smb_port = int(os.getenv('SMB_PORT', '445'))
+        
+        # Sanitize share name - remove any control characters that could corrupt paths
+        smb_share = smb_share.replace('\n', '').replace('\r', '').replace('\t', '')
         
         if not all([smb_server, smb_username, smb_password]):
             raise ValueError("SMB credentials must be set in environment variables (SMB_SERVER, SMB_SHARE, SMB_USERNAME, SMB_PASSWORD)")
+        
+        # Debug: Print share name to verify it's correct
+        print(f"Reading SMB config - Share: {repr(smb_share)} (length: {len(smb_share)})")
         
         self.smb_client = SMBClient(
             server=smb_server,
@@ -232,68 +238,68 @@ class ClientWorkerService:
                     # SMB doesn't need connection pooling - smbclient handles it automatically
                     
                     while True:
-                            # Get file from queue
-                            file_info = file_queue.get()
-                            if file_info is None:  # Sentinel - no more files
-                                file_queue.task_done()
-                                break  # Exit loop when sentinel received
+                        # Get file from queue
+                        file_info = file_queue.get()
+                        if file_info is None:  # Sentinel - no more files
+                            file_queue.task_done()
+                            break  # Exit loop when sentinel received
+                        
+                        local_file, remote_filename = file_info
+                        try:
+                            # SMB is fast - no need for connection pooling
+                            success, message = self.smb_client.upload_save(
+                                username=username,
+                                game_name=game_name,
+                                local_file_path=local_file,
+                                folder_number=save_folder_number,
+                                remote_filename=remote_filename,
+                                ftp_path=ftp_path
+                            )
                             
-                            local_file, remote_filename = file_info
-                            try:
-                                # SMB is fast - no need for connection pooling
-                                success, message = self.smb_client.upload_save(
-                                    username=username,
-                                    game_name=game_name,
-                                    local_file_path=local_file,
-                                    folder_number=save_folder_number,
-                                    remote_filename=remote_filename,
-                                    ftp_path=ftp_path
-                                )
-                                
-                                # Update progress
-                                with progress_lock:
-                                    completed_count[0] += 1
-                                    current = completed_count[0]
-                                    total = total_files[0]
-                                    # Show filename (truncate if too long)
-                                    display_name = remote_filename if len(remote_filename) <= 60 else remote_filename[:57] + "..."
-                                    if success:
-                                        if total > 0:
-                                            print(f"  [{current}/{total}] Uploaded: {display_name}")
-                                            if operation_id:
-                                                self._update_progress(operation_id, current, total, f"Uploaded: {display_name}")
-                                        else:
-                                            print(f"  [{current}] Uploaded: {display_name}")
-                                            if operation_id:
-                                                self._update_progress(operation_id, current, 0, f"Uploaded: {display_name}")
+                            # Update progress
+                            with progress_lock:
+                                completed_count[0] += 1
+                                current = completed_count[0]
+                                total = total_files[0]
+                                # Show filename (truncate if too long)
+                                display_name = remote_filename if len(remote_filename) <= 60 else remote_filename[:57] + "..."
+                                if success:
+                                    if total > 0:
+                                        print(f"  [{current}/{total}] Uploaded: {display_name}")
+                                        if operation_id:
+                                            self._update_progress(operation_id, current, total, f"Uploaded: {display_name}")
                                     else:
-                                        # Show error immediately - upload_save returned success=False
-                                        error_msg = message if message else "Upload failed"
-                                        if total > 0:
-                                            print(f"  [{current}/{total}] FAILED: {display_name}")
-                                            print(f"      Error: {error_msg}")
-                                            if operation_id:
-                                                self._update_progress(operation_id, current, total, f"Failed: {display_name}")
-                                        else:
-                                            print(f"  [{current}] FAILED: {display_name}")
-                                            print(f"      Error: {error_msg}")
-                                            if operation_id:
-                                                self._update_progress(operation_id, current, 0, f"Failed: {display_name}")
-                                
-                                file_queue.task_done()
-                                worker_results.append((success, remote_filename, message))
-                            except Exception as e:
-                                with progress_lock:
-                                    completed_count[0] += 1
-                                    current = completed_count[0]
-                                    total = total_files[0]
-                                    print(f"  [{current}/{total if total > 0 else '?'}] ERROR uploading {remote_filename}: {e}")
-                                    if operation_id:
-                                        self._update_progress(operation_id, current, total if total > 0 else 0, f"Error: {remote_filename}")
-                                file_queue.task_done()
-                                worker_results.append((False, remote_filename, str(e)))
-                
-                return worker_results
+                                        print(f"  [{current}] Uploaded: {display_name}")
+                                        if operation_id:
+                                            self._update_progress(operation_id, current, 0, f"Uploaded: {display_name}")
+                                else:
+                                    # Show error immediately - upload_save returned success=False
+                                    error_msg = message if message else "Upload failed"
+                                    if total > 0:
+                                        print(f"  [{current}/{total}] FAILED: {display_name}")
+                                        print(f"      Error: {error_msg}")
+                                        if operation_id:
+                                            self._update_progress(operation_id, current, total, f"Failed: {display_name}")
+                                    else:
+                                        print(f"  [{current}] FAILED: {display_name}")
+                                        print(f"      Error: {error_msg}")
+                                        if operation_id:
+                                            self._update_progress(operation_id, current, 0, f"Failed: {display_name}")
+                            
+                            file_queue.task_done()
+                            worker_results.append((success, remote_filename, message))
+                        except Exception as e:
+                            with progress_lock:
+                                completed_count[0] += 1
+                                current = completed_count[0]
+                                total = total_files[0]
+                                print(f"  [{current}/{total if total > 0 else '?'}] ERROR uploading {remote_filename}: {e}")
+                                if operation_id:
+                                    self._update_progress(operation_id, current, total if total > 0 else 0, f"Error: {remote_filename}")
+                            file_queue.task_done()
+                            worker_results.append((False, remote_filename, str(e)))
+                    
+                    return worker_results
                 
                 # Check if we found any files
                 # Wait a moment for collector to start finding files
