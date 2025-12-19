@@ -365,7 +365,23 @@ document.addEventListener('DOMContentLoaded', function () {
                     })
                 });
                 
+                // Check if response is JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    // Server returned HTML (likely an error page)
+                    const text = await response.text();
+                    console.error('Server returned non-JSON response:', text.substring(0, 200));
+                    showToast(`Server error (${response.status}): Please check the console for details.`, 'error');
+                    return;
+                }
+                
                 const data = await response.json();
+                
+                if (!response.ok) {
+                    // HTTP error status
+                    showToast(data.error || `Failed to create game (${response.status})`, 'error');
+                    return;
+                }
                 
                 if (data.success) {
                     showToast(data.message || 'Game created successfully!', 'success');
@@ -380,7 +396,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             } catch (error) {
                 console.error('Error creating game:', error);
-                showToast('Error: Failed to create game. Please try again.', 'error');
+                if (error instanceof SyntaxError && error.message.includes('JSON')) {
+                    showToast('Server returned invalid response. Please check the console.', 'error');
+                } else {
+                    showToast('Error: Failed to create game. Please try again.', 'error');
+                }
             } finally {
                 // Restore button safely
                 saveGameBtn.disabled = false;

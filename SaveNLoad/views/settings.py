@@ -47,7 +47,6 @@ def user_settings_view(request):
 
 
 @login_required
-@client_worker_required
 @require_http_methods(["POST"])
 def create_game(request):
     """Create a new game (AJAX endpoint - Admin only)"""
@@ -56,47 +55,51 @@ def create_game(request):
     if error_response:
         return error_response
     
-    # Handle both form data and JSON
-    if request.headers.get('Content-Type') == 'application/json':
-        data, error_response = parse_json_body(request)
-        if error_response:
-            return error_response
-        name = (data.get('name') or '').strip()
-        save_file_location = (data.get('save_file_location') or '').strip()
-        banner = (data.get('banner') or '').strip()
-    else:
-        name = request.POST.get('name', '').strip()
-        save_file_location = request.POST.get('save_file_location', '').strip()
-        banner = request.POST.get('banner', '').strip()
-    
-    if not name or not save_file_location:
-        return json_response_error('Game name and save file location are required.', status=400)
-    
-    # Check if game with same name already exists
-    if Game.objects.filter(name=name).exists():
-        return json_response_error('A game with this name already exists.', status=400)
-    
-    # Create new game
-    game_data = {
-        'name': name,
-        'save_file_location': save_file_location,
-    }
-    if banner:
-        game_data['banner'] = banner
-    
-    game = Game.objects.create(**game_data)
-    
-    return json_response_success(
-        message=f'Game "{game.name}" created successfully!',
-        data={
-            'game': {
-                'id': game.id,
-                'name': game.name,
-                'banner': game.banner or '',
-                'save_file_location': game.save_file_location,
-            }
+    try:
+        # Handle both form data and JSON
+        if request.headers.get('Content-Type') == 'application/json':
+            data, error_response = parse_json_body(request)
+            if error_response:
+                return error_response
+            name = (data.get('name') or '').strip()
+            save_file_location = (data.get('save_file_location') or '').strip()
+            banner = (data.get('banner') or '').strip()
+        else:
+            name = request.POST.get('name', '').strip()
+            save_file_location = request.POST.get('save_file_location', '').strip()
+            banner = request.POST.get('banner', '').strip()
+        
+        if not name or not save_file_location:
+            return json_response_error('Game name and save file location are required.', status=400)
+        
+        # Check if game with same name already exists
+        if Game.objects.filter(name=name).exists():
+            return json_response_error('A game with this name already exists.', status=400)
+        
+        # Create new game
+        game_data = {
+            'name': name,
+            'save_file_location': save_file_location,
         }
-    )
+        if banner:
+            game_data['banner'] = banner
+        
+        game = Game.objects.create(**game_data)
+        
+        return json_response_success(
+            message=f'Game "{game.name}" created successfully!',
+            data={
+                'game': {
+                    'id': game.id,
+                    'name': game.name,
+                    'banner': game.banner or '',
+                    'save_file_location': game.save_file_location,
+                }
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error creating game: {str(e)}", exc_info=True)
+        return json_response_error(f'Failed to create game: {str(e)}', status=500)
 
 
 @login_required
