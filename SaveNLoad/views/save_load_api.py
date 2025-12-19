@@ -22,7 +22,6 @@ import tempfile
 import io
 from pathlib import Path
 from django.conf import settings
-from SaveNLoad.utils.ftp_storage import get_ftp_storage
 
 logger = logging.getLogger(__name__)
 

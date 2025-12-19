@@ -47,9 +47,6 @@ services:
       - DEFAULT_ADMIN_EMAIL=${DEFAULT_ADMIN_EMAIL}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD}
       - RAWG=${RAWG}
-      - FTP_HOST=${FTP_HOST}
-      - FTP_USERNAME=${FTP_USERNAME}
-      - FTP_PASSWORD=${FTP_PASSWORD}
     depends_on:
       db:
         condition: service_healthy

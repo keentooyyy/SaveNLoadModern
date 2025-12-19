@@ -92,10 +92,8 @@ DEFAULT_ADMIN_PASSWORD=admin123
 # RAWG API (Required for game search)
 RAWG=your-rawg-api-key-here
 
-# FTP Configuration (for client worker and backend)
-FTP_HOST=192.168.88.101
-FTP_USERNAME=savenload
-FTP_PASSWORD=your-ftp-password
+# Note: File storage is handled by the client worker via rclone
+# Configure rclone in client_worker/rclone/rclone.conf
 ```
 
 > **Note:** For Gmail, you need to generate an [App Password](https://support.google.com/accounts/answer/185833) instead of your regular password. For production, set `DEBUG=False` and configure `ALLOWED_HOSTS` appropriately.
@@ -241,8 +239,7 @@ SaveNLoadModern/
 │   │   └── base.html          # Base template
 │   │
 │   ├── utils/                  # Utility functions
-│   │   ├── email_service.py   # Email sending utilities
-│   │   └── ftp_storage.py     # FTP storage backend using rclone
+│   │   └── email_service.py   # Email sending utilities
 │   │
 │   └── management/             # Management commands
 │       └── commands/           # Custom commands
