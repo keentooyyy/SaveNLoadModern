@@ -145,20 +145,26 @@ def get_pending_operations(request, client_id):
     try:
         worker = ClientWorker.objects.get(client_id=client_id)
         
-        # Get pending operations assigned to this worker
-        operations = OperationQueue.get_pending_operations_for_worker(worker)
-        
-        # Also get unassigned operations and assign them to this worker
-        from SaveNLoad.models.operation_queue import OperationQueue
-        unassigned = OperationQueue.objects.filter(
-            status=OperationStatus.PENDING,
-            client_worker__isnull=True
-        ).order_by('created_at')
-        
-        # Assign unassigned operations to this worker
-        for op in unassigned:
-            op.assign_to_worker(worker)
-            operations = list(operations) + [op]
+        # Get pending operations assigned to this worker ONLY
+        # Operations must be pre-assigned when created to prevent race conditions
+        # Use select_for_update with skip_locked to prevent concurrent access
+        from django.db import transaction
+        with transaction.atomic():
+            # Lock and get pending operations for this worker atomically
+            operations = list(OperationQueue.objects.select_for_update(skip_locked=True).filter(
+                client_worker=worker,
+                status=OperationStatus.PENDING
+            ).order_by('created_at'))
+            
+            # Mark operations as in_progress atomically
+            if operations:
+                operation_ids = [op.id for op in operations]
+                OperationQueue.objects.filter(id__in=operation_ids).update(
+                    status=OperationStatus.IN_PROGRESS,
+                    started_at=timezone.now()
+                )
+                # Re-fetch to get updated objects with new status
+                operations = list(OperationQueue.objects.filter(id__in=operation_ids))
         
         operations_list = []
         for op in operations:

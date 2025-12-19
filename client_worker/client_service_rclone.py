@@ -613,7 +613,12 @@ class ClientWorkerServiceRclone:
         op_type_display = op_type.capitalize()
         print(f"\nProcessing: {op_type_display} operation for {game_name}")
         
-        if op_type in ['save', 'load', 'list', 'delete'] and save_folder_number is None:
+        # For delete operations, remote_path is sufficient (can delete entire directories)
+        if op_type == 'delete' and not remote_path:
+            print(f"Error: Delete operation missing remote_path")
+            return
+        
+        if op_type in ['save', 'load', 'list'] and save_folder_number is None:
             print(f"Error: Operation missing required information")
             return
         
@@ -629,6 +634,8 @@ class ClientWorkerServiceRclone:
         elif op_type == 'list':
             result = self.list_saves(game_id, username, game_name, save_folder_number, remote_path)
         elif op_type == 'delete':
+            # For delete operations, remote_path is required and sufficient
+            # save_folder_number is optional (used for individual save folder deletes)
             result = self.delete_save_folder(game_id, username, game_name, save_folder_number, remote_path, operation_id)
         elif op_type == 'backup':
             result = self.backup_all_saves(game_id, username, game_name, operation_id)

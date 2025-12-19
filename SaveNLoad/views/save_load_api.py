@@ -59,9 +59,9 @@ def save_game(request, game_id):
     if not local_save_path or not local_save_path.strip():
         return json_response_error('Local save path is required', status=400)
     
-    # Get client worker or return error
+    # Get client worker for this user (prioritizes user's worker to prevent collisions)
     client_id = data.get('client_id')
-    client_worker, error_response = get_client_worker_or_error(client_id)
+    client_worker, error_response = get_client_worker_or_error(client_id, user=user)
     if error_response:
         return error_response
     
@@ -162,9 +162,9 @@ def load_game(request, game_id):
     if not save_folder.smb_path:
         return json_response_error('Save folder path is missing', status=500)
     
-    # Get client worker or return error
+    # Get client worker for this user (prioritizes user's worker to prevent collisions)
     client_id = data.get('client_id')
-    client_worker, error_response = get_client_worker_or_error(client_id)
+    client_worker, error_response = get_client_worker_or_error(client_id, user=user)
     if error_response:
         return error_response
     
@@ -276,10 +276,10 @@ def delete_save_folder(request, game_id, folder_number):
         if not save_folder.smb_path:
             return json_response_error('Save folder path is missing', status=500)
         
-        # Get client worker
-        client_worker = ClientWorker.get_any_active_worker()
-        if not client_worker:
-            return json_response_error('No active client worker available', status=503)
+        # Get client worker for this user (prioritizes user's worker to prevent collisions)
+        client_worker, error_response = get_client_worker_or_error(None, user=user)
+        if error_response:
+            return error_response
         
         # All validations passed - create DELETE operation (with client_worker set but status PENDING)
         operation = OperationQueue.create_operation(
@@ -391,10 +391,10 @@ def list_saves(request, game_id):
     if not save_folder.smb_path:
         return json_response_error('Save folder SMB path is missing', status=500)
     
-    # Get client worker
-    client_worker = ClientWorker.get_any_active_worker()
-    if not client_worker:
-        return json_response_error('No active client worker available', status=503)
+    # Get client worker for this user (prioritizes user's worker to prevent collisions)
+    client_worker, error_response = get_client_worker_or_error(None, user=user)
+    if error_response:
+        return error_response
     
     try:
         # All validations passed - create LIST operation (with client_worker set but status PENDING)
@@ -454,8 +454,8 @@ def backup_all_saves(request, game_id):
     if error_response:
         return error_response
     
-    # Get client worker or return error
-    client_worker, error_response = get_client_worker_or_error(None)
+    # Get client worker for this user (prioritizes user's worker to prevent collisions)
+    client_worker, error_response = get_client_worker_or_error(None, user=user)
     if error_response:
         return error_response
     
@@ -507,10 +507,10 @@ def delete_all_saves(request, game_id):
         if not save_folders.exists():
             return json_response_error('No save folders found for this game', status=404)
         
-        # Get client worker
-        client_worker = ClientWorker.get_any_active_worker()
-        if not client_worker:
-            return json_response_error('No active client worker available', status=503)
+        # Get client worker for this user (prioritizes user's worker to prevent collisions)
+        client_worker, error_response = get_client_worker_or_error(None, user=user)
+        if error_response:
+            return error_response
         
         # Create DELETE operations for all save folders
         operation_ids = []
@@ -614,8 +614,8 @@ def open_save_location(request, game_id):
     if error_response:
         return error_response
     
-    # Get client worker or return error
-    client_worker, error_response = get_client_worker_or_error(None)
+    # Get client worker for this user (prioritizes user's worker to prevent collisions)
+    client_worker, error_response = get_client_worker_or_error(None, user=user)
     if error_response:
         return error_response
     

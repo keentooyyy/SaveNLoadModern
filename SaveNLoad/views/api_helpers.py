@@ -55,10 +55,13 @@ def get_game_or_error(game_id):
         return None, json_response_error('Game not found', status=404)
 
 
-def get_client_worker_or_error(client_id=None):
+def get_client_worker_or_error(client_id=None, user=None):
     """
-    Get available client worker or return error response
+    Get client worker for a user or return error response
+    Priority: 1) specified client_id, 2) user's worker (from recent operations)
     Returns: (client_worker_object, error_response_or_none)
+    
+    Note: App requires workers to function, so we don't fall back to "any worker"
     """
     if client_id:
         # Use specified client worker
@@ -69,21 +72,40 @@ def get_client_worker_or_error(client_id=None):
             return client_worker, None
         except ClientWorker.DoesNotExist:
             return None, json_response_error('Specified client worker not found', status=400)
-    else:
-        # Get any available worker (optimized - single query)
-        timeout_threshold = timezone.now() - timedelta(seconds=30)
-        client_worker = ClientWorker.objects.filter(
-            is_active=True,
-            last_heartbeat__gte=timeout_threshold
-        ).order_by('-last_heartbeat').first()
+    
+    # Try to find the user's worker (the one that has been handling their operations)
+    if user:
+        from SaveNLoad.models.operation_queue import OperationQueue
         
-        if not client_worker:
-            return None, JsonResponse({
-                'error': 'No client worker available',
-                'requires_worker': True
-            }, status=503)
+        # Find the worker that has handled the most operations for this user
+        recent_operations = OperationQueue.objects.filter(
+            user=user,
+            client_worker__isnull=False
+        ).exclude(client_worker=None).order_by('-created_at')[:50]
         
-        return client_worker, None
+        if recent_operations.exists():
+            # Count operations per worker
+            worker_counts = {}
+            for op in recent_operations:
+                if op.client_worker and op.client_worker.is_online():
+                    worker_id = op.client_worker.id
+                    worker_counts[worker_id] = worker_counts.get(worker_id, 0) + 1
+            
+            if worker_counts:
+                # Get the worker with the most operations
+                most_common_worker_id = max(worker_counts.items(), key=lambda x: x[1])[0]
+                try:
+                    client_worker = ClientWorker.objects.get(id=most_common_worker_id, is_active=True)
+                    if client_worker.is_online():
+                        return client_worker, None
+                except ClientWorker.DoesNotExist:
+                    pass
+    
+    # No worker found - app requires workers to function
+    return None, JsonResponse({
+        'error': 'No client worker available',
+        'requires_worker': True
+    }, status=503)
 
 
 def check_admin_or_error(user):

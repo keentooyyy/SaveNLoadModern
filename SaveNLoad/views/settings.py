@@ -138,6 +138,75 @@ def search_game(request):
         return JsonResponse({'games': [], 'error': 'Failed to search games'}, status=500)
 
 
+def _queue_game_deletion_operations(game: Game, admin_user):
+    """
+    Queue operations to delete all FTP saves for a game before deletion.
+    Creates delete operations for the entire game directory for each user who has saves.
+    All operations are assigned to the admin's worker (the one making the delete request).
+    
+    Args:
+        game: Game instance to delete
+        admin_user: Admin user making the delete request (their worker will handle all deletions)
+    """
+    from SaveNLoad.models.save_folder import SaveFolder
+    from SaveNLoad.models.client_worker import ClientWorker
+    from SaveNLoad.models.operation_queue import OperationQueue, OperationType
+    
+    try:
+        # Get all save folders for this game (across all users)
+        save_folders = SaveFolder.objects.filter(game=game)
+        
+        if not save_folders.exists():
+            logger.info(f"No save folders found for game {game.id} ({game.name}), skipping FTP cleanup")
+            return
+        
+        # Get unique users who have saves for this game
+        users_with_saves = save_folders.values_list('user', flat=True).distinct()
+        
+        # Get the admin's worker (the one making the delete request)
+        from SaveNLoad.views.api_helpers import get_client_worker_or_error
+        client_worker, error_response = get_client_worker_or_error(None, user=admin_user)
+        if error_response:
+            logger.warning(f"No active client worker available for admin {admin_user.username}, cannot delete FTP saves for game {game.id}")
+            return
+        
+        # Build safe game name (same logic as SaveFolder._generate_remote_path)
+        safe_game_name = "".join(c for c in game.name if c.isalnum() or c in (' ', '-', '_')).strip()
+        safe_game_name = safe_game_name.replace(' ', '_')
+        
+        # Create delete operations for each user's game directory
+        # This will delete the entire game directory (username/gamename/) which includes all save folders
+        # All operations are assigned to the admin's worker
+        operations_created = 0
+        for user_id in users_with_saves:
+            from SaveNLoad.models.user import SimpleUsers
+            try:
+                user = SimpleUsers.objects.get(id=user_id)
+                # Build the game directory path (username/gamename/)
+                game_directory_path = f"{user.username}/{safe_game_name}"
+                
+                # Create DELETE operation for the entire game directory
+                # Note: user field is the save owner, but operation is handled by admin's worker
+                OperationQueue.create_operation(
+                    operation_type=OperationType.DELETE,
+                    user=user,  # Save owner (for tracking)
+                    game=game,
+                    local_save_path='',  # Not needed for delete
+                    save_folder_number=None,  # Deleting entire game directory
+                    smb_path=game_directory_path,  # Full path to game directory
+                    client_worker=client_worker  # Admin's worker handles all deletions
+                )
+                operations_created += 1
+                logger.info(f"Queued delete operation for game directory: {game_directory_path} (assigned to admin's worker: {client_worker.client_id})")
+            except Exception as e:
+                logger.error(f"Failed to create delete operation for user {user_id}: {e}")
+        
+        if operations_created > 0:
+            logger.info(f"Queued {operations_created} delete operation(s) for game {game.id} ({game.name}) - all assigned to admin's worker")
+    except Exception as e:
+        logger.error(f"Error queueing game deletion operations for game {game.id}: {e}")
+
+
 @login_required
 @require_http_methods(["GET", "POST", "DELETE"])
 def game_detail(request, game_id):
@@ -162,6 +231,9 @@ def game_detail(request, game_id):
         })
 
     if request.method == "DELETE":
+        # Queue operations to delete all FTP saves for this game before deleting
+        # Use admin's worker (the one making the delete request)
+        _queue_game_deletion_operations(game, admin_user=user)
         game.delete()
         return json_response_success()
 
@@ -212,6 +284,9 @@ def delete_game(request, game_id):
     if error_response:
         return error_response
 
+    # Queue operations to delete all FTP saves for this game before deleting
+    # Use admin's worker (the one making the delete request)
+    _queue_game_deletion_operations(game, admin_user=user)
     game.delete()
     return json_response_success()
 
