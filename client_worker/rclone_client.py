@@ -329,6 +329,7 @@ class RcloneClient:
             '--checkers', str(transfers * 2),  # More checkers for faster file discovery
             '--stats', '1s',  # Show stats every second
             '--progress',  # Show detailed progress for each file
+            '--create-empty-src-dirs',  # Copy empty directories from source
         ]
         
         success, stdout, stderr = self._run_rclone(command, timeout=3600, progress_callback=progress_callback)
@@ -483,6 +484,7 @@ class RcloneClient:
             '--checkers', str(transfers * 2),
             '--stats', '1s',  # Show stats every second
             '--progress',  # Show detailed progress for each file
+            '--create-empty-src-dirs',  # Copy empty directories from source
         ]
         
         success, stdout, stderr = self._run_rclone(command, timeout=3600, progress_callback=progress_callback)
