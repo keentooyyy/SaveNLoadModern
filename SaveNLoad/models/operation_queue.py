@@ -105,7 +105,24 @@ class OperationQueue(models.Model):
     @classmethod
     def create_operation(cls, operation_type: str, user: SimpleUsers, game: Game, 
                         local_save_path: str, save_folder_number=None, smb_path=None, client_worker=None):
-        """Create a new operation in the queue"""
+        """
+        Create a new operation in the queue
+        
+        Args:
+            operation_type: Type of operation (save, load, delete, etc.)
+            user: User who owns the operation
+            game: Game associated with the operation
+            local_save_path: Local file path
+            save_folder_number: Optional save folder number
+            smb_path: Remote FTP path
+            client_worker: ClientWorker instance (REQUIRED - must be provided to avoid collisions)
+        
+        Raises:
+            ValueError: If client_worker is not provided
+        """
+        if client_worker is None:
+            raise ValueError("client_worker is required - all operations must be assigned to a worker to prevent collisions")
+        
         operation = cls.objects.create(
             operation_type=operation_type,
             user=user,

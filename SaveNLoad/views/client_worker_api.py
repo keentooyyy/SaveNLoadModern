@@ -145,10 +145,30 @@ def get_pending_operations(request, client_id):
     try:
         worker = ClientWorker.objects.get(client_id=client_id)
         
+        # Handle stuck operations (in_progress for too long) - mark as failed
+        from datetime import timedelta
+        from django.db import transaction
+        
+        with transaction.atomic():
+            # Find stuck operations assigned to this worker
+            # Stuck = IN_PROGRESS for more than 30 minutes
+            stuck_threshold = timezone.now() - timedelta(minutes=30)
+            stuck_operations = OperationQueue.objects.select_for_update(skip_locked=True).filter(
+                client_worker=worker,
+                status=OperationStatus.IN_PROGRESS,
+                started_at__lt=stuck_threshold
+            )
+            
+            if stuck_operations.exists():
+                # Mark stuck operations as failed
+                stuck_ids = list(stuck_operations.values_list('id', flat=True))
+                for op in stuck_operations:
+                    op.mark_failed('Operation timed out after 30 minutes')
+                logger.warning(f"Marked {len(stuck_ids)} stuck operations as failed (operation timeout)")
+        
         # Get pending operations assigned to this worker ONLY
         # Operations must be pre-assigned when created to prevent race conditions
         # Use select_for_update with skip_locked to prevent concurrent access
-        from django.db import transaction
         with transaction.atomic():
             # Lock and get pending operations for this worker atomically
             operations = list(OperationQueue.objects.select_for_update(skip_locked=True).filter(
