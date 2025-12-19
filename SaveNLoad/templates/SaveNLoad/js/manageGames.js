@@ -1031,17 +1031,32 @@ document.addEventListener('DOMContentLoaded', function () {
                 const operationId = data.operation_id;
                 
                 // Poll for operation status
-                const pollInterval = 500; // Poll every 500ms
-                const maxAttempts = 60; // Max 30 seconds
+                const pollInterval = 300; // Poll every 300ms (faster for quick operations)
+                const maxAttempts = 100; // Max 30 seconds (100 * 300ms)
                 let attempts = 0;
+                let pollStatus = null;
+                let isPolling = true; // Flag to prevent multiple intervals
                 
-                const pollStatus = setInterval(async () => {
+                const stopPolling = () => {
+                    if (pollStatus) {
+                        clearInterval(pollStatus);
+                        pollStatus = null;
+                    }
+                    isPolling = false;
+                };
+                
+                // Function to check status
+                const checkStatus = async () => {
+                    if (!isPolling) {
+                        return false; // Stop checking if polling was stopped
+                    }
+                    
                     attempts++;
                     
                     if (attempts > maxAttempts) {
-                        clearInterval(pollStatus);
+                        stopPolling();
                         showToast('Operation timed out. Please check if the folder exists.', 'error');
-                        return;
+                        return false;
                     }
                     
                     try {
@@ -1054,28 +1069,60 @@ document.addEventListener('DOMContentLoaded', function () {
                             credentials: 'same-origin'
                         });
                         
+                        if (!statusResponse.ok) {
+                            stopPolling();
+                            showToast('Error checking operation status', 'error');
+                            return false;
+                        }
+                        
                         const statusData = await statusResponse.json();
                         
+                        // Check if operation is completed or failed
                         if (statusData.success && statusData.data) {
-                            if (statusData.data.completed) {
-                                clearInterval(pollStatus);
+                            if (statusData.data.completed === true) {
+                                stopPolling();
                                 showToast('Folder opened successfully', 'success');
-                            } else if (statusData.data.failed) {
-                                clearInterval(pollStatus);
+                                return false; // Stop polling
+                            } else if (statusData.data.failed === true) {
+                                stopPolling();
                                 // Check if it's a "does not exist" error
-                                const errorMsg = statusData.data.message || statusData.data.error || 'Failed to open folder';
+                                const errorMsg = statusData.data.message || 'Failed to open folder';
                                 if (errorMsg.includes('does not exist') || errorMsg.includes('not found') || errorMsg.includes('not a directory')) {
                                     showToast('The folder or directory does not exist', 'error');
                                 } else {
                                     showToast(errorMsg, 'error');
                                 }
+                                return false; // Stop polling
                             }
-                            // If still in progress, continue polling
+                            // If still in progress (pending or in_progress), continue polling
+                            return true; // Continue polling
+                        } else {
+                            // Invalid response structure, stop polling to avoid infinite loop
+                            stopPolling();
+                            showToast('Error: Invalid response from server', 'error');
+                            return false;
                         }
                     } catch (error) {
                         console.error('Error polling operation status:', error);
-                        clearInterval(pollStatus);
+                        stopPolling();
                         showToast('Error checking operation status', 'error');
+                        return false;
+                    }
+                };
+                
+                // Check immediately first (operation might complete very quickly)
+                const immediateCheck = await checkStatus();
+                if (!immediateCheck) {
+                    // Operation already completed or failed, no need to poll
+                    return;
+                }
+                
+                // If still in progress, start polling interval
+                pollStatus = setInterval(async () => {
+                    const shouldContinue = await checkStatus();
+                    if (!shouldContinue) {
+                        // Operation completed or failed, interval will be cleared by checkStatus
+                        return;
                     }
                 }, pollInterval);
             } else {
