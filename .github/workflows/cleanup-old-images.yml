@@ -6,8 +6,8 @@ on:
 env:
   PACKAGE_NAME: savenloadmodern
   PACKAGE_OWNER: keentooyyy
-  # Always keeps: latest, prod-latest, dev-latest, main, and version tags (v*)
-  # Deletes: All old commit-based versions (prod-*, dev-*) and untagged versions (sha256 digests)
+  # Always keeps: latest, prod-latest, main, and version tags (v*)
+  # Deletes: All dev-* tags (including dev-latest), old commit-based prod-* versions, and untagged versions (sha256 digests)
 
 jobs:
   cleanup:
@@ -51,8 +51,24 @@ jobs:
             # Check if this version has any special tags we always keep
             KEEP_THIS=false
             
-            # Check for special tags: latest, prod-latest, dev-latest, main
-            if echo "$tags" | grep -qiE "(latest|main)"; then
+            # Check for dev-* tags - delete ALL of them (dev is local only)
+            if echo "$tags" | grep -qiE "dev-"; then
+              echo "Deleting: $tags (dev build - local only)"
+              if gh api \
+                -X DELETE \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "/users/${{ env.PACKAGE_OWNER }}/packages/container/${{ env.PACKAGE_NAME }}/versions/$version_id" 2>/dev/null; then
+                DELETED_COUNT=$((DELETED_COUNT + 1))
+                echo "  Deleted successfully"
+              else
+                echo "  Failed to delete (may have been deleted already)"
+              fi
+              continue
+            fi
+            
+            # Check for special tags: latest, prod-latest, main (but NOT dev-latest)
+            if echo "$tags" | grep -qiE "(latest|main)" && ! echo "$tags" | grep -qiE "dev-"; then
               KEEP_THIS=true
               echo "Keeping: $tags (special tag)"
               KEPT_COUNT=$((KEPT_COUNT + 1))
@@ -78,10 +94,10 @@ jobs:
                 else
                   echo "  Failed to delete (may have been deleted already)"
                 fi
-              # Check if it's a commit-based tag (prod-* or dev-*)
-              elif echo "$tags" | grep -qE "(prod-[a-f0-9]|dev-[a-f0-9])"; then
-                # Delete all old commit-based versions (not tagged as latest)
-                echo "Deleting: $tags (old commit-based version)"
+              # Check if it's a commit-based prod-* tag (not prod-latest)
+              elif echo "$tags" | grep -qE "prod-[a-f0-9]"; then
+                # Delete old commit-based prod versions (not tagged as prod-latest)
+                echo "Deleting: $tags (old commit-based prod version)"
                 if gh api \
                   -X DELETE \
                   -H "Accept: application/vnd.github+json" \
@@ -114,9 +130,10 @@ jobs:
           echo "Old Docker image versions have been cleaned up automatically" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Retention Policy:**" >> $GITHUB_STEP_SUMMARY
-          echo "- Always keep: \`latest\`, \`prod-latest\`, \`dev-latest\`, \`main\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Always keep: \`latest\`, \`prod-latest\`, \`main\`" >> $GITHUB_STEP_SUMMARY
           echo "- Always keep: Version tags (\`v*\`)" >> $GITHUB_STEP_SUMMARY
-          echo "- Delete all old commit-based versions (\`prod-*\`, \`dev-*\` that aren't tagged as latest)" >> $GITHUB_STEP_SUMMARY
+          echo "- Delete ALL dev builds (\`dev-*\` including \`dev-latest\` - dev is local only)" >> $GITHUB_STEP_SUMMARY
+          echo "- Delete all old commit-based prod versions (\`prod-*\` that aren't tagged as prod-latest)" >> $GITHUB_STEP_SUMMARY
           echo "- Delete all untagged versions (sha256 digests only)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "[View Packages](https://github.com/${{ github.repository }}/pkgs/container/${{ env.PACKAGE_OWNER }}/${{ env.PACKAGE_NAME }})" >> $GITHUB_STEP_SUMMARY
