@@ -18,7 +18,7 @@ jobs:
     
     steps:
       - name: Set up GitHub CLI
-        uses: github/setup-gh-cli@v1
+        uses: actions/setup-gh-cli@v1
 
       - name: Get all package versions
         id: get-versions
