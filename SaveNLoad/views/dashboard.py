@@ -231,18 +231,15 @@ def search_available_games(request):
     elif sort_by == 'name_desc':
         games_list.sort(key=lambda x: x['title'].lower(), reverse=True)
     elif sort_by == 'last_saved_desc':
-        # Most recent first (games with saves first, then games without saves)
-        games_list.sort(key=lambda x: (
-            x['last_played_timestamp'] is None,  # Games without saves go to end
-            x['last_played_timestamp'] or ''  # Then sort by timestamp (most recent first)
-        ), reverse=True)
+        # Filter out games that have never been played (no last_played_timestamp)
+        games_list = [g for g in games_list if g['last_played_timestamp'] is not None]
+        # Sort by timestamp (most recent first)
+        games_list.sort(key=lambda x: x['last_played_timestamp'], reverse=True)
     elif sort_by == 'last_saved_asc':
-        # Oldest first (games with saves first, then games without saves)
-        # Convert timestamp to comparable value - None goes to end
-        games_list.sort(key=lambda x: (
-            x['last_played_timestamp'] is None,  # Games without saves go to end
-            x['last_played_timestamp'] if x['last_played_timestamp'] else '9999-12-31'  # Oldest first (ascending)
-        ))
+        # Filter out games that have never been played (no last_played_timestamp)
+        games_list = [g for g in games_list if g['last_played_timestamp'] is not None]
+        # Sort by timestamp (oldest first)
+        games_list.sort(key=lambda x: x['last_played_timestamp'])
     
     return JsonResponse({
         'success': True,
