@@ -17,8 +17,9 @@ jobs:
       packages: write
     
     steps:
-      - name: Set up GitHub CLI
-        uses: actions/setup-gh-cli@v1
+      - name: Authenticate GitHub CLI
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: Get all package versions
         id: get-versions
