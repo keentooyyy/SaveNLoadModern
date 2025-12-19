@@ -46,10 +46,14 @@
         toggleNewPassword.addEventListener('click', function() {
             const type = newPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
             newPasswordInput.setAttribute('type', type);
-            const icon = toggleNewPassword.querySelector('i');
-            if (icon) {
-                icon.classList.toggle('fa-eye');
-                icon.classList.toggle('fa-eye-slash');
+            
+            // Toggle icon directly (the toggle element IS the icon)
+            if (type === 'password') {
+                toggleNewPassword.classList.remove('fa-eye');
+                toggleNewPassword.classList.add('fa-eye-slash');
+            } else {
+                toggleNewPassword.classList.remove('fa-eye-slash');
+                toggleNewPassword.classList.add('fa-eye');
             }
         });
     }
@@ -58,10 +62,14 @@
         toggleConfirmPassword.addEventListener('click', function() {
             const type = confirmPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
             confirmPasswordInput.setAttribute('type', type);
-            const icon = toggleConfirmPassword.querySelector('i');
-            if (icon) {
-                icon.classList.toggle('fa-eye');
-                icon.classList.toggle('fa-eye-slash');
+            
+            // Toggle icon directly (the toggle element IS the icon)
+            if (type === 'password') {
+                toggleConfirmPassword.classList.remove('fa-eye');
+                toggleConfirmPassword.classList.add('fa-eye-slash');
+            } else {
+                toggleConfirmPassword.classList.remove('fa-eye-slash');
+                toggleConfirmPassword.classList.add('fa-eye');
             }
         });
     }
