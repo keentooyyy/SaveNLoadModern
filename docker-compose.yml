@@ -17,7 +17,15 @@ services:
       retries: 5
 
   web:
-    build: .
+    # Use pre-built image from GitHub Container Registry
+    # To use local build, comment this and uncomment the build section below
+    image: ghcr.io/keentooyyy/savenloadmodern:dev-latest
+    # Alternative: Use Docker Hub
+    # image: ${DOCKER_USERNAME:-your-username}/savenloadmodern:dev-latest
+    # Alternative: Build locally (uncomment to use)
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: web
     command: sh -c "npm install && npm run build && python manage.py makemigrations && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
     volumes:
@@ -45,4 +53,3 @@ services:
     depends_on:
       db:
         condition: service_healthy
-
