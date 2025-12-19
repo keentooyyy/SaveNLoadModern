@@ -42,7 +42,6 @@ services:
     volumes:
       # Static files are already built in the image, no need to bind mount
       # - ./staticfiles:/app/staticfiles  # Removed - static files are in the image
-      - ./media:/app/media
       - ./logs:/app/logs
     ports:
       - "0.0.0.0:8000:8000"  # Bind to all interfaces for LAN access
