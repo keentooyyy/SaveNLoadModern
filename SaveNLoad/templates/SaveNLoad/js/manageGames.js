@@ -1077,31 +1077,33 @@ document.addEventListener('DOMContentLoaded', function () {
                         
                         const statusData = await statusResponse.json();
                         
-                        // Check if operation is completed or failed
-                        if (statusData.success && statusData.data) {
-                            if (statusData.data.completed === true) {
-                                stopPolling();
-                                showToast('Folder opened successfully', 'success');
-                                return false; // Stop polling
-                            } else if (statusData.data.failed === true) {
-                                stopPolling();
-                                // Check if it's a "does not exist" error
-                                const errorMsg = statusData.data.message || 'Failed to open folder';
-                                if (errorMsg.includes('does not exist') || errorMsg.includes('not found') || errorMsg.includes('not a directory')) {
-                                    showToast('The folder or directory does not exist', 'error');
-                                } else {
-                                    showToast(errorMsg, 'error');
-                                }
-                                return false; // Stop polling
-                            }
-                            // If still in progress (pending or in_progress), continue polling
-                            return true; // Continue polling
-                        } else {
-                            // Invalid response structure, stop polling to avoid infinite loop
+                        // Check if we have a valid response
+                        if (!statusData.success) {
                             stopPolling();
-                            showToast('Error: Invalid response from server', 'error');
+                            showToast(statusData.error || 'Operation failed', 'error');
                             return false;
                         }
+                        
+                        // Response structure: fields are at top level (not nested under 'data')
+                        // { success: true, status: 'pending', completed: false, failed: false, ... }
+                        if (statusData.completed === true) {
+                            stopPolling();
+                            showToast('Folder opened successfully', 'success');
+                            return false; // Stop polling
+                        } else if (statusData.failed === true) {
+                            stopPolling();
+                            // Check if it's a "does not exist" error
+                            const errorMsg = statusData.message || 'Failed to open folder';
+                            if (errorMsg.includes('does not exist') || errorMsg.includes('not found') || errorMsg.includes('not a directory')) {
+                                showToast('The folder or directory does not exist', 'error');
+                            } else {
+                                showToast(errorMsg, 'error');
+                            }
+                            return false; // Stop polling
+                        }
+                        
+                        // If still in progress (pending or in_progress), continue polling
+                        return true; // Continue polling
                     } catch (error) {
                         console.error('Error polling operation status:', error);
                         stopPolling();
