@@ -1,0 +1,107 @@
+name: Cleanup Old Docker Images
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+env:
+  PACKAGE_NAME: keentooyyy/savenloadmodern
+  # Always keeps: latest, prod-latest, dev-latest, main, and version tags (v*)
+  # Deletes: All old commit-based versions (prod-*, dev-*)
+
+jobs:
+  cleanup:
+    name: Cleanup Old Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Set up GitHub CLI
+        uses: github/setup-gh-cli@v1
+
+      - name: Get all package versions
+        id: get-versions
+        run: |
+          echo "Fetching all package versions..."
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/user/packages/container/${{ env.PACKAGE_NAME }}/versions" \
+            --jq '.[] | "\(.id)|\(.metadata.container.tags | join(","))|\(.created_at)"' > /tmp/all_versions.txt || echo ""
+          
+          echo "Found versions:"
+          cat /tmp/all_versions.txt | head -20 || echo "No versions found"
+
+      - name: Cleanup old versions
+        run: |
+          DELETED_COUNT=0
+          KEPT_COUNT=0
+          
+          echo "Processing versions..."
+          
+          # Process each version
+          while IFS='|' read -r version_id tags created_at; do
+            if [ -z "$version_id" ]; then
+              continue
+            fi
+            
+            # Check if this version has any special tags we always keep
+            KEEP_THIS=false
+            
+            # Check for special tags: latest, prod-latest, dev-latest, main
+            if echo "$tags" | grep -qiE "(latest|main)"; then
+              KEEP_THIS=true
+              echo "Keeping: $tags (special tag)"
+              KEPT_COUNT=$((KEPT_COUNT + 1))
+            # Check for version tags (v1.0.0, v2.0, etc.)
+            elif echo "$tags" | grep -qE "v[0-9]+\.[0-9]+"; then
+              KEEP_THIS=true
+              echo "Keeping: $tags (version tag)"
+              KEPT_COUNT=$((KEPT_COUNT + 1))
+            fi
+            
+            # If not keeping, check if it's a commit-based tag to delete
+            if [ "$KEEP_THIS" = false ]; then
+              # Check if it's a commit-based tag (prod-* or dev-*)
+              if echo "$tags" | grep -qE "(prod-[a-f0-9]|dev-[a-f0-9])"; then
+                # Delete all old commit-based versions (not tagged as latest)
+                echo "Deleting: $tags (old commit-based version)"
+                if gh api \
+                  -X DELETE \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "/user/packages/container/${{ env.PACKAGE_NAME }}/versions/$version_id" 2>/dev/null; then
+                  DELETED_COUNT=$((DELETED_COUNT + 1))
+                  echo "  Deleted successfully"
+                else
+                  echo "  Failed to delete (may have been deleted already)"
+                fi
+              else
+                # Unknown tag type, keep it to be safe
+                echo "Keeping: $tags (unknown type - keeping for safety)"
+                KEPT_COUNT=$((KEPT_COUNT + 1))
+              fi
+            fi
+          done < /tmp/all_versions.txt
+          
+          echo ""
+          echo "========================================="
+          echo "Cleanup Summary:"
+          echo "  Kept: $KEPT_COUNT versions"
+          echo "  Deleted: $DELETED_COUNT versions"
+          echo "========================================="
+
+      - name: Summary
+        run: |
+          echo "## Cleanup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Old Docker image versions have been cleaned up automatically" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Retention Policy:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Always keep: \`latest\`, \`prod-latest\`, \`dev-latest\`, \`main\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Always keep: Version tags (\`v*\`)" >> $GITHUB_STEP_SUMMARY
+          echo "- Delete all old commit-based versions (\`prod-*\`, \`dev-*\` that aren't tagged as latest)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[View Packages](https://github.com/${{ github.repository }}/pkgs/container/${{ env.PACKAGE_NAME }})" >> $GITHUB_STEP_SUMMARY
+
