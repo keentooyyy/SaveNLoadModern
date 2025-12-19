@@ -32,7 +32,6 @@
     <script>
         // Inject Django URLs for worker check and game creation
         window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
-        window.WORKER_REQUIRED_URL = '{% url "SaveNLoad:worker_required" %}';
         window.CREATE_GAME_URL = '{% url "admin:create_game" %}';
         window.UPDATE_ACCOUNT_SETTINGS_URL = '{% url "admin:update_account_settings" %}';
         // Inject Django URL patterns for manageGames.js

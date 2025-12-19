@@ -5,9 +5,8 @@ from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.utils.html import escape
 
 from SaveNLoad.models import SimpleUsers, UserRole
-from SaveNLoad.views.custom_decorators import login_required, get_current_user
+from SaveNLoad.views.custom_decorators import login_required, get_current_user, client_worker_required
 from SaveNLoad.views.api_helpers import (
-    check_worker_connected_or_redirect,
     redirect_if_logged_in,
     json_response_with_redirect,
     json_response_field_errors,
@@ -25,13 +24,9 @@ from SaveNLoad.views.input_sanitizer import (
 
 @ensure_csrf_cookie
 @csrf_protect
+@client_worker_required
 def login(request):
     """Login page and authentication - CSRF protected"""
-    # Check if client worker is connected
-    redirect_response = check_worker_connected_or_redirect()
-    if redirect_response:
-        return redirect_response
-    
     # Check if already logged in
     redirect_response = redirect_if_logged_in(request)
     if redirect_response:
@@ -108,13 +103,9 @@ def login(request):
 
 @ensure_csrf_cookie
 @csrf_protect
+@client_worker_required
 def register(request):
     """Registration page and user creation - CSRF protected"""
-    # Check if client worker is connected
-    redirect_response = check_worker_connected_or_redirect()
-    if redirect_response:
-        return redirect_response
-    
     # Check if already logged in
     redirect_response = redirect_if_logged_in(request)
     if redirect_response:
@@ -454,26 +445,3 @@ def logout(request):
     request.session.flush()
     return redirect(reverse('SaveNLoad:login'))
 
-
-def worker_required(request):
-    """Page shown when client worker is not connected"""
-    from SaveNLoad.models.client_worker import ClientWorker
-    is_connected = ClientWorker.is_worker_connected()
-    
-    if is_connected:
-        # Worker is connected, redirect to appropriate page
-        redirect_response = redirect_if_logged_in(request)
-        if redirect_response:
-            return redirect_response
-        else:
-            # User is not logged in, redirect to login
-            return redirect(reverse('SaveNLoad:login'))
-    
-    # No worker connected - show the worker required page
-    # Get all active workers for display
-    all_workers = ClientWorker.get_active_workers()
-    
-    return render(request, 'SaveNLoad/worker_required.html', {
-        'all_workers': all_workers,
-        'total_workers': len(all_workers)
-    })

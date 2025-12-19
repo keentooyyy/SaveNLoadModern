@@ -27,7 +27,6 @@
     <script>
         // Inject Django URLs for worker check
         window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
-        window.WORKER_REQUIRED_URL = '{% url "SaveNLoad:worker_required" %}';
         // Inject Django URL patterns (with placeholder for game_id or operation_id)
         // Use admin URLs for save/load operations (these work for both admin and users)
         window.LIST_SAVE_FOLDERS_URL_PATTERN = '{% url "admin:list_save_folders" 0 %}';

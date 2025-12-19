@@ -8,7 +8,6 @@
     const CHECK_INTERVAL = 5000; // Check every 5 second
     // API endpoint is injected from Django template
     const API_ENDPOINT = window.WORKER_CHECK_URL;
-    const WORKER_REQUIRED_URL = window.WORKER_REQUIRED_URL;
     
     let checkInterval = null;
     
@@ -17,15 +16,15 @@
             .then(response => response.json())
             .then(data => {
                 if (!data.connected) {
-                    // Worker disconnected - redirect to worker required page
-                    console.warn('Client worker disconnected. Redirecting...');
-                    window.location.href = WORKER_REQUIRED_URL;
+                    // Worker disconnected - reload page (decorator will show worker required page)
+                    console.warn('Client worker disconnected. Reloading...');
+                    window.location.reload();
                 }
             })
             .catch(error => {
                 console.error('Error checking worker connection:', error);
-                // On error, assume disconnected and redirect
-                window.location.href = WORKER_REQUIRED_URL;
+                // On error, assume disconnected and reload (decorator will handle it)
+                window.location.reload();
             });
     }
     

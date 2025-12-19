@@ -300,11 +300,12 @@ def complete_operation(request, operation_id):
         if success:
             operation.mark_completed(result_data=data)
             # Update game's last_played when save operation completes successfully
-            if operation.operation_type == 'save':
+            from SaveNLoad.utils.operation_utils import is_operation_type, is_save_folder_operation
+            if is_operation_type(operation, 'save'):
                 operation.game.last_played = timezone.now()
                 operation.game.save()
             # Delete save folder from database when DELETE operation completes successfully
-            elif operation.operation_type == 'delete' and operation.save_folder_number:
+            elif is_save_folder_operation(operation):
                 from SaveNLoad.models.save_folder import SaveFolder
                 try:
                     save_folder = SaveFolder.get_by_number(
@@ -319,12 +320,15 @@ def complete_operation(request, operation_id):
                     logger.warning(f"Failed to delete save folder from database after operation: {e}")
             
             # Check if game is pending deletion and all operations are complete
-            if operation.game.pending_deletion and operation.operation_type == 'delete' and not operation.save_folder_number:
+            from SaveNLoad.utils.operation_utils import (
+                is_game_deletion_operation,
+                get_pending_or_in_progress_operations,
+                check_all_operations_succeeded
+            )
+            if operation.game.pending_deletion and is_game_deletion_operation(operation):
                 # This is a game deletion operation - check if all operations for this game are complete
-                from SaveNLoad.models.operation_queue import OperationStatus
-                remaining_operations = OperationQueue.objects.filter(
-                    game=operation.game,
-                    status__in=[OperationStatus.PENDING, OperationStatus.IN_PROGRESS]
+                remaining_operations = get_pending_or_in_progress_operations(
+                    OperationQueue.objects.filter(game=operation.game)
                 ).exclude(id=operation.id)
                 
                 if not remaining_operations.exists():
@@ -335,7 +339,7 @@ def complete_operation(request, operation_id):
                         save_folder_number__isnull=True  # Game deletion operations
                     )
                     
-                    all_succeeded = all_operations.exclude(status=OperationStatus.COMPLETED).count() == 0
+                    all_succeeded = check_all_operations_succeeded(all_operations)
                     
                     if all_succeeded:
                         # All operations succeeded - delete the game
@@ -353,18 +357,15 @@ def complete_operation(request, operation_id):
             error_message = data.get('error', data.get('message', 'Operation failed'))
             
             # Transform error messages to be user-friendly
-            error_lower = error_message.lower() if error_message else ''
-            if 'local save path does not exist' in error_lower or 'local file not found' in error_lower:
-                if operation.operation_type == 'save':
-                    error_message = 'Oops! You don\'t have any save files to save. Maybe you haven\'t played the game yet, or the save location is incorrect.'
-                elif operation.operation_type == 'load':
-                    error_message = 'Oops! You don\'t have any save files to load. Maybe you haven\'t saved this game yet.'
+            from SaveNLoad.utils.string_utils import transform_path_error_message
+            error_message = transform_path_error_message(error_message, operation.operation_type)
             
             operation.mark_failed(error_message)
             
             # Check if game is pending deletion and all operations are complete
             # Only check after all operations complete (per documentation: "After All Operations Complete")
-            if operation.game.pending_deletion and operation.operation_type == 'delete' and not operation.save_folder_number:
+            from SaveNLoad.utils.operation_utils import is_game_deletion_operation
+            if operation.game.pending_deletion and is_game_deletion_operation(operation):
                 # This is a game deletion operation - check if all operations for this game are complete
                 from SaveNLoad.models.operation_queue import OperationStatus
                 remaining_operations = OperationQueue.objects.filter(
@@ -397,7 +398,8 @@ def complete_operation(request, operation_id):
             
             # Cleanup: If SAVE operation failed due to missing local path or empty saves, delete the save folder
             # This prevents orphaned save folders when user provides invalid path or empty saves
-            if operation.operation_type == 'save' and operation.save_folder_number:
+            from SaveNLoad.utils.operation_utils import is_operation_type
+            if is_operation_type(operation, 'save') and operation.save_folder_number:
                 error_lower = error_message.lower() if error_message else ''
                 # Check if error is about local path not existing or empty saves
                 path_errors = [

@@ -278,6 +278,8 @@ class RcloneClient:
     def _get_full_path(self, username: str, game_name: str, folder_number: int, 
                       remote_path: str = '') -> str:
         """Build full FTP path for save folder"""
+        # Import path utilities (note: these are Django utils, but we can use the logic)
+        # For client worker, we'll inline the logic to avoid Django dependency
         safe_game_name = "".join(c for c in game_name if c.isalnum() or c in (' ', '-', '_')).strip()
         safe_game_name = safe_game_name.replace(' ', '_')
         

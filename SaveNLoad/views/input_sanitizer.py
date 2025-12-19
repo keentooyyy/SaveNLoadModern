@@ -117,3 +117,37 @@ def validate_password_strength(password):
     
     return True, None
 
+
+def sanitize_search_query(query, max_length=200):
+    """
+    Sanitize search query input to prevent XSS and injection attacks.
+    Removes HTML tags and dangerous characters, but preserves search functionality.
+    Does NOT escape HTML (since it's used in database queries, not HTML output).
+    
+    Args:
+        query: Search query string
+        max_length: Maximum length (default: 200)
+        
+    Returns:
+        Sanitized query string or None if invalid
+    """
+    if not query:
+        return None
+    
+    # Strip whitespace
+    query = query.strip()
+    
+    if not query:
+        return None
+    
+    # Remove any HTML tags
+    query = re.sub(r'<[^>]+>', '', query)
+    
+    # Remove null bytes (dangerous)
+    query = query.replace('\x00', '')
+    
+    # Limit length
+    if len(query) > max_length:
+        query = query[:max_length]
+    
+    return query

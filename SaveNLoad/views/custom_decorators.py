@@ -1,4 +1,4 @@
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.http import JsonResponse
 from functools import wraps
@@ -7,17 +7,50 @@ from SaveNLoad.models.client_worker import ClientWorker
 
 
 def login_required(view_func):
-    """Custom login required decorator using sessions"""
+    """
+    Custom login required decorator using sessions - IDOR-proof
+    
+    Security features:
+    - Validates session exists
+    - Validates user_id is a valid integer (prevents type confusion attacks)
+    - Verifies user still exists in database (prevents deleted user access)
+    - Clears invalid sessions automatically
+    """
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
+        # Check if session exists
+        if not hasattr(request, 'session'):
+            return redirect(reverse('SaveNLoad:login'))
+        
+        # Get user_id from session
         user_id = request.session.get('user_id')
         if not user_id:
             return redirect(reverse('SaveNLoad:login'))
+        
+        # Validate user_id is a valid integer (prevent type confusion attacks)
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            # Invalid user_id type - clear session and redirect
+            request.session.flush()
+            return redirect(reverse('SaveNLoad:login'))
+        
+        # Validate user_id is positive (prevent negative IDs or zero)
+        if user_id <= 0:
+            request.session.flush()
+            return redirect(reverse('SaveNLoad:login'))
+        
+        # Get user from database - verify it still exists
         try:
             user = SimpleUsers.objects.get(id=user_id)
             request.user = user  # Attach user to request
             return view_func(request, *args, **kwargs)
         except SimpleUsers.DoesNotExist:
+            # User was deleted - clear session to prevent orphaned sessions
+            request.session.flush()
+            return redirect(reverse('SaveNLoad:login'))
+        except Exception:
+            # Unexpected error - redirect to login
             request.session.flush()
             return redirect(reverse('SaveNLoad:login'))
     return wrapper
@@ -36,18 +69,60 @@ def client_worker_required(view_func):
                     'requires_worker': True
                 }, status=503)
             else:
-                # Regular request - redirect to worker required page
-                return redirect(reverse('SaveNLoad:worker_required'))
+                # Regular request - render worker required page directly
+                return render(request, 'SaveNLoad/worker_required.html')
         return view_func(request, *args, **kwargs)
     return wrapper
 
 
 def get_current_user(request):
-    """Get current user from session"""
+    """
+    Get current user from session - IDOR-proof implementation
+    
+    Security features:
+    - Validates session exists and is not expired
+    - Validates user_id is a valid integer (prevents type confusion attacks)
+    - Verifies user still exists in database (prevents deleted user access)
+    - Clears invalid sessions automatically
+    - Returns None if any validation fails (fail-secure)
+    
+    Args:
+        request: Django request object
+        
+    Returns:
+        SimpleUsers instance if valid, None otherwise
+    """
+    # Check if session exists
+    if not hasattr(request, 'session'):
+        return None
+    
+    # Get user_id from session
     user_id = request.session.get('user_id')
-    if user_id:
-        try:
-            return SimpleUsers.objects.get(id=user_id)
-        except SimpleUsers.DoesNotExist:
-            return None
-    return None
+    
+    if not user_id:
+        return None
+    
+    # Validate user_id is a valid integer (prevent type confusion attacks)
+    try:
+        user_id = int(user_id)
+    except (ValueError, TypeError):
+        # Invalid user_id type - clear session and return None
+        request.session.flush()
+        return None
+    
+    # Validate user_id is positive (prevent negative IDs or zero)
+    if user_id <= 0:
+        request.session.flush()
+        return None
+    
+    # Get user from database - verify it still exists
+    try:
+        user = SimpleUsers.objects.get(id=user_id)
+        return user
+    except SimpleUsers.DoesNotExist:
+        # User was deleted - clear session to prevent orphaned sessions
+        request.session.flush()
+        return None
+    except Exception:
+        # Unexpected error - fail securely
+        return None

@@ -47,8 +47,8 @@ class SaveFolder(models.Model):
     def _generate_remote_path(username: str, game_name: str, folder_number: int) -> str:
         """Generate the full remote path for a save folder in FTP format (forward slashes)"""
         # Sanitize game name
-        safe_game_name = "".join(c for c in game_name if c.isalnum() or c in (' ', '-', '_')).strip()
-        safe_game_name = safe_game_name.replace(' ', '_')
+        from SaveNLoad.utils.path_utils import sanitize_game_name_for_path
+        safe_game_name = sanitize_game_name_for_path(game_name)
         # Generate full path in FTP format: username/gamename/save_1
         return f"{username}/{safe_game_name}/save_{folder_number}"
     

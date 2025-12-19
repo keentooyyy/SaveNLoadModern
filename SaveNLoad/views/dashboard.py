@@ -71,7 +71,8 @@ def admin_dashboard(request):
     )
     
     # Sort by last_played timestamp from save folders
-    recent_db_games = sorted(recent_db_games, key=lambda g: game_last_played.get(g.id), reverse=True)
+    from SaveNLoad.utils.list_utils import sort_by_dict_lookup
+    recent_db_games = sort_by_dict_lookup(recent_db_games, game_last_played, reverse=True)
     
     recent_games = []
     for game in recent_db_games:
@@ -139,7 +140,8 @@ def user_dashboard(request):
     )
     
     # Sort by last_played timestamp from save folders
-    recent_db_games = sorted(recent_db_games, key=lambda g: game_last_played.get(g.id), reverse=True)
+    from SaveNLoad.utils.list_utils import sort_by_dict_lookup
+    recent_db_games = sort_by_dict_lookup(recent_db_games, game_last_played, reverse=True)
     
     recent_games = []
     for game in recent_db_games:
@@ -192,9 +194,16 @@ def search_available_games(request):
     if not user:
         return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
     
-    # Get query parameters
-    search_query = request.GET.get('q', '').strip()
+    # Get and sanitize query parameters
+    from SaveNLoad.views.input_sanitizer import sanitize_search_query
+    raw_search_query = request.GET.get('q', '').strip()
+    search_query = sanitize_search_query(raw_search_query) if raw_search_query else None
     sort_by = request.GET.get('sort', 'name_asc')  # Default: name ascending
+    
+    # Validate sort_by parameter (prevent injection)
+    valid_sorts = ['name_asc', 'name_desc', 'last_saved_asc', 'last_saved_desc']
+    if sort_by not in valid_sorts:
+        sort_by = 'name_asc'
     
     # Fetch all games
     db_games = Game.objects.all()
@@ -226,20 +235,21 @@ def search_available_games(request):
         })
     
     # Apply sorting
+    from SaveNLoad.utils.list_utils import sort_by_field, filter_none_values
     if sort_by == 'name_asc':
-        games_list.sort(key=lambda x: x['title'].lower())
+        games_list = sort_by_field(games_list, 'title', reverse=False, case_insensitive=True)
     elif sort_by == 'name_desc':
-        games_list.sort(key=lambda x: x['title'].lower(), reverse=True)
+        games_list = sort_by_field(games_list, 'title', reverse=True, case_insensitive=True)
     elif sort_by == 'last_saved_desc':
         # Filter out games that have never been played (no last_played_timestamp)
-        games_list = [g for g in games_list if g['last_played_timestamp'] is not None]
+        games_list = filter_none_values(games_list, 'last_played_timestamp')
         # Sort by timestamp (most recent first)
-        games_list.sort(key=lambda x: x['last_played_timestamp'], reverse=True)
+        games_list = sort_by_field(games_list, 'last_played_timestamp', reverse=True)
     elif sort_by == 'last_saved_asc':
         # Filter out games that have never been played (no last_played_timestamp)
-        games_list = [g for g in games_list if g['last_played_timestamp'] is not None]
+        games_list = filter_none_values(games_list, 'last_played_timestamp')
         # Sort by timestamp (oldest first)
-        games_list.sort(key=lambda x: x['last_played_timestamp'])
+        games_list = sort_by_field(games_list, 'last_played_timestamp', reverse=False)
     
     return JsonResponse({
         'success': True,

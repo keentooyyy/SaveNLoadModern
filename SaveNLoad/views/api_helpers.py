@@ -109,16 +109,6 @@ def check_admin_or_error(user):
     return None
 
 
-def check_worker_connected_or_redirect():
-    """
-    Check if client worker is connected, redirect if not
-    Returns: redirect_response_or_none
-    """
-    if not ClientWorker.is_worker_connected():
-        return redirect(reverse('SaveNLoad:worker_required'))
-    return None
-
-
 def redirect_if_logged_in(request):
     """
     Redirect user to appropriate dashboard if already logged in
@@ -170,4 +160,325 @@ def get_client_worker_by_id_or_error(client_id):
         return worker, None
     except ClientWorker.DoesNotExist:
         return None, json_response_error('Client not registered', status=404)
+
+
+def get_save_folder_or_error(user, game, folder_number):
+    """
+    Get save folder by number or return error response
+    Returns: (save_folder_object, error_response_or_none)
+    """
+    from SaveNLoad.models.save_folder import SaveFolder
+    
+    if not user:
+        return None, json_response_error('User is required', status=400)
+    
+    if not game:
+        return None, json_response_error('Game is required', status=400)
+    
+    if folder_number is None:
+        return None, json_response_error('Save folder number is required', status=400)
+    
+    save_folder = SaveFolder.get_by_number(user, game, folder_number)
+    if not save_folder:
+        return None, json_response_error('Save folder not found', status=404)
+    
+    # Validate save folder has required fields
+    if not save_folder.folder_number:
+        return None, json_response_error('Save folder number is missing', status=500)
+    
+    if not save_folder.smb_path:
+        return None, json_response_error('Save folder path is missing', status=500)
+    
+    return save_folder, None
+
+
+def validate_save_folder_or_error(save_folder):
+    """
+    Validate save folder has required fields or return error response
+    Returns: (save_folder_object, error_response_or_none)
+    """
+    if not save_folder:
+        return None, json_response_error('Save folder not found', status=404)
+    
+    if not save_folder.folder_number:
+        return None, json_response_error('Save folder number is missing', status=500)
+    
+    if not save_folder.smb_path:
+        return None, json_response_error('Save folder path is missing', status=500)
+    
+    return save_folder, None
+
+
+def get_local_save_path_or_error(data, game, field_name='local_save_path'):
+    """
+    Get local save path from data or game default, validate it exists
+    Returns: (local_save_path_string, error_response_or_none)
+    """
+    local_save_path = data.get(field_name, '').strip()
+    
+    # If not provided, use game's default
+    if not local_save_path:
+        local_save_path = game.save_file_location
+    
+    # Validate it's not empty
+    if not local_save_path or not local_save_path.strip():
+        return None, json_response_error('Local save path is required', status=400)
+    
+    return local_save_path, None
+
+
+def get_latest_save_folder_or_error(user, game):
+    """
+    Get latest save folder for user+game or return error response
+    Returns: (save_folder_object, error_response_or_none)
+    """
+    from SaveNLoad.models.save_folder import SaveFolder
+    
+    if not user:
+        return None, json_response_error('User is required', status=400)
+    
+    if not game:
+        return None, json_response_error('Game is required', status=400)
+    
+    save_folder = SaveFolder.get_latest(user, game)
+    if not save_folder:
+        return None, json_response_error('No save files found', status=404)
+    
+    # Validate save folder has required fields
+    if not save_folder.folder_number:
+        return None, json_response_error('Save folder number is missing', status=500)
+    
+    if not save_folder.smb_path:
+        return None, json_response_error('Save folder path is missing', status=500)
+    
+    return save_folder, None
+
+
+def create_operation_response(operation, client_worker, message=None, extra_data=None):
+    """
+    Create standardized operation response with operation_id and client_id
+    Returns: JsonResponse with operation data
+    
+    Args:
+        operation: OperationQueue instance
+        client_worker: ClientWorker instance
+        message: Optional success message
+        extra_data: Optional dict of additional data to include
+    """
+    data = {
+        'operation_id': operation.id,
+        'client_id': client_worker.client_id
+    }
+    
+    # Add save_folder_number if present
+    if operation.save_folder_number:
+        data['save_folder_number'] = operation.save_folder_number
+    
+    # Merge any extra data
+    if extra_data:
+        data.update(extra_data)
+    
+    return json_response_success(message=message, data=data)
+
+
+def update_session_client_id(request, client_id, user):
+    """
+    Update or clear client_id in user's session based on login status
+    This centralizes the session management logic used in register_client, heartbeat, and check_connection
+    
+    Args:
+        request: Django request object
+        client_id: Client worker ID (can be None to clear)
+        user: Current user (None if logged out)
+    """
+    if not hasattr(request, 'session'):
+        return
+    
+    if user and client_id:
+        # User is logged in - associate worker with session
+        request.session['client_id'] = client_id
+        request.session.modified = True
+    elif not user and 'client_id' in request.session:
+        # User is logged out - clear client_id (revoke association)
+        request.session.pop('client_id', None)
+        request.session.modified = True
+
+
+def get_operation_or_error(operation_id, user=None):
+    """
+    Get operation by ID or return error response
+    Optionally verify operation belongs to user
+    
+    Returns: (operation_object, error_response_or_none)
+    """
+    from SaveNLoad.models.operation_queue import OperationQueue
+    
+    try:
+        operation = OperationQueue.objects.get(pk=operation_id)
+        
+        # If user provided, verify operation belongs to user
+        if user and operation.user != user:
+            return None, json_response_error('Operation not found', status=404)
+        
+        return operation, None
+    except OperationQueue.DoesNotExist:
+        return None, json_response_error('Operation not found', status=404)
+
+
+def get_user_game_last_played(user, limit=None):
+    """
+    Get last_played timestamps for all games for a user from SaveFolder records
+    Returns: dict mapping game_id -> last_played datetime
+    
+    Args:
+        user: User instance
+        limit: Optional limit for recent games (e.g., 10 for top 10)
+    """
+    from SaveNLoad.models.save_folder import SaveFolder
+    from django.db.models import Max
+    
+    query = SaveFolder.objects.filter(user=user).values('game').annotate(
+        last_played=Max('created_at')
+    )
+    
+    if limit:
+        query = query.order_by('-last_played')[:limit]
+    
+    return {sf['game']: sf['last_played'] for sf in query}
+
+
+def build_game_data_dict(game, last_played=None, include_id=False, include_footer=False, footer_formatter=None):
+    """
+    Build standardized game data dictionary
+    Returns: dict with game data
+    
+    Args:
+        game: Game instance
+        last_played: Optional datetime for last_played
+        include_id: Whether to include game.id
+        include_footer: Whether to include footer field (uses last_played)
+        footer_formatter: Optional function to format footer (e.g., format_last_played)
+    """
+    data = {
+        'title': game.name,
+        'image': game.banner if game.banner else '',
+    }
+    
+    if include_id:
+        data['id'] = game.id
+    
+    if include_footer and last_played:
+        if footer_formatter:
+            data['footer'] = footer_formatter(last_played)
+        else:
+            data['footer'] = last_played.isoformat() if last_played else None
+    
+    if last_played and not include_footer:
+        data['playtime'] = footer_formatter(last_played) if footer_formatter else (last_played.isoformat() if last_played else None)
+    
+    return data
+
+
+def safe_delete_operations(queryset, expected_model='SaveNLoad.OperationQueue'):
+    """
+    Safely delete operations and verify only expected model was deleted
+    Returns: (deleted_count, is_safe)
+    
+    Args:
+        queryset: QuerySet to delete
+        expected_model: Expected model name in deleted_objects dict
+    """
+    deleted_count, deleted_objects = queryset.delete()
+    
+    # Verify only expected model was deleted (safety check)
+    is_safe = True
+    if deleted_objects:
+        if expected_model not in deleted_objects or len(deleted_objects) > 1:
+            is_safe = False
+            logger.warning(f"Unexpected objects deleted: {deleted_objects}")
+    
+    return deleted_count, is_safe
+
+
+def cleanup_operations_by_status(status, no_items_message, success_message_template):
+    """
+    Cleanup operations by status with standardized pattern
+    Returns: JsonResponse
+    
+    Args:
+        status: OperationStatus constant
+        no_items_message: Message when no items to delete
+        success_message_template: Template for success message (e.g., "Deleted {count} completed operation(s)")
+    """
+    from SaveNLoad.models.operation_queue import OperationQueue, OperationStatus
+    
+    # Check if there are any operations first
+    count = OperationQueue.objects.filter(status=status).count()
+    if count == 0:
+        return json_response_success(
+            message=no_items_message,
+            data={'deleted_count': 0}
+        )
+    
+    # Delete operations safely
+    deleted_count, is_safe = safe_delete_operations(
+        OperationQueue.objects.filter(status=status)
+    )
+    
+    return json_response_success(
+        message=success_message_template.format(count=deleted_count),
+        data={'deleted_count': deleted_count}
+    )
+
+
+def cleanup_operations_by_age(days, no_items_message, success_message_template):
+    """
+    Cleanup operations older than specified days
+    Returns: JsonResponse
+    
+    Args:
+        days: Number of days (e.g., 30 for 30+ days old)
+        no_items_message: Message when no items to delete
+        success_message_template: Template for success message
+    """
+    from SaveNLoad.models.operation_queue import OperationQueue
+    from datetime import timedelta
+    
+    threshold = timezone.now() - timedelta(days=days)
+    
+    # Check if there are any old operations first
+    old_count = OperationQueue.objects.filter(created_at__lt=threshold).count()
+    if old_count == 0:
+        return json_response_success(
+            message=no_items_message,
+            data={'deleted_count': 0}
+        )
+    
+    # Delete old operations safely
+    deleted_count, is_safe = safe_delete_operations(
+        OperationQueue.objects.filter(created_at__lt=threshold)
+    )
+    
+    return json_response_success(
+        message=success_message_template.format(count=deleted_count),
+        data={'deleted_count': deleted_count}
+    )
+
+
+def handle_exception_with_logging(exception, error_message, logger_instance=None, status=500):
+    """
+    Standardized exception handling with logging
+    Returns: JsonResponse error
+    
+    Args:
+        exception: Exception instance
+        error_message: User-facing error message
+        logger_instance: Optional logger (defaults to module logger)
+        status: HTTP status code
+    """
+    if logger_instance is None:
+        logger_instance = logger
+    
+    logger_instance.error(f"{error_message}: {exception}", exc_info=True)
+    return json_response_error(error_message, status=status)
 

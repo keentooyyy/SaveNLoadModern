@@ -110,7 +110,10 @@ def search_game(request):
     if not user or not user.is_admin():
         return JsonResponse({'games': []}, status=403)
     
-    query = request.GET.get('q', '').strip()
+    # Get and sanitize search query
+    from SaveNLoad.views.input_sanitizer import sanitize_search_query
+    raw_query = request.GET.get('q', '').strip()
+    query = sanitize_search_query(raw_query) if raw_query else None
     
     if not query:
         return JsonResponse({'games': []})
@@ -178,8 +181,8 @@ def _queue_game_deletion_operations(game: Game, admin_user, request=None):
             return (False, error_msg)
         
         # Build safe game name (same logic as SaveFolder._generate_remote_path)
-        safe_game_name = "".join(c for c in game.name if c.isalnum() or c in (' ', '-', '_')).strip()
-        safe_game_name = safe_game_name.replace(' ', '_')
+        from SaveNLoad.utils.path_utils import sanitize_game_name_for_path
+        safe_game_name = sanitize_game_name_for_path(game.name)
         
         # Create delete operations for each user's game directory
         # This will delete the entire game directory (username/gamename/) which includes all save folders
@@ -340,9 +343,8 @@ def update_account_settings(request):
     if error_response:
         return error_response
     
-    # Sanitize inputs
+    # Sanitize inputs using input_sanitizer utilities
     from SaveNLoad.views.input_sanitizer import sanitize_email, validate_password_strength
-    import re
     
     # Sanitize email
     raw_email = data.get('email', '').strip()
@@ -352,26 +354,32 @@ def update_account_settings(request):
     if raw_email and not email:
         return json_response_error('Invalid email format.', status=400)
     
-    # Sanitize password inputs (strip whitespace, validate length, but don't escape - will be hashed)
+    # Get password inputs (strip whitespace)
     current_password = data.get('current_password', '').strip()
     new_password = data.get('new_password', '').strip()
     confirm_password = data.get('confirm_password', '').strip()
     
-    # Validate password length (prevent extremely long inputs that could cause issues)
-    if current_password and len(current_password) > 128:
-        return json_response_error('Password is too long (maximum 128 characters).', status=400)
-    if new_password and len(new_password) > 128:
-        return json_response_error('Password is too long (maximum 128 characters).', status=400)
-    if confirm_password and len(confirm_password) > 128:
-        return json_response_error('Password is too long (maximum 128 characters).', status=400)
+    # Validate password inputs using sanitizer (checks length and dangerous characters)
+    if current_password:
+        is_valid, error_msg = validate_password_strength(current_password)
+        if not is_valid:
+            return json_response_error(f'Current password: {error_msg}', status=400)
+        if '\x00' in current_password:
+            return json_response_error('Invalid characters in current password.', status=400)
     
-    # Check for null bytes or other dangerous characters in passwords
-    if current_password and '\x00' in current_password:
-        return json_response_error('Invalid characters in password.', status=400)
-    if new_password and '\x00' in new_password:
-        return json_response_error('Invalid characters in password.', status=400)
-    if confirm_password and '\x00' in confirm_password:
-        return json_response_error('Invalid characters in password.', status=400)
+    if new_password:
+        is_valid, error_msg = validate_password_strength(new_password)
+        if not is_valid:
+            return json_response_error(f'New password: {error_msg}', status=400)
+        if '\x00' in new_password:
+            return json_response_error('Invalid characters in new password.', status=400)
+    
+    if confirm_password:
+        is_valid, error_msg = validate_password_strength(confirm_password)
+        if not is_valid:
+            return json_response_error(f'Confirm password: {error_msg}', status=400)
+        if '\x00' in confirm_password:
+            return json_response_error('Invalid characters in confirm password.', status=400)
     
     messages = []
     email_changed = False
@@ -410,10 +418,7 @@ def update_account_settings(request):
         if new_password != confirm_password:
             return json_response_error('New passwords do not match.', status=400)
         
-        # Validate password strength (already imported above)
-        is_valid, error_msg = validate_password_strength(new_password)
-        if not is_valid:
-            return json_response_error(error_msg, status=400)
+        # Password strength already validated above
         
         # Check if new password is different from current
         if user.check_password(new_password):

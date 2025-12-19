@@ -10,9 +10,19 @@ from SaveNLoad.views.api_helpers import (
     parse_json_body,
     get_game_or_error,
     get_client_worker_or_error,
+    get_local_save_path_or_error,
+    get_save_folder_or_error,
+    get_latest_save_folder_or_error,
+    validate_save_folder_or_error,
+    create_operation_response,
+    get_operation_or_error,
     json_response_error,
     json_response_success
 )
+from SaveNLoad.utils.string_utils import transform_path_error_message
+from SaveNLoad.utils.datetime_utils import calculate_progress_percentage, to_isoformat
+from SaveNLoad.utils.model_utils import filter_by_user_and_game
+from SaveNLoad.models.save_folder import SaveFolder
 from SaveNLoad.models import Game
 import json
 import os
@@ -37,8 +47,6 @@ def save_game(request, game_id):
     from SaveNLoad.models.operation_queue import OperationQueue, OperationType
     
     user = get_current_user(request)
-    if not user:
-        return json_response_error('Unauthorized', status=403)
     
     # Get game or return error
     game, error_response = get_game_or_error(game_id)
@@ -50,14 +58,10 @@ def save_game(request, game_id):
     if error_response:
         return error_response
     
-    local_save_path = data.get('local_save_path', '').strip()
-    if not local_save_path:
-        # Use the game's save_file_location if not provided
-        local_save_path = game.save_file_location
-    
-    # Validate local_save_path is provided (actual existence check happens on client worker)
-    if not local_save_path or not local_save_path.strip():
-        return json_response_error('Local save path is required', status=400)
+    # Get and validate local save path
+    local_save_path, error_response = get_local_save_path_or_error(data, game)
+    if error_response:
+        return error_response
     
     # Get client worker for this user (from session - automatic association)
     client_worker, error_response = get_client_worker_or_error(user, request)
@@ -71,11 +75,9 @@ def save_game(request, game_id):
     save_folder = SaveFolder.get_or_create_next(user, game)
     
     # Validate save folder has required information
-    if not save_folder or not save_folder.folder_number:
-        return json_response_error('Failed to create save folder', status=500)
-    
-    if not save_folder.smb_path:
-        return json_response_error('Save folder path is missing', status=500)
+    save_folder, error_response = validate_save_folder_or_error(save_folder)
+    if error_response:
+        return error_response
     
     # All validations passed - create operation in queue with save folder number and SMB path
     operation = OperationQueue.create_operation(
@@ -88,13 +90,11 @@ def save_game(request, game_id):
         client_worker=client_worker
     )
     
-    return json_response_success(
+    return create_operation_response(
+        operation,
+        client_worker,
         message='Save operation queued',
-        data={
-            'operation_id': operation.id,
-            'client_id': client_worker.client_id,
-            'save_folder_number': save_folder.folder_number
-        }
+        extra_data={'save_folder_number': save_folder.folder_number}
     )
 
 
@@ -109,8 +109,6 @@ def load_game(request, game_id):
     from SaveNLoad.models.operation_queue import OperationQueue, OperationType
     
     user = get_current_user(request)
-    if not user:
-        return json_response_error('Unauthorized', status=403)
     
     # Get game or return error
     game, error_response = get_game_or_error(game_id)
@@ -122,44 +120,25 @@ def load_game(request, game_id):
     if error_response:
         return error_response
     
-    local_save_path = data.get('local_save_path', '').strip()
-    if not local_save_path:
-        # Use the game's save_file_location if not provided
-        local_save_path = game.save_file_location
+    # Get and validate local save path
+    local_save_path, error_response = get_local_save_path_or_error(data, game)
+    if error_response:
+        return error_response
     
     save_folder_number = data.get('save_folder_number')  # Optional
     
-    # Validate local_save_path
-    if not local_save_path or not local_save_path.strip():
-        return json_response_error('Local save path is required', status=400)
-    
-    # Get the save folder to get smb_path
-    from SaveNLoad.models.save_folder import SaveFolder
-    save_folder = None
+    # Get the save folder
     if save_folder_number is None:
         # If no save_folder_number specified, use the latest one
-        save_folder = SaveFolder.get_latest(user, game)
-        if save_folder:
-            save_folder_number = save_folder.folder_number
-        else:
-            # No save folders exist for this game
-            return json_response_error('No save files found to load', status=404)
+        save_folder, error_response = get_latest_save_folder_or_error(user, game)
+        if error_response:
+            return error_response
+        save_folder_number = save_folder.folder_number
     else:
         # Get the specific save folder
-        save_folder = SaveFolder.get_by_number(user, game, save_folder_number)
-        if not save_folder:
-            return json_response_error('Save folder not found', status=404)
-    
-    # Validate save_folder_number is set
-    if save_folder_number is None:
-        return json_response_error('Save folder number is required', status=400)
-    
-    # Validate save_folder exists and has path
-    if not save_folder:
-        return json_response_error('Save folder not found', status=404)
-    
-    if not save_folder.smb_path:
-        return json_response_error('Save folder path is missing', status=500)
+        save_folder, error_response = get_save_folder_or_error(user, game, save_folder_number)
+        if error_response:
+            return error_response
     
     # Get client worker for this user (from session - automatic association)
     client_worker, error_response = get_client_worker_or_error(user, request)
@@ -177,13 +156,11 @@ def load_game(request, game_id):
         client_worker=client_worker
     )
     
-    return json_response_success(
+    return create_operation_response(
+        operation,
+        client_worker,
         message='Load operation queued',
-        data={
-            'operation_id': operation.id,
-            'client_id': client_worker.client_id,
-            'save_folder_number': save_folder_number
-        }
+        extra_data={'save_folder_number': save_folder_number}
     )
 
 
@@ -196,34 +173,24 @@ def check_operation_status(request, operation_id):
     from SaveNLoad.models.operation_queue import OperationQueue, OperationStatus
     
     user = get_current_user(request)
-    if not user:
-        return json_response_error('Unauthorized', status=403)
     
-    try:
-        operation = OperationQueue.objects.get(pk=operation_id, user=user)
-    except OperationQueue.DoesNotExist:
-        return json_response_error('Operation not found', status=404)
+    # Get operation or return error
+    from SaveNLoad.views.api_helpers import get_operation_or_error
+    operation, error_response = get_operation_or_error(operation_id, user)
+    if error_response:
+        return error_response
     
     # Get error message and transform to user-friendly format if needed
     error_message = None
     if operation.status == OperationStatus.FAILED and operation.error_message:
-        error_message = operation.error_message
-        error_lower = error_message.lower()
-        # Transform old error messages to user-friendly format
-        if 'local save path does not exist' in error_lower or 'local file not found' in error_lower:
-            if operation.operation_type == 'save':
-                error_message = 'Oops! You don\'t have any save files to save. Maybe you haven\'t played the game yet, or the save location is incorrect.'
-            elif operation.operation_type == 'load':
-                error_message = 'Oops! You don\'t have any save files to load. Maybe you haven\'t saved this game yet.'
+        error_message = transform_path_error_message(operation.error_message, operation.operation_type)
     
     # Calculate progress percentage
-    progress_percentage = 0
-    if operation.progress_total > 0:
-        progress_percentage = min(100, int((operation.progress_current / operation.progress_total) * 100))
-    elif operation.status == OperationStatus.COMPLETED:
-        progress_percentage = 100
-    elif operation.status == OperationStatus.FAILED:
-        progress_percentage = 0
+    progress_percentage = calculate_progress_percentage(
+        operation.progress_current,
+        operation.progress_total,
+        operation.status
+    )
     
     return json_response_success(
         data={
@@ -249,37 +216,26 @@ def delete_save_folder(request, game_id, folder_number):
     Delete a save folder (from SMB and database)
     """
     user = get_current_user(request)
-    if not user:
-        return json_response_error('Unauthorized', status=403)
     
     # Get game or return error
     game, error_response = get_game_or_error(game_id)
     if error_response:
         return error_response
     
-    from SaveNLoad.models.save_folder import SaveFolder
-    from SaveNLoad.models.client_worker import ClientWorker
-    from SaveNLoad.models.operation_queue import OperationQueue, OperationType, OperationStatus
+    from SaveNLoad.models.operation_queue import OperationQueue, OperationType
     
     try:
-        # Get the save folder from database
-        save_folder = SaveFolder.get_by_number(user, game, folder_number)
-        if not save_folder:
-            return json_response_error('Save folder not found', status=404)
-        
-        # Validate save folder has required information
-        if not save_folder.folder_number:
-            return json_response_error('Save folder number is missing', status=500)
-        
-        if not save_folder.smb_path:
-            return json_response_error('Save folder path is missing', status=500)
+        # Get and validate save folder
+        save_folder, error_response = get_save_folder_or_error(user, game, folder_number)
+        if error_response:
+            return error_response
         
         # Get client worker for this user (from session - automatic association)
         client_worker, error_response = get_client_worker_or_error(user, request)
         if error_response:
             return error_response
         
-        # All validations passed - create DELETE operation (with client_worker set but status PENDING)
+        # All validations passed - create DELETE operation
         operation = OperationQueue.create_operation(
             operation_type=OperationType.DELETE,
             user=user,
@@ -292,13 +248,11 @@ def delete_save_folder(request, game_id, folder_number):
         
         # Return operation_id immediately - frontend will poll for status
         # Save folder will be deleted from database when operation completes successfully
-        return json_response_success(
+        return create_operation_response(
+            operation,
+            client_worker,
             message='Delete operation queued',
-            data={
-                'operation_id': operation.id,
-                'client_id': client_worker.client_id,
-                'save_folder_number': folder_number
-            }
+            extra_data={'save_folder_number': folder_number}
         )
         
     except Exception as e:
@@ -313,29 +267,25 @@ def list_save_folders(request, game_id):
     List all available save folders for a game with their dates (sorted by latest)
     """
     user = get_current_user(request)
-    if not user:
-        return JsonResponse({'error': 'Unauthorized'}, status=403)
     
-    try:
-        game = Game.objects.get(pk=game_id)
-    except Game.DoesNotExist:
-        return JsonResponse({'error': 'Game not found'}, status=404)
+    # Get game or return error
+    game, error_response = get_game_or_error(game_id)
+    if error_response:
+        return error_response
     
     from SaveNLoad.models.save_folder import SaveFolder
+    from SaveNLoad.utils.model_utils import filter_by_user_and_game
     
     # Get all save folders for this user+game, sorted by latest first
-    save_folders = SaveFolder.objects.filter(
-        user=user,
-        game=game
-    ).order_by('-created_at')
+    save_folders = filter_by_user_and_game(SaveFolder, user, game).order_by('-created_at')
     
     folders_data = []
     for folder in save_folders:
         folders_data.append({
             'folder_number': folder.folder_number,
             'folder_name': folder.folder_name,
-            'created_at': folder.created_at.isoformat(),
-            'updated_at': folder.updated_at.isoformat()
+            'created_at': to_isoformat(folder.created_at),
+            'updated_at': to_isoformat(folder.updated_at)
         })
     
     return json_response_success(
@@ -354,8 +304,6 @@ def list_saves(request, game_id):
     from SaveNLoad.models.save_folder import SaveFolder
     
     user = get_current_user(request)
-    if not user:
-        return json_response_error('Unauthorized', status=403)
     
     # Get game or return error
     game, error_response = get_game_or_error(game_id)
@@ -371,23 +319,15 @@ def list_saves(request, game_id):
     
     # If no save_folder_number, use latest
     if save_folder_number is None:
-        latest_folder = SaveFolder.get_latest(user, game)
-        if latest_folder:
-            save_folder_number = latest_folder.folder_number
-        else:
-            return json_response_error('No save folders found', status=404)
-    
-    # Get save folder to get smb_path
-    save_folder = SaveFolder.get_by_number(user, game, save_folder_number)
-    if not save_folder:
-        return json_response_error('Save folder not found', status=404)
-    
-    # Validate save folder has required information
-    if not save_folder.folder_number:
-        return json_response_error('Save folder number is missing', status=500)
-    
-    if not save_folder.smb_path:
-        return json_response_error('Save folder SMB path is missing', status=500)
+        save_folder, error_response = get_latest_save_folder_or_error(user, game)
+        if error_response:
+            return error_response
+        save_folder_number = save_folder.folder_number
+    else:
+        # Get specific save folder
+        save_folder, error_response = get_save_folder_or_error(user, game, save_folder_number)
+        if error_response:
+            return error_response
     
     # Get client worker for this user (from session - automatic association)
     client_worker, error_response = get_client_worker_or_error(user, request)
@@ -444,8 +384,6 @@ def backup_all_saves(request, game_id):
     from SaveNLoad.models.operation_queue import OperationQueue, OperationType
     
     user = get_current_user(request)
-    if not user:
-        return json_response_error('Unauthorized', status=403)
     
     # Get game or return error
     game, error_response = get_game_or_error(game_id)
@@ -470,12 +408,10 @@ def backup_all_saves(request, game_id):
         client_worker=client_worker
     )
     
-    return json_response_success(
-        message='Backup operation queued',
-        data={
-            'operation_id': operation.id,
-            'client_id': client_worker.client_id
-        }
+    return create_operation_response(
+        operation,
+        client_worker,
+        message='Backup operation queued'
     )
 
 
@@ -486,21 +422,18 @@ def delete_all_saves(request, game_id):
     Delete all save folders for a game (from SMB and database)
     """
     user = get_current_user(request)
-    if not user:
-        return json_response_error('Unauthorized', status=403)
     
     # Get game or return error
     game, error_response = get_game_or_error(game_id)
     if error_response:
         return error_response
     
-    from SaveNLoad.models.save_folder import SaveFolder
-    from SaveNLoad.models.client_worker import ClientWorker
-    from SaveNLoad.models.operation_queue import OperationQueue, OperationType, OperationStatus
+    from SaveNLoad.models.operation_queue import OperationQueue, OperationType
+    from SaveNLoad.utils.model_utils import filter_by_user_and_game
     
     try:
         # Get all save folders for this user and game
-        save_folders = SaveFolder.objects.filter(user=user, game=game)
+        save_folders = filter_by_user_and_game(SaveFolder, user, game)
         
         if not save_folders.exists():
             return json_response_error('No save folders found for this game', status=404)
@@ -517,13 +450,9 @@ def delete_all_saves(request, game_id):
         for save_folder in save_folders:
             try:
                 # Validate save folder has required information
-                if not save_folder.folder_number:
-                    logger.warning(f'Save folder {save_folder.id} missing folder_number, skipping')
-                    invalid_folders.append(save_folder)
-                    continue
-                
-                if not save_folder.smb_path:
-                    logger.warning(f'Save folder {save_folder.id} missing smb_path, skipping')
+                validated_folder, error_response = validate_save_folder_or_error(save_folder)
+                if error_response:
+                    logger.warning(f'Save folder {save_folder.id} validation failed: {error_response.content.decode() if hasattr(error_response, "content") else "validation error"}, skipping')
                     invalid_folders.append(save_folder)
                     continue
                 
@@ -578,8 +507,6 @@ def get_game_save_location(request, game_id):
     Get the save file location for a game
     """
     user = get_current_user(request)
-    if not user:
-        return json_response_error('Unauthorized', status=403)
     
     # Get game or return error
     game, error_response = get_game_or_error(game_id)
@@ -604,8 +531,6 @@ def open_save_location(request, game_id):
     from SaveNLoad.models.operation_queue import OperationQueue, OperationType
     
     user = get_current_user(request)
-    if not user:
-        return json_response_error('Unauthorized', status=403)
     
     # Get game or return error
     game, error_response = get_game_or_error(game_id)
@@ -628,10 +553,8 @@ def open_save_location(request, game_id):
         client_worker=client_worker
     )
     
-    return json_response_success(
-        message='Open folder operation queued',
-        data={
-            'operation_id': operation.id,
-            'client_id': client_worker.client_id
-        }
+    return create_operation_response(
+        operation,
+        client_worker,
+        message='Open folder operation queued'
     )
