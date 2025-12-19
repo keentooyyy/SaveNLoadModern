@@ -9,6 +9,7 @@ class Game(models.Model):
     save_file_location = models.CharField(max_length=500, help_text="Path to the save file location")
     # Optional timestamp for when this game was last played (for future use in dashboards, sorting, etc.)
     last_played = models.DateTimeField(blank=True, null=True)
+    pending_deletion = models.BooleanField(default=False, help_text="If True, game is marked for deletion and will be deleted after all FTP cleanup operations complete")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

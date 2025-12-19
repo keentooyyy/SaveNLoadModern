@@ -55,57 +55,48 @@ def get_game_or_error(game_id):
         return None, json_response_error('Game not found', status=404)
 
 
-def get_client_worker_or_error(client_id=None, user=None):
+def get_client_worker_or_error(user, request=None):
     """
     Get client worker for a user or return error response
-    Priority: 1) specified client_id, 2) user's worker (from recent operations)
+    Uses client_id from session - if not available or worker is offline, fails immediately
     Returns: (client_worker_object, error_response_or_none)
     
-    Note: App requires workers to function, so we don't fall back to "any worker"
+    Note: App requires workers to function - if user's worker is not available, operation fails
     """
-    if client_id:
-        # Use specified client worker
-        try:
-            client_worker = ClientWorker.objects.get(client_id=client_id, is_active=True)
-            if not client_worker.is_online():
-                return None, json_response_error('Specified client worker is not online', status=400)
+    if not user:
+        return None, json_response_error('User is required', status=400)
+    
+    # Get client_id from session (user's current machine)
+    client_id = None
+    if request and hasattr(request, 'session'):
+        client_id = request.session.get('client_id')
+    
+    if not client_id:
+        # No worker in session - app requires worker to function
+        return None, JsonResponse({
+            'error': 'No client worker available. Please ensure the client worker is running on your machine.',
+            'requires_worker': True
+        }, status=503)
+    
+    # Try to get the worker from session
+    try:
+        client_worker = ClientWorker.objects.get(client_id=client_id, is_active=True)
+        if client_worker.is_online():
             return client_worker, None
-        except ClientWorker.DoesNotExist:
-            return None, json_response_error('Specified client worker not found', status=400)
-    
-    # Try to find the user's worker (the one that has been handling their operations)
-    if user:
-        from SaveNLoad.models.operation_queue import OperationQueue
-        
-        # Find the worker that has handled the most operations for this user
-        recent_operations = OperationQueue.objects.filter(
-            user=user,
-            client_worker__isnull=False
-        ).exclude(client_worker=None).order_by('-created_at')[:50]
-        
-        if recent_operations.exists():
-            # Count operations per worker
-            worker_counts = {}
-            for op in recent_operations:
-                if op.client_worker and op.client_worker.is_online():
-                    worker_id = op.client_worker.id
-                    worker_counts[worker_id] = worker_counts.get(worker_id, 0) + 1
-            
-            if worker_counts:
-                # Get the worker with the most operations
-                most_common_worker_id = max(worker_counts.items(), key=lambda x: x[1])[0]
-                try:
-                    client_worker = ClientWorker.objects.get(id=most_common_worker_id, is_active=True)
-                    if client_worker.is_online():
-                        return client_worker, None
-                except ClientWorker.DoesNotExist:
-                    pass
-    
-    # No worker found - app requires workers to function
-    return None, JsonResponse({
-        'error': 'No client worker available',
-        'requires_worker': True
-    }, status=503)
+        else:
+            # Worker in session is offline - fail immediately
+            return None, JsonResponse({
+                'error': f'Client worker ({client_id}) is offline. Please ensure the client worker is running.',
+                'requires_worker': True
+            }, status=503)
+    except ClientWorker.DoesNotExist:
+        # client_id in session doesn't exist anymore - clear it and fail
+        if request and hasattr(request, 'session'):
+            request.session.pop('client_id', None)
+        return None, JsonResponse({
+            'error': 'Client worker not found. Please ensure the client worker is running on your machine.',
+            'requires_worker': True
+        }, status=503)
 
 
 def check_admin_or_error(user):

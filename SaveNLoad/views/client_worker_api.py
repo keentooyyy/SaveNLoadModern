@@ -48,6 +48,22 @@ def register_client(request):
             worker.last_heartbeat = timezone.now()
             worker.save()
         
+        # If user is logged in, update their session with this client_id
+        # If user is logged out, clear client_id from session (if it exists)
+        # This associates the worker with the user's current session and revokes on logout
+        from SaveNLoad.views.custom_decorators import get_current_user
+        user = get_current_user(request)
+        if hasattr(request, 'session'):
+            if user:
+                # User is logged in - associate worker with session
+                request.session['client_id'] = client_id
+                request.session.modified = True
+            else:
+                # User is logged out - clear client_id if it exists (revoke association)
+                if 'client_id' in request.session:
+                    request.session.pop('client_id', None)
+                    request.session.modified = True
+        
         logger.info(f"Client worker registered: {client_id}")
         return json_response_success(
             message='Client worker registered successfully',
@@ -62,7 +78,7 @@ def register_client(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def heartbeat(request):
-    """Receive heartbeat from client worker"""
+    """Receive heartbeat from client worker and update user's session if logged in"""
     try:
         data, error_response = parse_json_body(request)
         if error_response:
@@ -77,6 +93,23 @@ def heartbeat(request):
         worker.last_heartbeat = timezone.now()
         worker.is_active = True
         worker.save()
+        
+        # If user is logged in, update their session with this client_id
+        # If user is logged out, clear client_id from session (if it exists)
+        # This associates the worker with the user's current session and revokes on logout
+        from SaveNLoad.views.custom_decorators import get_current_user
+        user = get_current_user(request)
+        if hasattr(request, 'session'):
+            if user:
+                # User is logged in - associate worker with session
+                request.session['client_id'] = client_id
+                request.session.modified = True
+            else:
+                # User is logged out - clear client_id if it exists (revoke association)
+                if 'client_id' in request.session:
+                    request.session.pop('client_id', None)
+                    request.session.modified = True
+        
         return json_response_success()
         
     except Exception as e:
@@ -112,7 +145,7 @@ def unregister_client(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 def check_connection(request):
-    """Check if client worker is connected - only returns info for the requesting client"""
+    """Check if client worker is connected and update user's session if logged in"""
     # Get client_id from query parameter if provided
     client_id = request.GET.get('client_id', '').strip()
     
@@ -120,6 +153,21 @@ def check_connection(request):
         # Check specific client
         worker = ClientWorker.get_worker_by_id(client_id)
         is_connected = worker is not None and worker.is_online()
+        
+        # If user is logged in and worker is connected, store client_id in session
+        # If user is logged out, clear client_id from session (if it exists)
+        # This associates the worker with the user's current session and revokes on logout
+        from SaveNLoad.views.custom_decorators import get_current_user
+        user = get_current_user(request)
+        if hasattr(request, 'session'):
+            if user and is_connected:
+                # User is logged in and worker is online - associate worker with session
+                request.session['client_id'] = client_id
+                request.session.modified = True
+            elif not user and 'client_id' in request.session:
+                # User is logged out - clear client_id (revoke association)
+                request.session.pop('client_id', None)
+                request.session.modified = True
         
         return JsonResponse({
             'connected': is_connected,
@@ -269,6 +317,38 @@ def complete_operation(request, operation_id):
                         logger.info(f"Deleted save folder {operation.save_folder_number} from database after successful SMB deletion")
                 except Exception as e:
                     logger.warning(f"Failed to delete save folder from database after operation: {e}")
+            
+            # Check if game is pending deletion and all operations are complete
+            if operation.game.pending_deletion and operation.operation_type == 'delete' and not operation.save_folder_number:
+                # This is a game deletion operation - check if all operations for this game are complete
+                from SaveNLoad.models.operation_queue import OperationStatus
+                remaining_operations = OperationQueue.objects.filter(
+                    game=operation.game,
+                    status__in=[OperationStatus.PENDING, OperationStatus.IN_PROGRESS]
+                ).exclude(id=operation.id)
+                
+                if not remaining_operations.exists():
+                    # All operations are complete - check if all succeeded
+                    all_operations = OperationQueue.objects.filter(
+                        game=operation.game,
+                        operation_type='delete',
+                        save_folder_number__isnull=True  # Game deletion operations
+                    )
+                    
+                    all_succeeded = all_operations.exclude(status=OperationStatus.COMPLETED).count() == 0
+                    
+                    if all_succeeded:
+                        # All operations succeeded - delete the game
+                        game_name = operation.game.name
+                        game_id = operation.game.id
+                        operation.game.delete()  # This will CASCADE delete all SaveFolders and OperationQueue records
+                        logger.info(f"Game {game_id} ({game_name}) deleted from database after all FTP cleanup operations completed successfully")
+                    else:
+                        # Some operations failed - keep the game, clear pending_deletion flag
+                        operation.game.pending_deletion = False
+                        operation.game.save()
+                        failed_count = all_operations.filter(status=OperationStatus.FAILED).count()
+                        logger.warning(f"Game {operation.game.id} ({operation.game.name}) deletion cancelled - {failed_count} FTP operation(s) failed")
         else:
             error_message = data.get('error', data.get('message', 'Operation failed'))
             
@@ -281,6 +361,39 @@ def complete_operation(request, operation_id):
                     error_message = 'Oops! You don\'t have any save files to load. Maybe you haven\'t saved this game yet.'
             
             operation.mark_failed(error_message)
+            
+            # Check if game is pending deletion and all operations are complete
+            # Only check after all operations complete (per documentation: "After All Operations Complete")
+            if operation.game.pending_deletion and operation.operation_type == 'delete' and not operation.save_folder_number:
+                # This is a game deletion operation - check if all operations for this game are complete
+                from SaveNLoad.models.operation_queue import OperationStatus
+                remaining_operations = OperationQueue.objects.filter(
+                    game=operation.game,
+                    status__in=[OperationStatus.PENDING, OperationStatus.IN_PROGRESS]
+                ).exclude(id=operation.id)
+                
+                if not remaining_operations.exists():
+                    # All operations are complete - check if all succeeded
+                    all_operations = OperationQueue.objects.filter(
+                        game=operation.game,
+                        operation_type='delete',
+                        save_folder_number__isnull=True  # Game deletion operations
+                    )
+                    
+                    all_succeeded = all_operations.exclude(status=OperationStatus.COMPLETED).count() == 0
+                    
+                    if all_succeeded:
+                        # All operations succeeded - delete the game
+                        game_name = operation.game.name
+                        game_id = operation.game.id
+                        operation.game.delete()  # This will CASCADE delete all SaveFolders and OperationQueue records
+                        logger.info(f"Game {game_id} ({game_name}) deleted from database after all FTP cleanup operations completed successfully")
+                    else:
+                        # Some operations failed - keep the game, clear pending_deletion flag
+                        operation.game.pending_deletion = False
+                        operation.game.save()
+                        failed_count = all_operations.filter(status=OperationStatus.FAILED).count()
+                        logger.warning(f"Game {operation.game.id} ({operation.game.name}) deletion cancelled - {failed_count} FTP operation(s) failed")
             
             # Cleanup: If SAVE operation failed due to missing local path or empty saves, delete the save folder
             # This prevents orphaned save folders when user provides invalid path or empty saves
