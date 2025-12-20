@@ -39,15 +39,11 @@ document.addEventListener('DOMContentLoaded', function () {
             align-items: center;
         `;
 
-        // Create card-like container to match page styling
-        const cardContainer = document.createElement('div');
-        cardContainer.style.cssText = `
-            background-color: #283144;
-            border-radius: 8px;
-            padding: 2.5rem 3rem;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        // Create spinner container
+        const spinnerContainer = document.createElement('div');
+        spinnerContainer.style.cssText = `
             text-align: center;
-            min-width: 250px;
+            color: white;
         `;
 
         // Create spinner with primary blue color
@@ -67,20 +63,15 @@ document.addEventListener('DOMContentLoaded', function () {
         spinnerText.textContent = 'Loading...';
         spinner.appendChild(spinnerText);
 
-        // Create loading text with matching theme colors
+        // Create loading text
         const loadingText = document.createElement('p');
         loadingText.className = 'text-white mt-3 mb-0';
-        loadingText.style.cssText = `
-            font-size: 1.1rem;
-            font-weight: 500;
-            color: #ffffff;
-            margin-top: 1.5rem;
-        `;
+        loadingText.style.cssText = 'font-size: 1.1rem; font-weight: 500;';
         loadingText.textContent = 'Searching for games...';
 
-        cardContainer.appendChild(spinner);
-        cardContainer.appendChild(loadingText);
-        loadingOverlay.appendChild(cardContainer);
+        spinnerContainer.appendChild(spinner);
+        spinnerContainer.appendChild(loadingText);
+        loadingOverlay.appendChild(spinnerContainer);
 
         // Add to body
         document.body.appendChild(loadingOverlay);
