@@ -30,13 +30,13 @@ services:
   web:
     # Use pre-built image from GitHub Container Registry
     # To use local build, comment this and uncomment the build section below
-    image: ghcr.io/keentooyyy/savenloadmodern:prod-latest
+    # image: ghcr.io/keentooyyy/savenloadmodern:prod-latest
     # Alternative: Use Docker Hub
     # image: ${DOCKER_USERNAME:-your-username}/savenloadmodern:prod-latest
     # Alternative: Build locally (uncomment to use)
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile.prod
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
     container_name: savenload_web_prod
     command: sh -c "python manage.py collectstatic --noinput && python manage.py makemigrations && python manage.py migrate && python manage.py seed_admin && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --threads 2 --timeout 120 --keep-alive 5 --access-logfile - --error-logfile -"
     volumes:

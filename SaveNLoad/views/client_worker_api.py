@@ -254,8 +254,6 @@ def get_pending_operations(request, client_id):
         return json_response_error('Client worker not found', status=404)
 
 
-
-
 @csrf_exempt
 @require_http_methods(["POST"])
 def update_operation_progress(request, operation_id):
