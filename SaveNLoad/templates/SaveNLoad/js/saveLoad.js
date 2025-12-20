@@ -250,8 +250,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Create toast element
         const toast = document.createElement('div');
         const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
-        toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
         
         const messageText = document.createTextNode(message);
         toast.appendChild(messageText);

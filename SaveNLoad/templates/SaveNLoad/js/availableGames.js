@@ -153,26 +153,23 @@ document.addEventListener('DOMContentLoaded', function () {
         if (game.image) {
             // Card with image
             const imgWrapper = document.createElement('div');
-            imgWrapper.className = 'card-img-wrapper position-relative overflow-hidden';
-            imgWrapper.style.cssText = 'height: 320px; background-color: #1c222f;';
+            imgWrapper.className = 'card-img-wrapper position-relative overflow-hidden bg-body';
+            imgWrapper.style.height = '320px';
             
             const img = document.createElement('img');
             img.src = game.image;
-            img.className = 'card-img-top w-100 h-100 game-card-img';
+            img.className = 'card-img-top w-100 h-100 game-card-img object-fit-cover';
             img.alt = game.title;
-            img.style.cssText = 'object-fit: cover;';
             
             const overlay = document.createElement('div');
             overlay.className = 'position-absolute bottom-0 start-0 end-0 p-3 game-card-overlay';
             
             const title = document.createElement('h5');
-            title.className = 'card-title text-white fw-bold mb-1';
-            title.style.fontSize = '1.1rem';
+            title.className = 'card-title text-white fw-bold mb-1 fs-6';
             title.textContent = game.title;
             
             const footer = document.createElement('small');
-            footer.className = 'text-white-50 d-flex align-items-center mb-2';
-            footer.style.fontSize = '0.85rem';
+            footer.className = 'text-white-50 d-flex align-items-center mb-2 small';
             
             const clockIcon = document.createElement('i');
             clockIcon.className = 'fas fa-clock me-1';
@@ -183,9 +180,8 @@ document.addEventListener('DOMContentLoaded', function () {
             buttonsDiv.className = 'd-flex gap-2 mt-2';
             
             const saveBtn = document.createElement('button');
-            saveBtn.className = 'btn btn-sm btn-success save-game-btn';
+            saveBtn.className = 'btn btn-sm btn-success save-game-btn flex-fill';
             saveBtn.setAttribute('data-game-id', game.id);
-            saveBtn.style.flex = '1';
             saveBtn.setAttribute('title', 'Save Game to server');
             const saveIcon = document.createElement('i');
             saveIcon.className = 'fas fa-upload me-1';
@@ -193,9 +189,8 @@ document.addEventListener('DOMContentLoaded', function () {
             saveBtn.appendChild(document.createTextNode(' Save'));
             
             const loadBtn = document.createElement('button');
-            loadBtn.className = 'btn btn-sm btn-primary quick-load-btn';
+            loadBtn.className = 'btn btn-sm btn-primary quick-load-btn flex-fill';
             loadBtn.setAttribute('data-game-id', game.id);
-            loadBtn.style.flex = '1';
             loadBtn.setAttribute('title', 'Quick Load - Load most recent save');
             const loadIcon = document.createElement('i');
             loadIcon.className = 'fas fa-download me-1';
@@ -215,8 +210,8 @@ document.addEventListener('DOMContentLoaded', function () {
         } else {
             // Card without image
             const cardBody = document.createElement('div');
-            cardBody.className = 'card-body d-flex align-items-center justify-content-center';
-            cardBody.style.cssText = 'min-height: 320px; background-color: #1c222f;';
+            cardBody.className = 'card-body d-flex align-items-center justify-content-center bg-body';
+            cardBody.style.minHeight = '320px';
             
             const centerDiv = document.createElement('div');
             centerDiv.className = 'text-center w-100';

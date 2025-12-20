@@ -41,10 +41,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Create spinner container
         const spinnerContainer = document.createElement('div');
-        spinnerContainer.style.cssText = `
-            text-align: center;
-            color: white;
-        `;
+        spinnerContainer.className = 'text-center text-white';
 
         // Create spinner with primary blue color
         const spinner = document.createElement('div');
@@ -65,8 +62,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Create loading text
         const loadingText = document.createElement('p');
-        loadingText.className = 'text-white mt-3 mb-0';
-        loadingText.style.cssText = 'font-size: 1.1rem; font-weight: 500;';
+        loadingText.className = 'text-white mt-3 mb-0 fs-6 fw-medium';
         loadingText.textContent = 'Searching for games...';
 
         spinnerContainer.appendChild(spinner);
@@ -209,10 +205,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Create container for the list
         const listContainer = document.createElement('div');
-        listContainer.style.cssText = `
-            padding: 0;
-            margin: 0;
-        `;
+        listContainer.className = 'p-0 m-0';
 
         games.forEach(game => {
             const gameId = String(game.id ?? '');
@@ -224,14 +217,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Create list item container
             const listItem = document.createElement('div');
-            listItem.style.cssText = `
-                display: flex;
-                align-items: center;
-                padding: 0.75rem 1rem;
-                cursor: pointer;
-                transition: background-color 0.2s ease;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            `;
+            listItem.className = 'search-list-item';
 
             // Store raw values in data attributes (not HTML-escaped)
             listItem.dataset.gameId = gameId;
@@ -239,77 +225,37 @@ document.addEventListener('DOMContentLoaded', function () {
             listItem.dataset.saveLocation = saveLocation;
             listItem.dataset.bannerUrl = bannerUrl;
 
-            // Add hover effect with app's accent color
-            listItem.addEventListener('mouseenter', function() {
-                this.style.backgroundColor = 'rgba(90, 141, 238, 0.15)';
-            });
-            listItem.addEventListener('mouseleave', function() {
-                this.style.backgroundColor = 'transparent';
-            });
+            // Hover effect is handled by CSS class .search-list-item:hover
 
             // Create image container
             if (bannerUrl && isValidImageUrl(bannerUrl)) {
                 const imgContainer = document.createElement('div');
-                imgContainer.style.cssText = `
-                    flex-shrink: 0;
-                    width: 60px;
-                    height: 60px;
-                    margin-right: 1rem;
-                    border-radius: 4px;
-                    overflow: hidden;
-                    background-color: rgba(255, 255, 255, 0.05);
-                `;
+                imgContainer.className = 'search-img-container';
 
                 const img = document.createElement('img');
                 img.src = bannerUrl;
                 img.alt = gameName;
-                img.style.cssText = `
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                `;
+                img.className = 'w-100 h-100 object-fit-cover';
                 img.referrerPolicy = 'no-referrer';
                 imgContainer.appendChild(img);
                 listItem.appendChild(imgContainer);
             } else {
                 // Placeholder for games without images
                 const placeholder = document.createElement('div');
-                placeholder.style.cssText = `
-                    flex-shrink: 0;
-                    width: 60px;
-                    height: 60px;
-                    margin-right: 1rem;
-                    border-radius: 4px;
-                    background-color: rgba(255, 255, 255, 0.05);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                `;
+                placeholder.className = 'search-img-container d-flex align-items-center justify-content-center';
                 const icon = document.createElement('i');
-                icon.className = 'fas fa-gamepad text-white-50';
-                icon.style.fontSize = '1.5rem';
+                icon.className = 'fas fa-gamepad text-white-50 fs-4';
                 placeholder.appendChild(icon);
                 listItem.appendChild(placeholder);
             }
 
             // Create text content container
             const textContainer = document.createElement('div');
-            textContainer.style.cssText = `
-                flex: 1;
-                min-width: 0;
-            `;
+            textContainer.className = 'search-text-container';
 
             // Primary title with year: "Game Name (Year)" in white
             const titleEl = document.createElement('div');
-            titleEl.style.cssText = `
-                color: #ffffff;
-                font-size: 1rem;
-                font-weight: 500;
-                margin-bottom: 0.25rem;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-            `;
+            titleEl.className = 'search-title';
             
             // Format title with year: "Game Name (Year)" or just "Game Name" if no year
             let titleText = gameName;
@@ -320,13 +266,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Secondary info: Company name in lighter grey
             const companyEl = document.createElement('div');
-            companyEl.style.cssText = `
-                color: rgba(255, 255, 255, 0.5);
-                font-size: 0.875rem;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-            `;
+            companyEl.className = 'search-subtitle';
             companyEl.appendChild(document.createTextNode(company || ''));
 
             textContainer.appendChild(titleEl);
@@ -464,13 +404,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const toggleBtn = document.getElementById('toggle_search_btn');
         if (!searchSection || !toggleBtn) return;
 
-        const isHidden = searchSection.style.display === 'none' || !searchSection.style.display;
+        const isHidden = searchSection.classList.contains('d-none');
 
         if (isHidden) {
-            searchSection.style.display = 'block';
+            searchSection.classList.remove('d-none');
             toggleBtn.textContent = 'Hide Search';
         } else {
-            searchSection.style.display = 'none';
+            searchSection.classList.add('d-none');
             toggleBtn.textContent = 'Search Game';
             clearElement(searchResults);
             if (searchInput) searchInput.value = '';
@@ -480,8 +420,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // Show toast notification (XSS-safe)
     function showToast(message, type = 'info') {
         const toast = document.createElement('div');
-        toast.className = `alert alert-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} alert-dismissible fade show position-fixed`;
-        toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
         
         // Use textContent for message to prevent XSS
         const messageSpan = document.createElement('span');

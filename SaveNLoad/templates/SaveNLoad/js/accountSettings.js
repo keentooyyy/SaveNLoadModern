@@ -2,8 +2,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // Show toast notification (XSS-safe)
     function showToast(message, type = 'info') {
         const toast = document.createElement('div');
-        toast.className = `alert alert-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} alert-dismissible fade show position-fixed`;
-        toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
         
         // Use textContent for message to prevent XSS
         const messageSpan = document.createElement('span');
