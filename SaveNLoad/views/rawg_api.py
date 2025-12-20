@@ -168,15 +168,22 @@ def search_games(query: str, limit: int = 10) -> List[Dict]:
                 except:
                     year = ''
             
-            # Extract developer or publisher name
+            # Extract all genre names and join them
+            # RAWG API returns genres as arrays of objects with 'id', 'name', and 'slug'
             company = ''
-            developers = game.get('developers', [])
-            publishers = game.get('publishers', [])
+            genres = game.get('genres', [])
             
-            if developers and len(developers) > 0:
-                company = developers[0].get('name', '')
-            elif publishers and len(publishers) > 0:
-                company = publishers[0].get('name', '')
+            if genres and len(genres) > 0:
+                genre_names = []
+                for genre in genres:
+                    if isinstance(genre, dict):
+                        genre_name = genre.get('name', '')
+                        if genre_name:
+                            genre_names.append(genre_name)
+                
+                # Join all genres with comma and space
+                if genre_names:
+                    company = ', '.join(genre_names)
             
             games.append(
                 {

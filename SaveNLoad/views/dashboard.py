@@ -85,7 +85,7 @@ def admin_dashboard(request):
     
     # Fetch all games from database for available games section (sorted alphabetically)
     # Get per-user last_played for each game
-    db_games = Game.objects.all().order_by('name')
+    db_games = Game.objects.all().order_by('name', 'id')  # Add 'id' for stable sorting
     available_games = []
     
     # Get last_played for all games for this user from SaveFolder records
@@ -106,6 +106,10 @@ def admin_dashboard(request):
             'image': game.banner if game.banner else '',
             'footer': format_last_played(last_played),
         })
+    
+    # Sort available games case-insensitively by title (fixes default sorting bug)
+    from SaveNLoad.utils.list_utils import sort_by_field
+    available_games = sort_by_field(available_games, 'title', reverse=False, case_insensitive=True)
     
     context = {
         'recent_games': recent_games,
@@ -154,7 +158,7 @@ def user_dashboard(request):
     
     # Fetch all games from database for available games section (sorted alphabetically)
     # Get per-user last_played for each game
-    db_games = Game.objects.all().order_by('name')
+    db_games = Game.objects.all().order_by('name', 'id')  # Add 'id' for stable sorting
     available_games = []
     
     # Get last_played for all games for this user from SaveFolder records
@@ -175,6 +179,10 @@ def user_dashboard(request):
             'image': game.banner if game.banner else '',
             'footer': format_last_played(last_played),
         })
+    
+    # Sort available games case-insensitively by title (fixes default sorting bug)
+    from SaveNLoad.utils.list_utils import sort_by_field
+    available_games = sort_by_field(available_games, 'title', reverse=False, case_insensitive=True)
     
     context = {
         'recent_games': recent_games,
