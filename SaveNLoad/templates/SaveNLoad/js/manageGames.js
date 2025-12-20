@@ -316,7 +316,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function deleteGame() {
-        if (!currentDeleteUrlRef) return;
+        if (!currentDeleteUrlRef || !currentDetailUrlRef) return;
         if (!csrfToken) {
             showToast('Error: CSRF token not found', 'error');
             return;
@@ -327,7 +327,33 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        // Extract game ID from the delete URL
+        const gameIdMatch = currentDeleteUrlRef.match(/\/games\/(\d+)\//);
+        if (!gameIdMatch) {
+            showToast('Error: Could not determine game ID', 'error');
+            return;
+        }
+        const gameId = gameIdMatch[1];
+
+        // Close the edit modal first
+        if (modalInstance) {
+            modalInstance.hide();
+        }
+
+        // Show progress modal
+        const modalData = createProgressModal(`delete_game_${gameId}`, 'Deleting Game', 'delete');
+        const { modal, modalBackdrop, updateProgress, progressBar, progressText, progressDetails } = modalData;
+        
+        // Update progress to show initial state
+        updateProgress({
+            percentage: 10,
+            current: 0,
+            total: 1,
+            message: 'Initiating deletion...'
+        });
+
         try {
+            // Make delete request
             const response = await fetch(currentDeleteUrlRef, {
                 method: 'POST',
                 headers: {
@@ -340,24 +366,182 @@ document.addEventListener('DOMContentLoaded', function () {
             
             if (!response.ok || !data.success) {
                 const errorMsg = data.error || data.message || 'Failed to delete game';
+                modal.hide();
+                modalBackdrop.remove();
                 showToast(errorMsg, 'error');
                 return;
             }
 
-            // Close modal before reloading to prevent 404 errors
-            if (modalInstance) {
-                modalInstance.hide();
+            // Update progress
+            updateProgress({
+                percentage: 30,
+                current: 0,
+                total: 1,
+                message: 'Game deletion queued...'
+            });
+
+            // Poll for game deletion completion by checking operation status
+            const maxAttempts = 300; // 5 minutes max (1 second intervals)
+            let attempts = 0;
+            const pollInterval = 1000; // 1 second
+            
+            const checkGameDeletionStatus = async () => {
+                try {
+                    const checkResponse = await fetch(currentDetailUrlRef, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    
+                    // If 404, game is deleted (all operations completed)
+                    if (checkResponse.status === 404) {
+                        return { deleted: true, operations: null };
+                    }
+                    
+                    // If response is ok, check operation status
+                    if (checkResponse.ok) {
+                        const checkData = await checkResponse.json();
+                        const ops = checkData.deletion_operations || {};
+                        
+                        // If no operations exist and game is not pending deletion, something went wrong
+                        if (!checkData.pending_deletion && (!ops.total || ops.total === 0)) {
+                            return { deleted: false, operations: null, error: 'No deletion operations found' };
+                        }
+                        
+                        // Return operation status
+                        return {
+                            deleted: false,
+                            operations: {
+                                total: ops.total || 0,
+                                pending: ops.pending || 0,
+                                completed: ops.completed || 0,
+                                failed: ops.failed || 0,
+                                progress_percentage: ops.progress_percentage || 0,
+                            },
+                            pending_deletion: checkData.pending_deletion || false
+                        };
+                    }
+                    
+                    return { deleted: false, operations: null, error: 'Failed to check status' };
+                } catch (error) {
+                    console.error('Error checking game deletion status:', error);
+                    return { deleted: false, operations: null, error: error.message };
+                }
+            };
+
+            // Helper function to handle deletion completion
+            const handleDeletionComplete = () => {
+                updateProgress({
+                    percentage: 100,
+                    current: 1,
+                    total: 1,
+                    message: 'Game deleted successfully!'
+                });
+                
+                progressBar.classList.remove('progress-bar-animated');
+                progressBar.style.backgroundColor = '#198754';
+                progressText.textContent = 'Game Deleted Successfully!';
+                progressDetails.textContent = 'The game has been removed from the system';
+                
+                setTimeout(() => {
+                    modal.hide();
+                    modalBackdrop.remove();
+                    window.location.reload();
+                }, 1500);
+            };
+
+            // Initial check before starting polling
+            const initialStatus = await checkGameDeletionStatus();
+            if (initialStatus.deleted) {
+                handleDeletionComplete();
+                return;
             }
-            
-            // Show success message briefly before reload
-            showToast('Game deleted successfully', 'success');
-            
-            // Small delay to show toast, then reload
-            setTimeout(() => {
-                window.location.reload();
-            }, 500);
+
+            // Poll until all operations complete and game is deleted
+            const poll = setInterval(async () => {
+                attempts++;
+                const status = await checkGameDeletionStatus();
+                
+                if (status.deleted) {
+                    // Game is deleted - all operations completed
+                    clearInterval(poll);
+                    handleDeletionComplete();
+                } else if (status.operations) {
+                    const ops = status.operations;
+                    
+                    // Update progress based on actual operation status
+                    if (ops.total > 0) {
+                        // Show progress based on completed operations
+                        const baseProgress = 30; // Start at 30% after queuing
+                        const operationProgress = Math.min(ops.progress_percentage, 100);
+                        const overallProgress = baseProgress + Math.floor((operationProgress * 0.7)); // Use 70% of remaining progress
+                        
+                        updateProgress({
+                            percentage: overallProgress,
+                            current: ops.completed,
+                            total: ops.total,
+                            message: ops.pending > 0 ? 'Deleting FTP files...' : 'Finalizing deletion...'
+                        });
+                        
+                        // Update progress text with actual counts
+                        if (ops.pending > 0) {
+                            progressText.textContent = `${ops.completed}/${ops.total} operations completed`;
+                            progressDetails.textContent = `${ops.pending} operation(s) remaining...`;
+                        } else if (ops.failed > 0) {
+                            // Some operations failed - game will NOT be deleted, but some FTP files may have been deleted
+                            clearInterval(poll);
+                            progressBar.classList.remove('progress-bar-animated');
+                            progressBar.style.backgroundColor = '#dc3545';
+                            progressText.textContent = 'Deletion Cancelled';
+                            progressDetails.textContent = `${ops.failed} operation(s) failed. The game will not be deleted. Note: Some FTP files may have been deleted for operations that succeeded.`;
+                            setTimeout(() => {
+                                modal.hide();
+                                modalBackdrop.remove();
+                                showToast(`Game deletion cancelled. ${ops.failed} FTP cleanup operation(s) failed. The game has been kept in the database.`, 'error');
+                            }, 4000);
+                            return;
+                        } else {
+                            // All operations completed, waiting for game deletion
+                            updateProgress({
+                                percentage: 95,
+                                current: ops.total,
+                                total: ops.total,
+                                message: 'All operations completed, finalizing...'
+                            });
+                            progressText.textContent = `All ${ops.total} operation(s) completed`;
+                            progressDetails.textContent = 'Finalizing game deletion...';
+                        }
+                    } else if (status.pending_deletion) {
+                        // Game marked for deletion but no operations yet (shouldn't happen, but handle it)
+                        updateProgress({
+                            percentage: 40,
+                            current: 0,
+                            total: 1,
+                            message: 'Processing deletion...'
+                        });
+                    }
+                } else if (status.error) {
+                    // Error checking status
+                    console.error('Error checking deletion status:', status.error);
+                }
+                
+                // Timeout check
+                if (attempts >= maxAttempts) {
+                    clearInterval(poll);
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.style.backgroundColor = '#ffc107';
+                    progressText.textContent = 'Deletion Taking Longer Than Expected';
+                    progressDetails.textContent = 'The game deletion is still processing. The page will reload to show updated status.';
+                    
+                    setTimeout(() => {
+                        modal.hide();
+                        modalBackdrop.remove();
+                        window.location.reload();
+                    }, 2000);
+                }
+            }, pollInterval);
         } catch (e) {
             console.error('Error deleting game:', e);
+            modal.hide();
+            modalBackdrop.remove();
             showToast('Error: Failed to delete game. Please try again.', 'error');
         }
     }

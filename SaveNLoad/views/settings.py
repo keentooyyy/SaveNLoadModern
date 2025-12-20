@@ -238,12 +238,42 @@ def game_detail(request, game_id):
         return error_response
 
     if request.method == "GET":
+        from SaveNLoad.models.operation_queue import OperationQueue, OperationStatus, OperationType
+        from SaveNLoad.utils.operation_utils import get_pending_or_in_progress_operations, is_game_deletion_operation
+        
+        # Get deletion operations for this game (operations without save_folder_number)
+        deletion_operations = OperationQueue.objects.filter(
+            game=game,
+            operation_type=OperationType.DELETE,
+            save_folder_number__isnull=True
+        )
+        
+        # Get pending/in-progress operations
+        pending_ops = get_pending_or_in_progress_operations(deletion_operations)
+        total_deletion_ops = deletion_operations.count()
+        pending_count = pending_ops.count()
+        completed_count = deletion_operations.filter(status=OperationStatus.COMPLETED).count()
+        failed_count = deletion_operations.filter(status=OperationStatus.FAILED).count()
+        
+        # Calculate progress percentage
+        progress_percentage = 0
+        if total_deletion_ops > 0:
+            progress_percentage = int((completed_count / total_deletion_ops) * 100)
+        
         return JsonResponse({
             'id': game.id,
             'name': game.name,
             'banner': game.banner or '',
             'save_file_location': game.save_file_location,
             'last_played': game.last_played.isoformat() if getattr(game, "last_played", None) else None,
+            'pending_deletion': getattr(game, 'pending_deletion', False),
+            'deletion_operations': {
+                'total': total_deletion_ops,
+                'pending': pending_count,
+                'completed': completed_count,
+                'failed': failed_count,
+                'progress_percentage': progress_percentage,
+            }
         })
 
     if request.method == "DELETE":
