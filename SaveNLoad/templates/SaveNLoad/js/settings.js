@@ -94,11 +94,21 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    /**
+     * Show the search results modal and sync the modal search input with the main search input
+     */
     function showModal() {
         if (!modalElement || !window.bootstrap) return;
         if (!bootstrapModal) {
             bootstrapModal = window.bootstrap.Modal.getOrCreateInstance(modalElement);
         }
+        
+        // Sync modal search input with main search input
+        const modalSearchInput = document.getElementById('modal_search_input');
+        if (modalSearchInput && searchInput) {
+            modalSearchInput.value = searchInput.value.trim();
+        }
+        
         bootstrapModal.show();
     }
 
@@ -180,6 +190,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    /**
+     * Display search results in a clean list format matching the app's dark theme
+     * Shows game image, title, and save location in a minimalist design
+     */
     function displaySearchResults(games) {
         // Clear previous results safely
         clearElement(searchResults);
@@ -193,67 +207,134 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const listGroup = document.createElement('div');
-        listGroup.className = 'list-group';
+        // Create container for the list
+        const listContainer = document.createElement('div');
+        listContainer.style.cssText = `
+            padding: 0;
+            margin: 0;
+        `;
 
         games.forEach(game => {
             const gameId = String(game.id ?? '');
             const gameName = game.name ?? '';
             const saveLocation = game.save_file_location ?? '';
             const bannerUrl = game.banner ?? '';
+            const year = game.year ?? '';
+            const company = game.company ?? '';
 
-            const link = document.createElement('a');
-            link.href = '#';
-            link.className = 'list-group-item list-group-item-action bg-primary text-white border-secondary';
+            // Create list item container
+            const listItem = document.createElement('div');
+            listItem.style.cssText = `
+                display: flex;
+                align-items: center;
+                padding: 0.75rem 1rem;
+                cursor: pointer;
+                transition: background-color 0.2s ease;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            `;
 
             // Store raw values in data attributes (not HTML-escaped)
-            link.dataset.gameId = gameId;
-            link.dataset.gameName = gameName;
-            link.dataset.saveLocation = saveLocation;
-            link.dataset.bannerUrl = bannerUrl;
+            listItem.dataset.gameId = gameId;
+            listItem.dataset.gameName = gameName;
+            listItem.dataset.saveLocation = saveLocation;
+            listItem.dataset.bannerUrl = bannerUrl;
 
-            // Add hover effect
-            link.style.transition = 'background-color 0.2s ease';
-            link.addEventListener('mouseenter', function() {
-                this.style.backgroundColor = 'rgba(90, 141, 238, 0.2)';
+            // Add hover effect with app's accent color
+            listItem.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = 'rgba(90, 141, 238, 0.15)';
             });
-            link.addEventListener('mouseleave', function() {
-                this.style.backgroundColor = '';
+            listItem.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = 'transparent';
             });
 
-            const row = document.createElement('div');
-            row.className = 'd-flex align-items-center';
-
+            // Create image container
             if (bannerUrl && isValidImageUrl(bannerUrl)) {
+                const imgContainer = document.createElement('div');
+                imgContainer.style.cssText = `
+                    flex-shrink: 0;
+                    width: 60px;
+                    height: 60px;
+                    margin-right: 1rem;
+                    border-radius: 4px;
+                    overflow: hidden;
+                    background-color: rgba(255, 255, 255, 0.05);
+                `;
+
                 const img = document.createElement('img');
                 img.src = bannerUrl;
                 img.alt = gameName;
-                img.className = 'me-3 rounded';
-                img.style.width = '50px';
-                img.style.height = '50px';
-                img.style.objectFit = 'cover';
+                img.style.cssText = `
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                `;
                 img.referrerPolicy = 'no-referrer';
-                row.appendChild(img);
+                imgContainer.appendChild(img);
+                listItem.appendChild(imgContainer);
+            } else {
+                // Placeholder for games without images
+                const placeholder = document.createElement('div');
+                placeholder.style.cssText = `
+                    flex-shrink: 0;
+                    width: 60px;
+                    height: 60px;
+                    margin-right: 1rem;
+                    border-radius: 4px;
+                    background-color: rgba(255, 255, 255, 0.05);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                `;
+                const icon = document.createElement('i');
+                icon.className = 'fas fa-gamepad text-white-50';
+                icon.style.fontSize = '1.5rem';
+                placeholder.appendChild(icon);
+                listItem.appendChild(placeholder);
             }
 
-            const textWrapper = document.createElement('div');
+            // Create text content container
+            const textContainer = document.createElement('div');
+            textContainer.style.cssText = `
+                flex: 1;
+                min-width: 0;
+            `;
 
-            const titleEl = document.createElement('h6');
-            titleEl.className = 'mb-1 text-white';
-            titleEl.appendChild(document.createTextNode(gameName));
+            // Primary title with year: "Game Name (Year)" in white
+            const titleEl = document.createElement('div');
+            titleEl.style.cssText = `
+                color: #ffffff;
+                font-size: 1rem;
+                font-weight: 500;
+                margin-bottom: 0.25rem;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            `;
+            
+            // Format title with year: "Game Name (Year)" or just "Game Name" if no year
+            let titleText = gameName;
+            if (year) {
+                titleText = `${gameName} (${year})`;
+            }
+            titleEl.appendChild(document.createTextNode(titleText));
 
-            const saveEl = document.createElement('small');
-            saveEl.className = 'text-white-50';
-            saveEl.appendChild(document.createTextNode(saveLocation));
+            // Secondary info: Company name in lighter grey
+            const companyEl = document.createElement('div');
+            companyEl.style.cssText = `
+                color: rgba(255, 255, 255, 0.5);
+                font-size: 0.875rem;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            `;
+            companyEl.appendChild(document.createTextNode(company || ''));
 
-            textWrapper.appendChild(titleEl);
-            textWrapper.appendChild(saveEl);
-            row.appendChild(textWrapper);
-            link.appendChild(row);
-            listGroup.appendChild(link);
+            textContainer.appendChild(titleEl);
+            textContainer.appendChild(companyEl);
+            listItem.appendChild(textContainer);
 
             // Click handler – uses dataset values (not HTML)
-            link.addEventListener('click', function (e) {
+            listItem.addEventListener('click', function (e) {
                 e.preventDefault();
                 populateForm(
                     this.dataset.gameId || '',
@@ -266,9 +347,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     bootstrapModal.hide();
                 }
             });
+
+            listContainer.appendChild(listItem);
         });
 
-        searchResults.appendChild(listGroup);
+        searchResults.appendChild(listContainer);
         showModal();
     }
 
@@ -333,6 +416,29 @@ document.addEventListener('DOMContentLoaded', function () {
         if (query.length < 2) {
             return;
         }
+        clearTimeout(searchTimeout);
+        searchGames(query);
+    }
+
+    /**
+     * Trigger search from the modal search input
+     * Syncs the main search input and performs the search
+     */
+    function triggerModalSearch() {
+        const modalSearchInput = document.getElementById('modal_search_input');
+        if (!modalSearchInput) return;
+        
+        const query = modalSearchInput.value.trim();
+        if (query.length < 2) {
+            return;
+        }
+        
+        // Sync with main search input
+        if (searchInput) {
+            searchInput.value = query;
+        }
+        
+        // Perform search
         clearTimeout(searchTimeout);
         searchGames(query);
     }
@@ -513,8 +619,21 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    // Wire up modal search input event listeners
+    const modalSearchInput = document.getElementById('modal_search_input');
+    if (modalSearchInput) {
+        // Enter key to search
+        modalSearchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                triggerModalSearch();
+            }
+        });
+    }
+
     // Expose a couple of helpers for inline handlers
     window.clearForm = clearForm;
     window.toggleSearch = toggleSearch;
     window.triggerSearch = triggerSearch;
+    window.triggerModalSearch = triggerModalSearch;
 });

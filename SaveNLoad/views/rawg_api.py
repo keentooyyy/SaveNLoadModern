@@ -158,11 +158,33 @@ def search_games(query: str, limit: int = 10) -> List[Dict]:
             if not image:
                 continue
             
+            # Extract release year from released date
+            released = game.get('released', '')
+            year = ''
+            if released:
+                try:
+                    # Extract year from date string (e.g., "2016-02-26" -> "2016")
+                    year = released.split('-')[0] if '-' in released else released[:4] if len(released) >= 4 else ''
+                except:
+                    year = ''
+            
+            # Extract developer or publisher name
+            company = ''
+            developers = game.get('developers', [])
+            publishers = game.get('publishers', [])
+            
+            if developers and len(developers) > 0:
+                company = developers[0].get('name', '')
+            elif publishers and len(publishers) > 0:
+                company = publishers[0].get('name', '')
+            
             games.append(
                 {
                     'id': game.get('id'),
                     'title': game.get('name', 'Unknown'),
                     'image': image,
+                    'year': year,
+                    'company': company,
                 }
             )
             

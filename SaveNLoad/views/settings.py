@@ -119,7 +119,7 @@ def search_game(request):
         return JsonResponse({'games': []})
     
     try:
-        games = rawg_search_games(query=query, limit=10)
+        games = rawg_search_games(query=query, limit=15)
         
         results = []
         for game in games:
@@ -130,6 +130,8 @@ def search_game(request):
                     'banner': game.get('image') or '',
                     # RAWG doesn't know the local save path – leave empty for manual input
                     'save_file_location': '',
+                    'year': game.get('year', ''),
+                    'company': game.get('company', ''),
                 }
             )
         

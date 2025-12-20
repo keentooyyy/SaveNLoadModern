@@ -1,13 +1,25 @@
 <!-- Game search results modal -->
 <div class="modal fade" id="gameSearchModal" tabindex="-1" aria-labelledby="gameSearchModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+    <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered modal-lg" style="max-width: 900px;">
         <div class="modal-content bg-primary text-white border-0">
             <div class="modal-header bg-primary border-secondary">
-                <h5 class="modal-title text-white" id="gameSearchModalLabel">Select a Game</h5>
+                <h5 class="modal-title text-white" id="gameSearchModalLabel">Select Item</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body bg-primary" id="modal_search_results">
+            <div class="modal-body bg-primary" id="modal_search_results" style="max-height: 500px; overflow-y: auto;">
                 <!-- Results rendered by settings.js -->
+            </div>
+            <div class="modal-footer bg-primary border-secondary d-flex gap-2">
+                <button type="button" class="btn btn-secondary text-white" id="modal_search_btn" onclick="triggerModalSearch()">
+                    Search
+                </button>
+                <input 
+                    type="text" 
+                    class="form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white" 
+                    id="modal_search_input" 
+                    placeholder="Type game name to search..."
+                    style="flex: 1;">
+                <button type="button" class="btn btn-outline-secondary text-white" data-bs-dismiss="modal">Cancel</button>
             </div>
         </div>
     </div>
