@@ -10,6 +10,91 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let searchTimeout = null;
     let bootstrapModal = null;
+    let loadingOverlay = null;
+
+    /**
+     * Show full-page loading overlay with spinner
+     * Creates a semi-transparent overlay that covers the entire page
+     * Matches the page's dark theme with primary blue accent color
+     */
+    function showLoadingOverlay() {
+        // Remove existing overlay if present
+        if (loadingOverlay && loadingOverlay.parentNode) {
+            loadingOverlay.remove();
+        }
+
+        // Create overlay container with dark theme background
+        loadingOverlay = document.createElement('div');
+        loadingOverlay.id = 'search_loading_overlay';
+        loadingOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(28, 34, 47, 0.85);
+            z-index: 9998;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        `;
+
+        // Create card-like container to match page styling
+        const cardContainer = document.createElement('div');
+        cardContainer.style.cssText = `
+            background-color: #283144;
+            border-radius: 8px;
+            padding: 2.5rem 3rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            text-align: center;
+            min-width: 250px;
+        `;
+
+        // Create spinner with primary blue color
+        const spinner = document.createElement('div');
+        spinner.className = 'spinner-border';
+        spinner.style.cssText = `
+            width: 3rem;
+            height: 3rem;
+            border-width: 0.25em;
+            border-color: #5a8dee;
+            border-right-color: transparent;
+        `;
+        spinner.setAttribute('role', 'status');
+
+        const spinnerText = document.createElement('span');
+        spinnerText.className = 'visually-hidden';
+        spinnerText.textContent = 'Loading...';
+        spinner.appendChild(spinnerText);
+
+        // Create loading text with matching theme colors
+        const loadingText = document.createElement('p');
+        loadingText.className = 'text-white mt-3 mb-0';
+        loadingText.style.cssText = `
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: #ffffff;
+            margin-top: 1.5rem;
+        `;
+        loadingText.textContent = 'Searching for games...';
+
+        cardContainer.appendChild(spinner);
+        cardContainer.appendChild(loadingText);
+        loadingOverlay.appendChild(cardContainer);
+
+        // Add to body
+        document.body.appendChild(loadingOverlay);
+    }
+
+    /**
+     * Hide and remove the loading overlay
+     */
+    function hideLoadingOverlay() {
+        if (loadingOverlay && loadingOverlay.parentNode) {
+            loadingOverlay.remove();
+            loadingOverlay = null;
+        }
+    }
 
     function clearElement(element) {
         if (!element) return;
@@ -196,12 +281,20 @@ document.addEventListener('DOMContentLoaded', function () {
         showModal();
     }
 
+    /**
+     * Search for games using the configured search URL
+     * Shows a loading overlay during the search request
+     * @param {string} query - The search query string
+     */
     async function searchGames(query) {
         if (!searchUrl) {
             console.error('Search URL not configured');
             showToast('Search functionality not configured', 'error');
             return;
         }
+        
+        // Show loading overlay
+        showLoadingOverlay();
         
         try {
             const response = await fetch(`${searchUrl}?q=${encodeURIComponent(query)}`);
@@ -216,14 +309,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 console.error('Search error from server:', data.error);
                 showToast('Failed to search games: ' + data.error, 'error');
                 displaySearchResults([]);
-                return;
+            } else {
+                displaySearchResults(data.games || []);
             }
-            
-            displaySearchResults(data.games || []);
         } catch (error) {
             console.error('Search error:', error);
             showToast('Error searching games. Please check console for details.', 'error');
             displaySearchResults([]);
+        } finally {
+            // Always hide loading overlay when search completes
+            hideLoadingOverlay();
         }
     }
 
