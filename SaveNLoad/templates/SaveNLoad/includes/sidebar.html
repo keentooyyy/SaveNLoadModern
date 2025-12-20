@@ -3,38 +3,38 @@
 <!-- Sidebar Navigation -->
 <aside class="offcanvas offcanvas-start sidebar h-100 d-flex flex-column" tabindex="-1" id="{% if sidebar_id %}{{ sidebar_id }}{% else %}sidebar{% endif %}" aria-labelledby="sidebarLabel">
     <!-- Sidebar Header -->
-    <div class="sidebar-header d-flex align-items-center justify-content-between p-2 p-md-3">
-        <div class="sidebar-logo d-flex align-items-center flex-grow-1 min-w-0">
-            <div class="logo-icon d-flex me-md-4 me-lg-5 flex-shrink-0">
+    <div class="border-bottom border-secondary d-flex align-items-center justify-content-between p-2 p-md-3 gap-2 gap-md-3" style="min-height: 70px;">
+        <div class="d-flex align-items-center flex-grow-1 min-w-0 gap-2 gap-md-3">
+            <div class="d-flex align-items-center justify-content-center flex-shrink-0 logo-icon">
                 <img src="{% static 'images/icon.png' %}" alt="Save N Load" class="img-fluid">
             </div>
-            <span class="sidebar-brand text-white fw-bold text-truncate">Save N Load</span>
+            <span class="text-white fw-bold text-truncate fs-5">Save N Load</span>
         </div>
-        <button type="button" class="btn-close btn-close-white d-lg-none ms-1 ms-md-2 flex-shrink-0" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        <button type="button" class="btn-close btn-close-white d-lg-none flex-shrink-0 ms-2" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
 
     <!-- Navigation Menu -->
-    <nav class="sidebar-nav flex-grow-1 overflow-auto mt-3">
+    <nav class="flex-grow-1 overflow-auto mt-3">
         <!-- Top Section -->
         <ul class="list-unstyled mb-0">
-            <li class="nav-item mb-2">
+            <li class="mb-2">
                 {% if is_user %}
                     {% url 'user:dashboard' as dashboard_url %}
                 {% else %}
                     {% url 'admin:dashboard' as dashboard_url %}
                 {% endif %}
-                <a href="{{ dashboard_url }}" class="nav-link d-flex align-items-center text-white text-decoration-none px-3 py-2 {% if request.path == dashboard_url %}active{% endif %}">
+                <a href="{{ dashboard_url }}" class="sidebar-nav-link d-flex align-items-center text-white text-decoration-none px-3 py-2 rounded {% if request.path == dashboard_url %}active{% endif %}">
                     <i class="fas fa-home me-2"></i>
                     <span class="flex-grow-1">Home</span>
                 </a>
             </li>
-            <li class="nav-item mb-2">
+            <li class="mb-2">
                 {% if is_user %}
                     {% url 'user:settings' as settings_url %}
                 {% else %}
                     {% url 'admin:settings' as settings_url %}
                 {% endif %}
-                <a href="{{ settings_url }}" class="nav-link d-flex align-items-center text-white text-decoration-none px-3 py-2 {% if request.path == settings_url %}active{% endif %}">
+                <a href="{{ settings_url }}" class="sidebar-nav-link d-flex align-items-center text-white text-decoration-none px-3 py-2 rounded {% if request.path == settings_url %}active{% endif %}">
                     <i class="fas fa-cog me-2"></i>
                     <span class="flex-grow-1">Settings</span>
                 </a>

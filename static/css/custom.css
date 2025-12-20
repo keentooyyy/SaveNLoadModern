@@ -1,86 +1,57 @@
-/* Custom styles for SaveNLoad Modern */
+/* Custom styles for SaveNLoad Modern - Minimal CSS using Bootstrap where possible */
 
 :root {
-    --sidebar-width: 300px; /* Change this value to adjust sidebar width everywhere */
+    --sidebar-width: 300px;
+    --sidebar-bg: #283046;
+    --body-bg: #1c222f;
 }
 
 body {
-    background-color: #1c222f;
+    background-color: var(--body-bg);
     min-height: 100vh;
 }
 
-/* Login page specific - one-off overflow handling */
+/* Login page overflow handling */
 .login-page {
     height: 100vh;
     overflow-y: auto;
     overflow-x: hidden;
 }
 
-/* White placeholder text for inputs with primary background */
-.bg-primary::placeholder,
-.form-control.bg-primary::placeholder {
+/* Placeholder text for primary background inputs */
+.bg-primary::placeholder {
     color: rgba(255, 255, 255, 0.6) !important;
 }
 
-.bg-primary::-webkit-input-placeholder {
-    color: rgba(255, 255, 255, 0.6) !important;
-}
-
-.bg-primary::-moz-placeholder {
-    color: rgba(255, 255, 255, 0.6) !important;
-    opacity: 1;
-}
-
-.bg-primary:-ms-input-placeholder {
-    color: rgba(255, 255, 255, 0.6) !important;
-}
-
-/* Custom checkbox styling to match dark theme */
+/* Custom checkbox for dark theme */
 .form-check-input.bg-primary:checked {
     background-color: #5a8dee !important;
     border-color: #5a8dee !important;
 }
 
-/* Remove Bootstrap validation icons, keep only red border */
+/* Remove Bootstrap validation icons */
 .form-control.is-invalid {
     background-image: none !important;
     padding-right: calc(1.5em + 0.75rem) !important;
 }
 
-.form-control.is-invalid:focus {
-    background-image: none !important;
-    border-color: #dc3545 !important;
-    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
-}
-
-/* Sidebar Styles - Only custom CSS where Bootstrap can't handle it */
+/* Sidebar - Only essential overrides Bootstrap can't handle */
 .sidebar {
     width: var(--sidebar-width) !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
-    background-color: #283046 !important;
+    background-color: var(--sidebar-bg) !important;
 }
 
-/* Override Bootstrap offcanvas width variable and width */
 .sidebar.offcanvas {
     --bs-offcanvas-width: var(--sidebar-width) !important;
     width: var(--sidebar-width) !important;
-    background-color: #283046 !important;
+    background-color: var(--sidebar-bg) !important;
 }
 
 .sidebar.offcanvas.offcanvas-start {
     width: var(--sidebar-width) !important;
 }
 
-/* Smooth animations for offcanvas */
-.offcanvas {
-    transition: transform 0.3s ease-in-out;
-}
-
-.offcanvas-backdrop {
-    transition: opacity 0.3s ease-in-out;
-}
-
-/* Mobile: Use 80% width instead of fixed width, increase text sizes */
+/* Mobile sidebar width */
 @media (max-width: 767.98px) {
     .sidebar.offcanvas {
         --bs-offcanvas-width: 80% !important;
@@ -90,36 +61,9 @@ body {
     .sidebar.offcanvas.offcanvas-start {
         width: 80% !important;
     }
-    
-    .offcanvas-backdrop {
-        background-color: rgba(0, 0, 0, 0.5);
-    }
-    
-    /* Increase text sizes on mobile */
-    .sidebar-brand {
-        font-size: 1.4rem !important;
-    }
-    
-    .sidebar-nav .nav-link {
-        font-size: 1.1rem !important;
-        padding: 0.875rem 1rem !important;
-    }
-    
-    .sidebar-nav .nav-link i {
-        font-size: 1.1rem !important;
-        width: 24px !important;
-    }
-    
-    .sidebar-footer {
-        font-size: 1rem !important;
-    }
-    
-    .sidebar-footer .small {
-        font-size: 0.95rem !important;
-    }
 }
 
-/* Tablet: Use max-width instead of percentage */
+/* Tablet sidebar width */
 @media (min-width: 768px) and (max-width: 991.98px) {
     .sidebar.offcanvas {
         --bs-offcanvas-width: 320px !important;
@@ -133,7 +77,7 @@ body {
     }
 }
 
-/* Override offcanvas for desktop - fixed positioning with max-width */
+/* Desktop sidebar - fixed positioning */
 @media (min-width: 992px) {
     .sidebar.offcanvas {
         position: fixed !important;
@@ -151,138 +95,82 @@ body {
         transform: none !important;
     }
     
-    /* Hide backdrop on desktop */
     .offcanvas-backdrop {
         display: none !important;
     }
     
-    /* Main content margin for fixed sidebar */
     .main-content {
         margin-left: var(--sidebar-width);
     }
 }
 
-.sidebar-header {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    min-height: 70px;
-    gap: 0.75rem;
-    overflow: hidden;
-}
-
-/* Sidebar logo container spacing */
-.sidebar-logo {
-    gap: 0.75rem;
-}
-
-/* Reduce header height on mobile and improve spacing */
+/* Sidebar header mobile adjustments */
 @media (max-width: 575.98px) {
-    .sidebar-header {
+    .sidebar .border-bottom {
         min-height: 60px;
         padding: 0.75rem 1rem !important;
-        gap: 1rem;
-    }
-    
-    .sidebar-logo {
-        gap: 0.75rem;
-    }
-    
-    /* Add padding for close button on mobile */
-    .sidebar-header .btn-close {
-        margin-right: 0 !important;
-        padding: 0.5rem !important;
-        margin-left: 0.5rem;
-    }
-    
-    /* Logo icon spacing on mobile */
-    .sidebar-header .logo-icon {
-        margin-right: 0.75rem !important;
     }
 }
 
-/* Ensure logo icon is consistent across all devices */
-.sidebar .logo-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.sidebar .logo-icon img,
-.sidebar .logo-icon svg {
-    width: 100%;
-    height: auto;
-    max-width: 50px;
-    min-width: 40px;
-    flex-shrink: 0;
-    object-fit: contain;
-}
-
-.sidebar-brand {
-    font-size: 1.25rem;
-    letter-spacing: 0.5px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-}
-
-/* Responsive brand text */
-@media (max-width: 575.98px) {
-    .sidebar-brand {
-        font-size: 0.9rem;
-        letter-spacing: 0.3px;
-    }
-}
-
-@media (min-width: 576px) and (max-width: 991.98px) {
-    .sidebar-brand {
-        font-size: 1.1rem;
-    }
-}
-
-.sidebar-nav .nav-link {
+/* Sidebar nav link styles - minimal custom for hover/active states */
+.sidebar-nav-link {
     transition: background-color 0.2s;
-    border-radius: 4px;
     margin: 2px 8px;
 }
 
-.sidebar-nav .nav-link:hover {
-    background-color: rgba(255, 255, 255, 0.08);
+.sidebar-nav-link:hover:not(.active) {
+    background-color: rgba(255, 255, 255, 0.08) !important;
 }
 
-.sidebar-nav .nav-link.active {
-    background-color: rgba(90, 141, 238, 0.15);
+.sidebar-nav-link.active {
+    background-color: rgba(90, 141, 238, 0.15) !important;
     color: #5a8dee !important;
 }
 
-.sidebar-nav .nav-link.active i {
-    color: #5a8dee;
+.sidebar-nav-link.active i {
+    color: #5a8dee !important;
 }
 
-.sidebar-nav .nav-link i {
+.sidebar-nav-link i {
     width: 20px;
     text-align: center;
     font-size: 0.9rem;
 }
 
-/* Hamburger menu button - ensure no extra lines */
-.hamburger-btn {
-    line-height: 1;
+/* Mobile text sizes */
+@media (max-width: 767.98px) {
+    .sidebar .border-bottom span {
+        font-size: 1.4rem !important;
+    }
+    
+    .sidebar-nav-link {
+        font-size: 1.1rem !important;
+        padding: 0.875rem 1rem !important;
+    }
+    
+    .sidebar-nav-link i {
+        font-size: 1.1rem !important;
+        width: 24px !important;
+    }
+    
+    .sidebar-footer {
+        font-size: 1rem !important;
+    }
+    
+    .sidebar-footer .small {
+        font-size: 0.95rem !important;
+    }
 }
 
-.hamburger-btn i {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
-    vertical-align: middle;
+/* Logo icon sizing */
+.sidebar .logo-icon img,
+.sidebar .logo-icon svg {
+    max-width: 50px;
+    min-width: 40px;
+    object-fit: contain;
 }
 
-/* Horizontal scrollable cards */
-.overflow-x-auto {
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-}
-
+/* Custom scrollbar styling */
 .overflow-x-auto::-webkit-scrollbar {
     height: 8px;
 }
@@ -301,26 +189,7 @@ body {
     background: rgba(255, 255, 255, 0.5);
 }
 
-/* Scroll arrows */
-.scroll-arrow {
-    transition: opacity 0.3s, transform 0.2s;
-    min-width: 40px;
-}
-
-.scroll-arrow:hover:not(:disabled) {
-    transform: scale(1.1);
-}
-
-.scroll-arrow:disabled {
-    cursor: not-allowed;
-}
-
-.cards-scroll-container {
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-}
-
-/* Game card hover zoom effect - custom CSS only for transform animation */
+/* Game card hover effects */
 .game-card {
     cursor: pointer;
     transition: transform 0.3s ease;
@@ -377,24 +246,21 @@ body {
     background-color: rgba(255, 255, 255, 0.08);
 }
 
-/* Fix available games grid squishing at ~997px width */
-/* Keep 3 columns (col-md-4) until we have enough space for 4 columns */
+/* Grid fixes for available games */
 @media (min-width: 992px) and (max-width: 1199.98px) {
     #availableGamesSection .col-lg-3 {
         flex: 0 0 auto;
-        width: 33.33333333% !important; /* Force 3 columns instead of 4 */
+        width: 33.33333333% !important;
     }
 }
 
-/* Prevent available games cards from stretching too wide on large screens */
-/* Set upper bound so cards maintain reasonable size even on very wide screens */
 @media (min-width: 1200px) {
     #availableGamesSection .col-lg-3 {
-        max-width: 300px; /* Upper bound - cards won't stretch beyond this */
+        max-width: 300px;
     }
 }
 
-/* Mobile: Give more space to search input */
+/* Mobile responsive adjustments */
 @media (max-width: 767.98px) {
     #gameSearchSortCollapse {
         padding-left: 0 !important;
@@ -417,23 +283,11 @@ body {
     }
 }
 
-/* Accordion header styles for Add Game, Account Settings, and Operation Queue */
+/* Accordion header transitions */
 .add-game-header,
 .account-settings-header,
 .operation-queue-header {
     cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.add-game-header .add-game-icon,
-.add-game-header .add-game-title,
-.add-game-header .add-game-chevron,
-.account-settings-header .account-settings-icon,
-.account-settings-header .account-settings-title,
-.account-settings-header .account-settings-chevron,
-.operation-queue-header .operation-queue-icon,
-.operation-queue-header .operation-queue-title,
-.operation-queue-header .operation-queue-chevron {
     transition: all 0.3s ease;
 }
 
@@ -449,16 +303,15 @@ body {
     color: #5A8DEE !important;
 }
 
-    /* Recent game card clickable styling */
-    .recent-game-card {
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
+/* Recent game card hover */
+.recent-game-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
 
-    .recent-game-card:hover {
-        transform: translateY(-2px);
-    }
+.recent-game-card:hover {
+    transform: translateY(-2px);
+}
 
-    .recent-game-card:hover .card {
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
-    }
-
+.recent-game-card:hover .card {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
