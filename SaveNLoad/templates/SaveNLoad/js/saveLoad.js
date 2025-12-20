@@ -315,13 +315,41 @@ document.addEventListener('DOMContentLoaded', function () {
                     body: JSON.stringify({}) // Empty body - uses game's save_file_location
                 });
 
+                // Handle 404 - game was deleted
+                if (response.status === 404) {
+                    showToast('Game not found (may have been deleted)', 'error');
+                    // Restore button
+                    btn.disabled = false;
+                    while (btn.firstChild) {
+                        btn.removeChild(btn.firstChild);
+                    }
+                    if (originalIcon) {
+                        const iconClone = originalIcon.cloneNode(true);
+                        btn.appendChild(iconClone);
+                    }
+                    btn.appendChild(document.createTextNode(' Save'));
+                    // Reload page to refresh game list
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                    return;
+                }
+
                 const data = await response.json();
 
                 if (data.success && data.operation_id) {
                     // Poll for operation completion
                     await pollOperationStatus(data.operation_id, btn, originalIcon, originalText);
                 } else {
-                    showToast(data.error || data.message || 'Failed to save game', 'error');
+                    // Check if it's a "not found" error
+                    if (response.status === 404 || (data.error && data.error.includes('not found'))) {
+                        showToast('Game not found (may have been deleted)', 'error');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    } else {
+                        showToast(data.error || data.message || 'Failed to save game', 'error');
+                    }
                     // Restore button on error
                     btn.disabled = false;
                     while (btn.firstChild) {
@@ -388,6 +416,26 @@ document.addEventListener('DOMContentLoaded', function () {
                             headers: { 'X-Requested-With': 'XMLHttpRequest' }
                         });
                         
+                        // Handle 404 - game was deleted
+                        if (foldersResponse.status === 404) {
+                            showToast('Game not found (may have been deleted)', 'error');
+                            // Restore button
+                            btn.disabled = false;
+                            while (btn.firstChild) {
+                                btn.removeChild(btn.firstChild);
+                            }
+                            if (originalIcon) {
+                                const iconClone = originalIcon.cloneNode(true);
+                                btn.appendChild(iconClone);
+                            }
+                            btn.appendChild(document.createTextNode(' Quick Load'));
+                            // Reload page to refresh game list
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 1500);
+                            return;
+                        }
+                        
                         if (foldersResponse.ok) {
                             const foldersData = await foldersResponse.json();
                             if (!foldersData.success || !foldersData.save_folders || foldersData.save_folders.length === 0) {
@@ -425,14 +473,40 @@ document.addEventListener('DOMContentLoaded', function () {
                     body: JSON.stringify({}) // Empty body - uses game's save_file_location and latest save folder
                 });
 
+                // Handle 404 - game was deleted
+                if (response.status === 404) {
+                    showToast('Game not found (may have been deleted)', 'error');
+                    // Restore button
+                    btn.disabled = false;
+                    while (btn.firstChild) {
+                        btn.removeChild(btn.firstChild);
+                    }
+                    if (originalIcon) {
+                        const iconClone = originalIcon.cloneNode(true);
+                        btn.appendChild(iconClone);
+                    }
+                    btn.appendChild(document.createTextNode(' Quick Load'));
+                    // Reload page to refresh game list
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                    return;
+                }
+
                 const data = await response.json();
 
                 if (data.success && data.operation_id) {
                     // Poll for operation completion
                     await pollLoadOperationStatus(data.operation_id, btn, originalIcon);
                 } else {
-                    // Check if error is about no save folders
-                    if (data.error && (data.error.includes('No save folders') || data.error.includes('save folder'))) {
+                    // Check if it's a "not found" error
+                    if (response.status === 404 || (data.error && data.error.includes('not found'))) {
+                        showToast('Game not found (may have been deleted)', 'error');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    } else if (data.error && (data.error.includes('No save folders') || data.error.includes('save folder'))) {
+                        // Check if error is about no save folders
                         showToast('Oops! You have no save files to load', 'error');
                     } else {
                         showToast(data.error || data.message || 'Failed to load game', 'error');

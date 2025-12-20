@@ -175,8 +175,30 @@ document.addEventListener('DOMContentLoaded', function () {
             const response = await fetch(detailUrl, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
+            
+            // Handle 404 - game was deleted
+            if (response.status === 404) {
+                console.warn('Game not found (may have been deleted)');
+                // Close modal if open
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+                // Reload page to refresh game list
+                window.location.reload();
+                return;
+            }
+            
             const data = await response.json();
             if (!response.ok) {
+                // Handle other errors
+                if (response.status === 404 || (data.error && data.error.includes('not found'))) {
+                    console.warn('Game not found (may have been deleted)');
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
+                    window.location.reload();
+                    return;
+                }
                 console.error('Failed to load game:', data);
                 return;
             }
@@ -198,6 +220,10 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } catch (e) {
             console.error('Error loading game:', e);
+            // If it's a network error and modal is open, close it
+            if (modalInstance) {
+                modalInstance.hide();
+            }
         }
     };
     loadGameRef = loadGame; // Store reference
@@ -205,7 +231,7 @@ document.addEventListener('DOMContentLoaded', function () {
     async function saveGame() {
         if (!currentDetailUrlRef) return;
         if (!csrfToken) {
-            console.error('CSRF token not found');
+            showToast('Error: CSRF token not found', 'error');
             return;
         }
 
@@ -225,9 +251,33 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 body: JSON.stringify(payload)
             });
+            
+            // Handle 404 - game was deleted
+            if (response.status === 404) {
+                showToast('Game not found (may have been deleted)', 'error');
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+                return;
+            }
+            
             const data = await response.json();
             if (!response.ok || !data.success) {
-                console.error('Failed to save game:', data);
+                // Check if it's a "not found" error
+                if (response.status === 404 || (data.error && data.error.includes('not found'))) {
+                    showToast('Game not found (may have been deleted)', 'error');
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                    return;
+                }
+                showToast(data.error || data.message || 'Failed to save game', 'error');
                 return;
             }
 
@@ -235,13 +285,40 @@ document.addEventListener('DOMContentLoaded', function () {
             window.location.reload();
         } catch (e) {
             console.error('Error saving game:', e);
+            showToast('Error: Failed to save game. Please try again.', 'error');
         }
+    }
+
+    // Helper function to show toast notifications
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed`;
+        toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        
+        const messageText = document.createTextNode(message);
+        toast.appendChild(messageText);
+        
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'btn-close';
+        closeBtn.setAttribute('data-bs-dismiss', 'alert');
+        closeBtn.setAttribute('aria-label', 'Close');
+        toast.appendChild(closeBtn);
+        
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.remove();
+            }
+        }, 5000);
     }
 
     async function deleteGame() {
         if (!currentDeleteUrlRef) return;
         if (!csrfToken) {
-            console.error('CSRF token not found');
+            showToast('Error: CSRF token not found', 'error');
             return;
         }
 
@@ -258,15 +335,30 @@ document.addEventListener('DOMContentLoaded', function () {
                     'X-CSRFToken': csrfToken
                 }
             });
+            
             const data = await response.json();
+            
             if (!response.ok || !data.success) {
-                console.error('Failed to delete game:', data);
+                const errorMsg = data.error || data.message || 'Failed to delete game';
+                showToast(errorMsg, 'error');
                 return;
             }
 
-            window.location.reload();
+            // Close modal before reloading to prevent 404 errors
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+            
+            // Show success message briefly before reload
+            showToast('Game deleted successfully', 'success');
+            
+            // Small delay to show toast, then reload
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
         } catch (e) {
             console.error('Error deleting game:', e);
+            showToast('Error: Failed to delete game. Please try again.', 'error');
         }
     }
 
@@ -329,9 +421,46 @@ document.addEventListener('DOMContentLoaded', function () {
             const response = await fetch(url, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
+            
+            // Handle 404 - game was deleted
+            if (response.status === 404) {
+                console.warn('Game not found (may have been deleted)');
+                clearElement(container);
+                container.appendChild(createErrorMessage('Game not found'));
+                // Close modal if open and reload page after a short delay
+                if (modalInstance) {
+                    setTimeout(() => {
+                        modalInstance.hide();
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                }
+                return;
+            }
+            
             const data = await response.json();
 
             if (!response.ok || !data.success) {
+                // Check if it's a "not found" error
+                if (response.status === 404 || (data.error && (data.error.includes('not found') || data.error.includes('Game not found')))) {
+                    console.warn('Game not found (may have been deleted)');
+                    clearElement(container);
+                    container.appendChild(createErrorMessage('Game not found'));
+                    if (modalInstance) {
+                        setTimeout(() => {
+                            modalInstance.hide();
+                            window.location.reload();
+                        }, 1500);
+                    } else {
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    }
+                    return;
+                }
                 clearElement(container);
                 container.appendChild(createErrorMessage(data.error || 'Failed to load saves'));
                 return;

@@ -181,8 +181,8 @@ def _queue_game_deletion_operations(game: Game, admin_user, request=None):
             return (False, error_msg)
         
         # Build safe game name (same logic as SaveFolder._generate_remote_path)
-        from SaveNLoad.utils.path_utils import sanitize_game_name_for_path
-        safe_game_name = sanitize_game_name_for_path(game.name)
+        from SaveNLoad.utils.path_utils import sanitize_game_name
+        safe_game_name = sanitize_game_name(game.name)
         
         # Create delete operations for each user's game directory
         # This will delete the entire game directory (username/gamename/) which includes all save folders

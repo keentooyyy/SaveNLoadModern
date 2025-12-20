@@ -4,6 +4,9 @@ from django.http import JsonResponse
 from functools import wraps
 from SaveNLoad.models import SimpleUsers
 from SaveNLoad.models.client_worker import ClientWorker
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def login_required(view_func):
@@ -11,11 +14,12 @@ def login_required(view_func):
     Custom login required decorator using sessions - IDOR-proof
     
     Security features:
-    - Validates session exists
-    - Validates user_id is a valid integer (prevents type confusion attacks)
-    - Verifies user still exists in database (prevents deleted user access)
-    - Clears invalid sessions automatically
+    - Uses get_current_user() for all validation logic (DRY principle)
     - Returns JSON error for AJAX requests instead of redirecting
+    - Attaches user to request.user for view access
+    
+    Note: All session validation, user_id validation, and database checks
+    are handled by get_current_user() to avoid code duplication.
     """
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
@@ -28,53 +32,18 @@ def login_required(view_func):
             request.path.startswith('/api/')
         )
         
-        # Check if session exists
-        if not hasattr(request, 'session'):
-            if is_ajax:
-                return JsonResponse({'error': 'Session not found. Please log in.', 'requires_login': True}, status=401)
-            return redirect(reverse('SaveNLoad:login'))
+        # Use get_current_user() to handle all validation logic
+        user = get_current_user(request)
         
-        # Get user_id from session
-        user_id = request.session.get('user_id')
-        if not user_id:
+        if not user:
+            # User not authenticated - return appropriate response
             if is_ajax:
                 return JsonResponse({'error': 'Not authenticated. Please log in.', 'requires_login': True}, status=401)
             return redirect(reverse('SaveNLoad:login'))
         
-        # Validate user_id is a valid integer (prevent type confusion attacks)
-        try:
-            user_id = int(user_id)
-        except (ValueError, TypeError):
-            # Invalid user_id type - clear session and redirect
-            request.session.flush()
-            if is_ajax:
-                return JsonResponse({'error': 'Invalid session. Please log in again.', 'requires_login': True}, status=401)
-            return redirect(reverse('SaveNLoad:login'))
-        
-        # Validate user_id is positive (prevent negative IDs or zero)
-        if user_id <= 0:
-            request.session.flush()
-            if is_ajax:
-                return JsonResponse({'error': 'Invalid session. Please log in again.', 'requires_login': True}, status=401)
-            return redirect(reverse('SaveNLoad:login'))
-        
-        # Get user from database - verify it still exists
-        try:
-            user = SimpleUsers.objects.get(id=user_id)
-            request.user = user  # Attach user to request
-            return view_func(request, *args, **kwargs)
-        except SimpleUsers.DoesNotExist:
-            # User was deleted - clear session to prevent orphaned sessions
-            request.session.flush()
-            if is_ajax:
-                return JsonResponse({'error': 'User not found. Please log in again.', 'requires_login': True}, status=401)
-            return redirect(reverse('SaveNLoad:login'))
-        except Exception:
-            # Unexpected error - redirect to login
-            request.session.flush()
-            if is_ajax:
-                return JsonResponse({'error': 'Authentication error. Please log in again.', 'requires_login': True}, status=401)
-            return redirect(reverse('SaveNLoad:login'))
+        # User is authenticated - attach to request and proceed
+        request.user = user
+        return view_func(request, *args, **kwargs)
     return wrapper
 
 
