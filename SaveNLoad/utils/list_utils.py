@@ -6,7 +6,7 @@ Common patterns for sorting, filtering, and manipulating lists
 
 def sort_by_field(items: list, field: str, reverse: bool = False, case_insensitive: bool = False):
     """
-    Sort list of dicts/objects by field
+    Sort list of dicts/objects by field with stable secondary sort by name
     
     Used in:
     - Game list sorting
@@ -19,24 +19,36 @@ def sort_by_field(items: list, field: str, reverse: bool = False, case_insensiti
         case_insensitive: Convert to lowercase for comparison
         
     Returns:
-        Sorted list
+        Sorted list (stable sort - items with equal primary values maintain consistent order)
     """
-    def get_value(item):
+    def get_sort_key(item):
+        # Primary sort value
         if isinstance(item, dict):
-            value = item.get(field)
+            primary_value = item.get(field)
+            # Use title/name as secondary sort for stability (prefer 'title', fallback to 'name')
+            secondary_value = item.get('title') or item.get('name', '')
         else:
-            value = getattr(item, field, None)
+            primary_value = getattr(item, field, None)
+            # Use title/name as secondary sort for stability (prefer 'title', fallback to 'name')
+            secondary_value = getattr(item, 'title', None) or getattr(item, 'name', '')
         
-        if case_insensitive and value:
-            return str(value).lower()
-        return value
+        # Handle case insensitive comparison
+        if case_insensitive:
+            if primary_value:
+                primary_value = str(primary_value).lower()
+            if secondary_value:
+                secondary_value = str(secondary_value).lower()
+        
+        # Return tuple for multi-key sorting: (primary, secondary)
+        # This ensures stable sorting when primary values are equal
+        return (primary_value, secondary_value)
     
-    return sorted(items, key=get_value, reverse=reverse)
+    return sorted(items, key=get_sort_key, reverse=reverse)
 
 
 def sort_by_dict_lookup(items: list, lookup_dict: dict, key_func=None, reverse: bool = False):
     """
-    Sort list by values from a lookup dictionary
+    Sort list by values from a lookup dictionary with stable secondary sort by name
     
     Used in:
     - Sorting games by last_played from separate dict
@@ -49,7 +61,7 @@ def sort_by_dict_lookup(items: list, lookup_dict: dict, key_func=None, reverse: 
         reverse: Sort in reverse order
         
     Returns:
-        Sorted list
+        Sorted list (stable sort - items with equal lookup values maintain consistent order)
     """
     if key_func is None:
         def key_func(item):
@@ -58,7 +70,21 @@ def sort_by_dict_lookup(items: list, lookup_dict: dict, key_func=None, reverse: 
             else:
                 return getattr(item, 'id', None)
     
-    return sorted(items, key=lambda x: lookup_dict.get(key_func(x)), reverse=reverse)
+    # Use tuple for multi-key sorting: (lookup_value, name)
+    # This ensures stable sorting when lookup values are equal
+    def get_sort_key(item):
+        lookup_value = lookup_dict.get(key_func(item))
+        # Use title/name as secondary sort for stability (prefer 'title', fallback to 'name')
+        if isinstance(item, dict):
+            secondary_value = item.get('title') or item.get('name', '')
+        else:
+            secondary_value = getattr(item, 'title', None) or getattr(item, 'name', '')
+        # Convert to lowercase for consistent comparison
+        if secondary_value:
+            secondary_value = str(secondary_value).lower()
+        return (lookup_value, secondary_value)
+    
+    return sorted(items, key=get_sort_key, reverse=reverse)
 
 
 def filter_none_values(items: list, field: str = None):

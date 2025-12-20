@@ -205,8 +205,8 @@ def search_available_games(request):
     if sort_by not in valid_sorts:
         sort_by = 'name_asc'
     
-    # Fetch all games
-    db_games = Game.objects.all()
+    # Fetch all games with consistent default ordering (by name, then ID for stability)
+    db_games = Game.objects.all().order_by('name', 'id')
     
     # Apply search filter if provided
     if search_query:
