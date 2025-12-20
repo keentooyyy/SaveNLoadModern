@@ -175,13 +175,47 @@ def check_connection(request):
             'last_heartbeat': worker.last_heartbeat.isoformat() if worker and is_connected else None,
         })
     else:
-        # No client_id provided - just check if any worker is connected (for backward compatibility)
-        # Don't expose other clients' information
-        is_connected = ClientWorker.is_worker_connected()
+        # No client_id provided - check if any worker is connected
+        # If user is logged in, try to associate an active worker with their session
+        from SaveNLoad.views.custom_decorators import get_current_user
+        user = get_current_user(request)
         
-        return JsonResponse({
+        is_connected = ClientWorker.is_worker_connected()
+        associated_worker = None
+        
+        # If user is logged in and worker is connected, try to associate one with session
+        if user and is_connected and hasattr(request, 'session'):
+            # First, check if there's already a client_id in session and if that worker is still online
+            existing_client_id = request.session.get('client_id')
+            if existing_client_id:
+                existing_worker = ClientWorker.get_worker_by_id(existing_client_id)
+                if existing_worker and existing_worker.is_online():
+                    # Existing worker in session is still online - use it
+                    associated_worker = existing_worker
+                else:
+                    # Existing worker is offline - clear it and find a new one
+                    request.session.pop('client_id', None)
+            
+            # If no worker associated yet, find any active worker and associate it
+            if not associated_worker:
+                active_worker = ClientWorker.get_any_active_worker()
+                if active_worker:
+                    # Associate this worker with the user's session
+                    request.session['client_id'] = active_worker.client_id
+                    request.session.modified = True
+                    associated_worker = active_worker
+        
+        # Build response
+        response_data = {
             'connected': is_connected,
-        })
+        }
+        
+        # Include client_id if we have an associated worker (for logged-in users)
+        if associated_worker:
+            response_data['client_id'] = associated_worker.client_id
+            response_data['last_heartbeat'] = associated_worker.last_heartbeat.isoformat()
+        
+        return JsonResponse(response_data)
 
 
 @csrf_exempt

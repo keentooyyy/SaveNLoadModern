@@ -15,16 +15,30 @@ def login_required(view_func):
     - Validates user_id is a valid integer (prevents type confusion attacks)
     - Verifies user still exists in database (prevents deleted user access)
     - Clears invalid sessions automatically
+    - Returns JSON error for AJAX requests instead of redirecting
     """
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
+        # Check if this is an AJAX request
+        # Check multiple indicators to reliably detect AJAX requests
+        is_ajax = (
+            request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
+            request.META.get('HTTP_CONTENT_TYPE', '').startswith('application/json') or
+            request.META.get('HTTP_ACCEPT', '').startswith('application/json') or
+            request.path.startswith('/api/')
+        )
+        
         # Check if session exists
         if not hasattr(request, 'session'):
+            if is_ajax:
+                return JsonResponse({'error': 'Session not found. Please log in.', 'requires_login': True}, status=401)
             return redirect(reverse('SaveNLoad:login'))
         
         # Get user_id from session
         user_id = request.session.get('user_id')
         if not user_id:
+            if is_ajax:
+                return JsonResponse({'error': 'Not authenticated. Please log in.', 'requires_login': True}, status=401)
             return redirect(reverse('SaveNLoad:login'))
         
         # Validate user_id is a valid integer (prevent type confusion attacks)
@@ -33,11 +47,15 @@ def login_required(view_func):
         except (ValueError, TypeError):
             # Invalid user_id type - clear session and redirect
             request.session.flush()
+            if is_ajax:
+                return JsonResponse({'error': 'Invalid session. Please log in again.', 'requires_login': True}, status=401)
             return redirect(reverse('SaveNLoad:login'))
         
         # Validate user_id is positive (prevent negative IDs or zero)
         if user_id <= 0:
             request.session.flush()
+            if is_ajax:
+                return JsonResponse({'error': 'Invalid session. Please log in again.', 'requires_login': True}, status=401)
             return redirect(reverse('SaveNLoad:login'))
         
         # Get user from database - verify it still exists
@@ -48,10 +66,14 @@ def login_required(view_func):
         except SimpleUsers.DoesNotExist:
             # User was deleted - clear session to prevent orphaned sessions
             request.session.flush()
+            if is_ajax:
+                return JsonResponse({'error': 'User not found. Please log in again.', 'requires_login': True}, status=401)
             return redirect(reverse('SaveNLoad:login'))
         except Exception:
             # Unexpected error - redirect to login
             request.session.flush()
+            if is_ajax:
+                return JsonResponse({'error': 'Authentication error. Please log in again.', 'requires_login': True}, status=401)
             return redirect(reverse('SaveNLoad:login'))
     return wrapper
 
