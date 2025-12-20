@@ -34,15 +34,16 @@ def login(request):
     
     if request.method == 'POST':
         # Sanitize and validate inputs
-        username = sanitize_username(request.POST.get('username'))
+        # Accept either username or email
+        username_or_email = request.POST.get('username', '').strip()
         password = request.POST.get('password')
         remember_me = request.POST.get('rememberMe') == 'on'
         
         # Validation with field-specific errors
         field_errors = {}
         
-        if not username:
-            field_errors['username'] = 'Username is required.'
+        if not username_or_email:
+            field_errors['username'] = 'Username or email is required.'
         
         if not password:
             field_errors['password'] = 'Password is required.'
@@ -55,47 +56,59 @@ def login(request):
                     message='Please fill in all required fields.'
                 )
             
-            # Custom authentication - check user exists and password matches
-            # Using Django ORM .get() prevents SQL injection
+            # Custom authentication - check user exists by username or email and password matches
+            # Using Django ORM .filter() prevents SQL injection
+            user = None
+            
+            # Try to find user by username first
             try:
-                user = SimpleUsers.objects.get(username=username)
-                if user.check_password(password):
-                    # Store user ID in session
-                    request.session['user_id'] = user.id
-                    
-                    # Handle "Remember Me" functionality
-                    if not remember_me:
-                        # Session expires in 1 day (86400 seconds) - standard practice
-                        request.session.set_expiry(86400)
-                    else:
-                        # Session expires in 2 weeks (1209600 seconds) when "Remember Me" is checked
-                        request.session.set_expiry(1209600)
-                    
-                    # Server-side redirect for AJAX (via custom header)
-                    if user.is_admin():
-                        redirect_url = reverse('admin:dashboard')
-                    else:
-                        redirect_url = reverse('user:dashboard')
-                    
-                    # Escape username to prevent XSS in response
-                    safe_username = escape(user.username)
-                    return json_response_with_redirect(
-                        message=f'Welcome back, {safe_username}!',
-                        redirect_url=redirect_url
-                    )
-                else:
-                    field_errors['username'] = 'Invalid username or password.'
-                    field_errors['password'] = 'Invalid username or password.'
-                    return json_response_field_errors(
-                        field_errors,
-                        message='Invalid username or password.'
-                    )
+                sanitized_username = sanitize_username(username_or_email)
+                if sanitized_username:
+                    user = SimpleUsers.objects.get(username=sanitized_username)
             except SimpleUsers.DoesNotExist:
-                field_errors['username'] = 'Invalid username or password.'
-                field_errors['password'] = 'Invalid username or password.'
+                pass
+            
+            # If not found by username, try email
+            if not user:
+                try:
+                    sanitized_email = sanitize_email(username_or_email)
+                    if sanitized_email:
+                        user = SimpleUsers.objects.get(email__iexact=sanitized_email)
+                except SimpleUsers.DoesNotExist:
+                    pass
+            
+            # Check password if user was found
+            if user and user.check_password(password):
+                # Store user ID in session
+                request.session['user_id'] = user.id
+                
+                # Handle "Remember Me" functionality
+                if not remember_me:
+                    # Session expires in 1 day (86400 seconds) - standard practice
+                    request.session.set_expiry(86400)
+                else:
+                    # Session expires in 2 weeks (1209600 seconds) when "Remember Me" is checked
+                    request.session.set_expiry(1209600)
+                
+                # Server-side redirect for AJAX (via custom header)
+                if user.is_admin():
+                    redirect_url = reverse('admin:dashboard')
+                else:
+                    redirect_url = reverse('user:dashboard')
+                
+                # Escape username to prevent XSS in response
+                safe_username = escape(user.username)
+                return json_response_with_redirect(
+                    message=f'Welcome back, {safe_username}!',
+                    redirect_url=redirect_url
+                )
+            else:
+                # User not found or password incorrect
+                field_errors['username'] = 'Invalid username/email or password.'
+                field_errors['password'] = 'Invalid username/email or password.'
                 return json_response_field_errors(
                     field_errors,
-                    message='Invalid username or password.'
+                    message='Invalid username/email or password.'
                 )
     
     return render(request, 'SaveNLoad/login.html')

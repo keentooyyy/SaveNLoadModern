@@ -80,8 +80,8 @@ body {
     transition: opacity 0.3s ease-in-out;
 }
 
-/* Mobile: Use 80% width instead of fixed width */
-@media (max-width: 991.98px) {
+/* Mobile: Use 80% width instead of fixed width, increase text sizes */
+@media (max-width: 767.98px) {
     .sidebar.offcanvas {
         --bs-offcanvas-width: 80% !important;
         width: 80% !important;
@@ -94,9 +94,46 @@ body {
     .offcanvas-backdrop {
         background-color: rgba(0, 0, 0, 0.5);
     }
+    
+    /* Increase text sizes on mobile */
+    .sidebar-brand {
+        font-size: 1.4rem !important;
+    }
+    
+    .sidebar-nav .nav-link {
+        font-size: 1.1rem !important;
+        padding: 0.875rem 1rem !important;
+    }
+    
+    .sidebar-nav .nav-link i {
+        font-size: 1.1rem !important;
+        width: 24px !important;
+    }
+    
+    .sidebar-footer {
+        font-size: 1rem !important;
+    }
+    
+    .sidebar-footer .small {
+        font-size: 0.95rem !important;
+    }
 }
 
-/* Override offcanvas for desktop - fixed positioning */
+/* Tablet: Use max-width instead of percentage */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .sidebar.offcanvas {
+        --bs-offcanvas-width: 320px !important;
+        width: 320px !important;
+        max-width: 320px !important;
+    }
+    
+    .sidebar.offcanvas.offcanvas-start {
+        width: 320px !important;
+        max-width: 320px !important;
+    }
+}
+
+/* Override offcanvas for desktop - fixed positioning with max-width */
 @media (min-width: 992px) {
     .sidebar.offcanvas {
         position: fixed !important;
@@ -107,6 +144,7 @@ body {
         transform: none !important;
         z-index: 1000 !important;
         border: none !important;
+        max-width: var(--sidebar-width) !important;
     }
     
     .sidebar.offcanvas.show {
@@ -139,19 +177,21 @@ body {
     }
 }
 
-/* Ensure SVG logo is consistent across all devices */
+/* Ensure logo icon is consistent across all devices */
 .sidebar .logo-icon {
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
+.sidebar .logo-icon img,
 .sidebar .logo-icon svg {
     width: 100%;
     height: auto;
     max-width: 50px;
     min-width: 40px;
     flex-shrink: 0;
+    object-fit: contain;
 }
 
 .sidebar-brand {
