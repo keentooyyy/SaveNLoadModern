@@ -456,7 +456,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     } catch (e) {
                         // If check fails, continue with load attempt - backend will handle it
-                        console.log('Could not check save folders, proceeding with load');
                     }
                 }
                 

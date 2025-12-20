@@ -1054,8 +1054,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const data = await response.json();
 
-            console.log('Delete response:', data); // Debug
-
             if (data.success && data.operation_id) {
                 // Show progress modal and poll for status
                 const modalData = createProgressModal(data.operation_id, 'Deleting Save Folder', 'delete');
@@ -1133,8 +1131,6 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             const data = await response.json();
-
-            console.log('Load response:', data); // Debug
 
             if (data.success && data.operation_id) {
                 // Show progress modal and poll for status
