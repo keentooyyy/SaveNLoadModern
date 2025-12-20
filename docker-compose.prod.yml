@@ -30,7 +30,7 @@ services:
   web:
     # Use pre-built image from GitHub Container Registry
     # To use local build, comment this and uncomment the build section below
-    image: ghcr.io/keentooyyy/savenloadmodern:prod-latest
+    image: ghcr.io/keentooyyy/savenloadmodern:latest
     # Alternative: Use Docker Hub
     # image: ${DOCKER_USERNAME:-your-username}/savenloadmodern:prod-latest
     # Alternative: Build locally (uncomment to use)
