@@ -43,9 +43,39 @@ jobs:
           # Calculate cutoff date (7 days ago) - grace period for untagged versions
           # This prevents breaking Docker clients with cached manifest references
           CUTOFF_DATE=$(date -u -d '7 days ago' +"%Y-%m-%dT%H:%M:%SZ")
+          CUTOFF_EPOCH=$(date -d "$CUTOFF_DATE" +%s 2>/dev/null || echo "0")
           
           echo "Processing versions..."
           echo "Grace period: Untagged versions newer than $CUTOFF_DATE will be kept"
+          echo "Additionally: Most recent untagged version will always be kept (prevents breaking cached pulls)"
+          
+          # First pass: collect all untagged versions to find the most recent one
+          echo "Collecting untagged versions..."
+          UNTAGGED_FILE=$(mktemp)
+          while IFS='|' read -r version_id tags created_at; do
+            if [ -z "$version_id" ]; then
+              continue
+            fi
+            if [ -z "$tags" ] || [ "$tags" = "" ]; then
+              CREATED_EPOCH=$(date -d "$created_at" +%s 2>/dev/null || echo "0")
+              echo "$version_id|$created_at|$CREATED_EPOCH" >> "$UNTAGGED_FILE"
+            fi
+          done < /tmp/all_versions.txt
+          
+          # Find the most recent untagged version (highest epoch)
+          MOST_RECENT_UNTAGGED_ID=""
+          MOST_RECENT_EPOCH=0
+          if [ -s "$UNTAGGED_FILE" ]; then
+            while IFS='|' read -r version_id created_at epoch; do
+              if [ "$epoch" -gt "$MOST_RECENT_EPOCH" ]; then
+                MOST_RECENT_EPOCH=$epoch
+                MOST_RECENT_UNTAGGED_ID=$version_id
+              fi
+            done < "$UNTAGGED_FILE"
+            if [ -n "$MOST_RECENT_UNTAGGED_ID" ]; then
+              echo "Most recent untagged version ID: $MOST_RECENT_UNTAGGED_ID (epoch: $MOST_RECENT_EPOCH)"
+            fi
+          fi
           
           # Process each version
           while IFS='|' read -r version_id tags created_at; do
@@ -88,25 +118,29 @@ jobs:
             if [ "$KEEP_THIS" = false ]; then
               # Check if tags is empty (untagged version - sha256 digest only)
               if [ -z "$tags" ] || [ "$tags" = "" ]; then
-                # Check if this untagged version is within grace period
-                # This prevents breaking Docker clients with cached manifest references
-                # Convert dates to epoch for reliable comparison
-                CREATED_EPOCH=$(date -d "$created_at" +%s 2>/dev/null || echo "0")
-                CUTOFF_EPOCH=$(date -d "$CUTOFF_DATE" +%s 2>/dev/null || echo "0")
-                if [ "$CREATED_EPOCH" -gt "$CUTOFF_EPOCH" ]; then
-                  echo "Keeping: (untagged version - within 7 day grace period, created: $created_at)"
+                # Always keep the most recent untagged version (prevents breaking cached pulls)
+                # This is the version that was previously tagged as 'latest' before a new push
+                if [ "$version_id" = "$MOST_RECENT_UNTAGGED_ID" ]; then
+                  echo "Keeping: (untagged version - most recent, always kept to prevent breaking cached pulls, created: $created_at)"
                   KEPT_COUNT=$((KEPT_COUNT + 1))
                 else
-                  echo "Deleting: (untagged version - older than 7 days, created: $created_at)"
-                  if gh api \
-                    -X DELETE \
-                    -H "Accept: application/vnd.github+json" \
-                    -H "X-GitHub-Api-Version: 2022-11-28" \
-                    "/users/${{ env.PACKAGE_OWNER }}/packages/container/${{ env.PACKAGE_NAME }}/versions/$version_id" 2>/dev/null; then
-                    DELETED_COUNT=$((DELETED_COUNT + 1))
-                    echo "  Deleted successfully"
+                  # For other untagged versions, check if within grace period
+                  CREATED_EPOCH=$(date -d "$created_at" +%s 2>/dev/null || echo "0")
+                  if [ "$CREATED_EPOCH" -gt "$CUTOFF_EPOCH" ]; then
+                    echo "Keeping: (untagged version - within 7 day grace period, created: $created_at)"
+                    KEPT_COUNT=$((KEPT_COUNT + 1))
                   else
-                    echo "  Failed to delete (may have been deleted already)"
+                    echo "Deleting: (untagged version - older than 7 days and not most recent, created: $created_at)"
+                    if gh api \
+                      -X DELETE \
+                      -H "Accept: application/vnd.github+json" \
+                      -H "X-GitHub-Api-Version: 2022-11-28" \
+                      "/users/${{ env.PACKAGE_OWNER }}/packages/container/${{ env.PACKAGE_NAME }}/versions/$version_id" 2>/dev/null; then
+                      DELETED_COUNT=$((DELETED_COUNT + 1))
+                      echo "  Deleted successfully"
+                    else
+                      echo "  Failed to delete (may have been deleted already)"
+                    fi
                   fi
                 fi
               # Check if it's a commit-based prod-* tag (not prod-latest)
@@ -131,6 +165,9 @@ jobs:
             fi
           done < /tmp/all_versions.txt
           
+          # Cleanup temp file
+          rm -f "$UNTAGGED_FILE"
+          
           echo ""
           echo "========================================="
           echo "Cleanup Summary:"
@@ -149,7 +186,8 @@ jobs:
           echo "- Always keep: Version tags (\`v*\`)" >> $GITHUB_STEP_SUMMARY
           echo "- Delete ALL dev builds (\`dev-*\` including \`dev-latest\` - dev is local only)" >> $GITHUB_STEP_SUMMARY
           echo "- Delete all old commit-based prod versions (\`prod-*\` that aren't tagged as prod-latest)" >> $GITHUB_STEP_SUMMARY
-          echo "- Delete untagged versions older than 7 days (grace period for cached manifests)" >> $GITHUB_STEP_SUMMARY
+          echo "- Always keep the most recent untagged version (prevents breaking cached pulls)" >> $GITHUB_STEP_SUMMARY
+          echo "- Delete other untagged versions older than 7 days (grace period for cached manifests)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "[View Packages](https://github.com/${{ github.repository }}/pkgs/container/${{ env.PACKAGE_OWNER }}/${{ env.PACKAGE_NAME }})" >> $GITHUB_STEP_SUMMARY
 
