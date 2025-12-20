@@ -94,7 +94,8 @@
             // Clear previous errors
             [newPasswordError, confirmPasswordError].forEach(el => {
                 if (el) {
-                    el.style.display = 'none';
+                    el.classList.add('d-none');
+                    el.classList.remove('d-block');
                     el.textContent = '';
                 }
             });
@@ -105,13 +106,15 @@
             if (!newPassword) {
                 if (newPasswordError) {
                     newPasswordError.textContent = 'New password is required.';
-                    newPasswordError.style.display = 'block';
+                    newPasswordError.classList.remove('d-none');
+                    newPasswordError.classList.add('d-block');
                 }
                 hasErrors = true;
             } else if (newPassword.length < 8) {
                 if (newPasswordError) {
                     newPasswordError.textContent = 'Password must be at least 8 characters long.';
-                    newPasswordError.style.display = 'block';
+                    newPasswordError.classList.remove('d-none');
+                    newPasswordError.classList.add('d-block');
                 }
                 hasErrors = true;
             }
@@ -119,13 +122,15 @@
             if (!confirmPassword) {
                 if (confirmPasswordError) {
                     confirmPasswordError.textContent = 'Please confirm your password.';
-                    confirmPasswordError.style.display = 'block';
+                    confirmPasswordError.classList.remove('d-none');
+                    confirmPasswordError.classList.add('d-block');
                 }
                 hasErrors = true;
             } else if (newPassword !== confirmPassword) {
                 if (confirmPasswordError) {
                     confirmPasswordError.textContent = 'Passwords do not match.';
-                    confirmPasswordError.style.display = 'block';
+                    confirmPasswordError.classList.remove('d-none');
+                    confirmPasswordError.classList.add('d-block');
                 }
                 hasErrors = true;
             }
@@ -179,11 +184,13 @@
                     if (data.field_errors) {
                         if (data.field_errors.new_password && newPasswordError) {
                             newPasswordError.textContent = data.field_errors.new_password;
-                            newPasswordError.style.display = 'block';
+                            newPasswordError.classList.remove('d-none');
+                            newPasswordError.classList.add('d-block');
                         }
                         if (data.field_errors.confirm_password && confirmPasswordError) {
                             confirmPasswordError.textContent = data.field_errors.confirm_password;
-                            confirmPasswordError.style.display = 'block';
+                            confirmPasswordError.classList.remove('d-none');
+                            confirmPasswordError.classList.add('d-block');
                         }
                     } else {
                         showToast(errorMsg, 'error');

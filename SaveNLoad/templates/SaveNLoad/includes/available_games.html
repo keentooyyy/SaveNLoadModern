@@ -22,11 +22,10 @@
                     <input 
                         type="text" 
                         id="gameSearchInput" 
-                        class="form-control bg-primary border-secondary text-white" 
+                        class="form-control bg-primary border-secondary text-white pe-5 w-100" 
                         placeholder="Search games..."
-                        autocomplete="off"
-                        style="padding-right: 40px; width: 100%;">
-                    <i class="fas fa-search position-absolute text-white-50" style="right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none;"></i>
+                        autocomplete="off">
+                    <i class="fas fa-search position-absolute top-50 end-0 translate-middle-y me-3 text-white-50" style="pointer-events: none;"></i>
                 </div>
                 <!-- Sort Dropdown -->
                 <select id="gameSortSelect" class="form-select bg-primary border-secondary text-white flex-shrink-0" style="width: auto; min-width: 180px;">
@@ -63,7 +62,7 @@
     </div>
 
     <!-- Hidden form just to provide CSRF token for JS actions -->
-    <form id="gameCsrfForm" style="display:none;">
+    <form id="gameCsrfForm" class="d-none">
         {% csrf_token %}
     </form>
 </div>

@@ -52,7 +52,8 @@
             
             // Clear previous errors
             if (emailError) {
-                emailError.style.display = 'none';
+                emailError.classList.add('d-none');
+                emailError.classList.remove('d-block');
                 emailError.textContent = '';
             }
             
@@ -60,7 +61,8 @@
             if (!email) {
                 if (emailError) {
                     emailError.textContent = 'Email is required.';
-                    emailError.style.display = 'block';
+                    emailError.classList.remove('d-none');
+                    emailError.classList.add('d-block');
                 }
                 return;
             }
@@ -70,7 +72,8 @@
             if (!emailRegex.test(email)) {
                 if (emailError) {
                     emailError.textContent = 'Please enter a valid email address.';
-                    emailError.style.display = 'block';
+                    emailError.classList.remove('d-none');
+                    emailError.classList.add('d-block');
                 }
                 return;
             }
@@ -112,7 +115,8 @@
                     const errorMsg = data.error || data.message || 'Failed to send OTP. Please try again.';
                     if (emailError) {
                         emailError.textContent = errorMsg;
-                        emailError.style.display = 'block';
+                        emailError.classList.remove('d-none');
+                        emailError.classList.add('d-block');
                     } else {
                         showToast(errorMsg, 'error');
                     }

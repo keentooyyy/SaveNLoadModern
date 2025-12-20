@@ -47,10 +47,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (scrollLeftBtn) {
             scrollLeftBtn.style.opacity = isAtStart ? '0.5' : '1';
             scrollLeftBtn.disabled = isAtStart;
+            // Opacity needs to be set via style for smooth transitions
         }
         if (scrollRightBtn) {
             scrollRightBtn.style.opacity = isAtEnd ? '0.5' : '1';
             scrollRightBtn.disabled = isAtEnd;
+            // Opacity needs to be set via style for smooth transitions
         }
     }
 

@@ -19,7 +19,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const inputs = document.querySelectorAll('.is-invalid');
         errorElements.forEach(el => {
             el.textContent = '';
-            el.style.display = 'none';
+            el.classList.add('d-none');
+            el.classList.remove('d-block');
         });
         inputs.forEach(input => {
             input.classList.remove('is-invalid');
@@ -35,7 +36,8 @@ document.addEventListener('DOMContentLoaded', function() {
             input.classList.remove('is-invalid');
             input.classList.remove('border-danger');
             errorDiv.textContent = '';
-            errorDiv.style.display = 'none';
+            errorDiv.classList.add('d-none');
+            errorDiv.classList.remove('d-block');
         }
     }
     
@@ -47,7 +49,8 @@ document.addEventListener('DOMContentLoaded', function() {
             input.classList.add('is-invalid');
             input.classList.add('border-danger');
             errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
+            errorDiv.classList.remove('d-none');
+            errorDiv.classList.add('d-block');
         }
     }
     
