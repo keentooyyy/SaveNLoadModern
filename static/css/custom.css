@@ -165,15 +165,37 @@ body {
 .sidebar-header {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     min-height: 70px;
-    gap: 0.5rem;
+    gap: 0.75rem;
     overflow: hidden;
 }
 
-/* Reduce header height on mobile */
+/* Sidebar logo container spacing */
+.sidebar-logo {
+    gap: 0.75rem;
+}
+
+/* Reduce header height on mobile and improve spacing */
 @media (max-width: 575.98px) {
     .sidebar-header {
         min-height: 60px;
+        padding: 0.75rem 1rem !important;
+        gap: 1rem;
+    }
+    
+    .sidebar-logo {
+        gap: 0.75rem;
+    }
+    
+    /* Add padding for close button on mobile */
+    .sidebar-header .btn-close {
+        margin-right: 0 !important;
         padding: 0.5rem !important;
+        margin-left: 0.5rem;
+    }
+    
+    /* Logo icon spacing on mobile */
+    .sidebar-header .logo-icon {
+        margin-right: 0.75rem !important;
     }
 }
 
