@@ -26,17 +26,10 @@ document.addEventListener('DOMContentLoaded', function () {
         // Create overlay container with dark theme background
         loadingOverlay = document.createElement('div');
         loadingOverlay.id = 'search_loading_overlay';
+        loadingOverlay.className = 'position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center';
         loadingOverlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
             background-color: rgba(28, 34, 47, 0.85);
             z-index: 9998;
-            display: flex;
-            justify-content: center;
-            align-items: center;
         `;
 
         // Create spinner container

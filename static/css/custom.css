@@ -393,3 +393,8 @@ body {
 .transition-bg {
     transition: background-color 0.2s ease;
 }
+
+/* Hover effect for list items */
+.list-group-item-hover:hover {
+    background-color: rgba(90, 141, 238, 0.2) !important;
+}

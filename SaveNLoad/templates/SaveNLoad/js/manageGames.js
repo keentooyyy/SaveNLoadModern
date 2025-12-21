@@ -706,16 +706,8 @@ document.addEventListener('DOMContentLoaded', function () {
             data.save_folders.forEach(folder => {
                 const link = document.createElement('a');
                 link.href = '#';
-                link.className = 'list-group-item list-group-item-action bg-primary text-white border-secondary';
-                link.classList.add('transition-bg');
+                link.className = 'list-group-item list-group-item-action bg-primary text-white border-secondary transition-bg list-group-item-hover';
                 link.dataset.folderNumber = folder.folder_number;
-
-                link.addEventListener('mouseenter', function() {
-                    this.style.backgroundColor = 'rgba(90, 141, 238, 0.2)';
-                });
-                link.addEventListener('mouseleave', function() {
-                    this.style.backgroundColor = '';
-                });
 
                 const row = document.createElement('div');
                 row.className = 'd-flex justify-content-between align-items-center';
