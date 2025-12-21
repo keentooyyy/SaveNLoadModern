@@ -141,11 +141,55 @@ body {
     }
 }
 
+/* Sidebar header container */
+.sidebar-header-container {
+    min-height: 70px;
+    overflow: hidden;
+}
+
+.sidebar-header-content {
+    overflow: hidden;
+}
+
+.sidebar-header-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Sidebar header mobile adjustments */
 @media (max-width: 575.98px) {
-    .sidebar .border-bottom {
+    .sidebar-header-container {
         min-height: 60px;
         padding: 0.75rem 1rem !important;
+    }
+}
+
+/* Very small screens - prevent overflow */
+@media (max-width: 335px) {
+    .sidebar-header-container {
+        min-height: 50px !important;
+        padding: 0.5rem 0.75rem !important;
+        gap: 0.5rem !important;
+    }
+    
+    .sidebar-header-content {
+        gap: 0.5rem !important;
+    }
+    
+    .sidebar .logo-icon img,
+    .sidebar .logo-icon svg {
+        max-width: 32px !important;
+        min-width: 28px !important;
+    }
+    
+    .sidebar-header-text {
+        font-size: 1rem !important;
+    }
+    
+    .sidebar-header-container .btn-close {
+        margin-left: 0.25rem !important;
+        padding: 0.25rem !important;
     }
 }
 

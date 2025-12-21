@@ -3,12 +3,12 @@
 <!-- Sidebar Navigation -->
 <aside class="offcanvas offcanvas-start sidebar h-100 d-flex flex-column" tabindex="-1" id="{% if sidebar_id %}{{ sidebar_id }}{% else %}sidebar{% endif %}" aria-labelledby="sidebarLabel">
     <!-- Sidebar Header -->
-    <div class="border-bottom border-secondary d-flex align-items-center justify-content-between p-2 p-md-3 gap-2 gap-md-3" style="min-height: 70px;">
-        <div class="d-flex align-items-center flex-grow-1 min-w-0 gap-2 gap-md-3">
+    <div class="border-bottom border-secondary d-flex align-items-center justify-content-between p-2 p-md-3 gap-2 gap-md-3 sidebar-header-container">
+        <div class="d-flex align-items-center flex-grow-1 min-w-0 gap-2 gap-md-3 sidebar-header-content">
             <div class="d-flex align-items-center justify-content-center flex-shrink-0 logo-icon">
                 <img src="{% static 'images/icon.png' %}" alt="Save N Load" class="img-fluid">
             </div>
-            <span class="text-white fw-bold text-truncate fs-5">Save N Load</span>
+            <span class="text-white fw-bold text-truncate fs-5 sidebar-header-text">Save N Load</span>
         </div>
         <button type="button" class="btn-close btn-close-white d-lg-none flex-shrink-0 ms-2" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
