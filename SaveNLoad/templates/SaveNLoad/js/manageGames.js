@@ -1,8 +1,3 @@
-// Helper function to get CSS variable value
-function getCSSVariable(name) {
-    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
-
 // Store references for openGameEditModal function
 let modalInstance = null;
 let currentDetailUrlRef = null;

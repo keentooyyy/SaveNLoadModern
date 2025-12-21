@@ -1,9 +1,4 @@
 document.addEventListener('DOMContentLoaded', function () {
-    // Helper function to get CSS variable value
-    function getCSSVariable(name) {
-        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    }
-    
     const csrfInput = document.querySelector('#gameCsrfForm input[name="csrfmiddlewaretoken"]');
     const csrfToken = csrfInput ? csrfInput.value : null;
 

@@ -1,9 +1,4 @@
 document.addEventListener('DOMContentLoaded', function () {
-    // Helper function to get CSS variable value
-    function getCSSVariable(name) {
-        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    }
-    
     const searchInput = document.getElementById('search_input');
     const modalElement = document.getElementById('gameSearchModal');
     const searchResults = document.getElementById('modal_search_results');
