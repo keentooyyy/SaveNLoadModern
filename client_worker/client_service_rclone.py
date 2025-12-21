@@ -127,7 +127,7 @@ class ClientWorkerServiceRclone:
                     progress_callback = lambda current, total, msg: self._update_progress(operation_id, current, total, msg)
                 
                 # Just call rclone - it handles everything
-                success, message, uploaded_files, failed_files, bytes_transferred = self.rclone_client.upload_directory(
+                success, message, uploaded_files, failed_files, bytes_transferred, files_transferred = self.rclone_client.upload_directory(
                     local_dir=local_save_path,
                     username=username,
                     game_name=game_name,
