@@ -97,30 +97,30 @@ After setting up your FTP server, note the following details (you'll need these 
 Create a `.env` file in the project root with the following variables:
 
 ```env
-# Django Settings
+# DJANGO CONFIGS
 DEBUG=True
-SECRET_KEY=your-secret-key-here
-ALLOWED_HOSTS=localhost,127.0.0.1
-
-# Database Configuration
-POSTGRES_DB=savenload_db
-POSTGRES_USER=savenload_user
-POSTGRES_PASSWORD=your-db-password
+POSTGRES_DB=savenload
+POSTGRES_USER=django
+POSTGRES_PASSWORD=your-db-password-here
 POSTGRES_HOST=db
 POSTGRES_PORT=5432
+SECRET_KEY=your-secret-key-here
 
-# Email Configuration (Gmail)
+# RAWG API
+RAWG=your-rawg-api-key-here
+
+# Email Configuration (Gmail SMTP)
 GMAIL_USER=your-email@gmail.com
-GMAIL_APP_PASSWORD=your-app-password
-EMAIL_ICON_URL=https://your-domain.com/static/images/icon.png
+GMAIL_APP_PASSWORD=your-gmail-app-password-here
+EMAIL_ICON_URL=https://i.ibb.co/5Xpxrkh7/icon.png
 
-# Default Admin Account
+# Default admin account
 DEFAULT_ADMIN_USERNAME=admin
 DEFAULT_ADMIN_EMAIL=admin@example.com
-DEFAULT_ADMIN_PASSWORD=admin123
+DEFAULT_ADMIN_PASSWORD=your-admin-password-here
 
-# RAWG API (Required for game search)
-RAWG=your-rawg-api-key-here
+# Version
+VERSION_GITHUB_URL=https://raw.githubusercontent.com/keentooyyy/SaveNLoadModern/refs/heads/main/version.txt
 ```
 
 > **Note:** 
@@ -211,8 +211,11 @@ This will install:
 - `requests` - HTTP client for API communication
 - `python-dotenv` - Environment variable management
 - `pyinstaller` - Executable builder
+- `rich` - Rich text and beautiful formatting for terminal output
 
 ### Step 2: Configure Rclone
+
+> **IMPORTANT: Rclone MUST be configured BEFORE building the executable!** The rclone configuration (`rclone.conf`) is bundled into the executable during the build process. If you build without configuring rclone first, the executable will not have FTP access configured and will need to be rebuilt.
 
 Before building, ensure rclone is properly configured:
 
@@ -275,14 +278,17 @@ y/e/d> y
 
 4. **Copy rclone.conf to client_worker directory**: After configuration, copy the rclone config file from the default location (`%APPDATA%\rclone\rclone.conf`) to `client_worker/rclone/` directory.
 
-> **Note:** 
+> **CRITICAL NOTES:** 
+> - **You MUST configure rclone BEFORE building the executable** - the configuration is bundled into the .exe during build
 > - You must download `rclone.exe` manually and place it in `client_worker/rclone/` directory before building
 > - The `rclone.exe` and `rclone.conf` files are bundled into the final executable during the PyInstaller build process
-> - Users can also reconfigure rclone after deployment by running `rclone.exe config` from the `rclone/` directory
-> - For more detailed configuration options, see the [rclone config command documentation](https://rclone.org/commands/rclone_config/)
 > - The configuration file must be manually copied from the default rclone location (`%APPDATA%\rclone\rclone.conf`) to `client_worker/rclone/` directory before building
+> - If you need to change FTP settings after building, you must reconfigure rclone and rebuild the executable
+> - For more detailed configuration options, see the [rclone config command documentation](https://rclone.org/commands/rclone_config/)
 
 ### Step 3: Build the Executable
+
+> **IMPORTANT: Ensure rclone is configured (Step 2) before building!** The build process bundles `rclone.exe` and `rclone.conf` into the executable. If rclone is not configured before building, you will need to configure it and rebuild.
 
 Run the build script:
 
@@ -291,37 +297,38 @@ python build_exe.py
 ```
 
 This will:
+- Fetch version from GitHub (if `VERSION_GITHUB_URL` is set in `.env`) or use local `version.txt` file
+- Generate Windows manifest with version information
 - Use PyInstaller to bundle all dependencies
 - Include rclone.exe and rclone.conf in the executable
 - Create `SaveNLoadClient.exe` in the `dist/` directory
 - Request admin privileges (UAC) when running
 
+> **Note:** The build script automatically fetches the version from GitHub (configured via `VERSION_GITHUB_URL` in `.env`) or falls back to the local `version.txt` file in the project root. This version is embedded in the Windows executable manifest.
+
 **Build Output:**
-- Executable: `client_worker/dist/SaveNLoadClient.exe`
+- Executable: `client_worker/dist/SaveNLoadClient.exe` (includes rclone.exe and rclone.conf bundled inside)
 - Build artifacts: `client_worker/build/` (can be deleted after build)
+
+> **Note:** The executable is self-contained - rclone.exe and rclone.conf are bundled into the executable during the PyInstaller build process. Users only need the `.exe` file and a `.env` file for configuration.
 
 ### Step 4: Prepare Distribution Package
 
 After building, create a distribution package for users:
 
 1. **Required Files:**
-   - `SaveNLoadClient.exe` (from `dist/` folder)
-   - `rclone/` folder containing:
-     - `rclone.exe`
-     - `rclone.conf` (pre-configured or template)
+   - `SaveNLoadClient.exe` (from `dist/` folder - includes rclone bundled inside)
+   - `.env` file (for server URL configuration)
 
 2. **Optional Files:**
-   - `.env` template file (for server URL configuration)
+   - `.env.example` template file (for reference)
    - README or setup instructions
 
 3. **Directory Structure for Distribution:**
 ```
 SaveNLoadClient/
-├── SaveNLoadClient.exe
-├── rclone/
-│   ├── rclone.exe
-│   └── rclone.conf
-└── .env (optional, for server URL)
+├── SaveNLoadClient.exe  (self-contained, includes rclone)
+└── .env                 (required for server URL)
 ```
 
 ### Step 5: User Configuration
@@ -330,18 +337,21 @@ Users need to configure the client worker before first use:
 
 1. **Server URL Configuration:**
    - Create a `.env` file in the same directory as `SaveNLoadClient.exe`
-   - Add the Django server URL:
+   - Add the Django server URL and optional version URL:
    ```env
+   # Django Server URL
    SAVENLOAD_SERVER_URL=http://YOUR_SERVER_IP:8000
+   
+   # Version (Optional - for version checking)
+   VERSION_GITHUB_URL=https://raw.githubusercontent.com/keentooyyy/SaveNLoadModern/refs/heads/main/version.txt
    ```
-   - Replace with your actual Django server IP/domain
+   - Replace `YOUR_SERVER_IP` with your actual Django server IP/domain
 
 2. **FTP Configuration:**
-   - Configure rclone FTP remote (see Step 2 in build instructions for detailed configuration steps)
-   - Or use rclone's command-line flags (non-interactive):
-   ```bash
-   rclone.exe config create ftp ftp host=your_ftp_server_ip user=your_ftp_username pass=your_ftp_password
-   ```
+   - The rclone configuration is bundled in the executable
+   - If you need to reconfigure FTP settings, you can extract rclone from the executable or rebuild with a new `rclone.conf`
+   - For build-time configuration, see Step 2 in build instructions
+   - The FTP remote must be named `ftp` in the rclone configuration (default remote name)
 
 3. **Session Cookie (First Run):**
    - The client worker will open a browser window
@@ -409,29 +419,31 @@ POSTGRES_PORT=5432
 
 ### FTP Configuration in Client Worker
 
-FTP settings are configured using rclone's interactive configuration:
+FTP settings are configured during the build process. The rclone configuration is bundled into the executable:
 
-```bash
-# Navigate to rclone directory
-cd client_worker/rclone
+1. **Before Building:** Configure rclone in `client_worker/rclone/` directory:
+   ```bash
+   # Navigate to rclone directory
+   cd client_worker/rclone
+   
+   # Run rclone config
+   rclone.exe config
+   
+   # Follow prompts to create/edit 'ftp' remote
+   # See "Building the Client Worker" section for detailed instructions
+   ```
 
-# Run rclone config
-rclone.exe config
+2. **Or use command-line configuration (non-interactive):**
+   ```bash
+   rclone.exe config create ftp ftp host=YOUR_FTP_SERVER_IP user=your_ftp_username pass=your_ftp_password
+   ```
 
-# Follow prompts to create/edit 'ftp' remote
-# See "Building the Client Worker" section for detailed instructions
-```
-
-Or use command-line configuration (non-interactive):
-
-```bash
-rclone.exe config create ftp ftp host=YOUR_FTP_SERVER_IP user=your_ftp_username pass=your_ftp_password
-```
+3. **The `rclone.conf` file** in `client_worker/rclone/` will be bundled into the executable during the PyInstaller build process.
 
 > **Note:** 
 > - The FTP server must be accessible from client worker machines
 > - The FTP server can be on the same machine as Django or on a separate server
-> - The rclone executable (`rclone.exe`) and configuration file (`rclone.conf`) must be in the `client_worker/rclone/` directory
+> - The rclone executable (`rclone.exe`) and configuration file (`rclone.conf`) are bundled into the final executable - no separate rclone folder needed for distribution
 > - The Django backend does NOT need FTP credentials - it only manages the operation queue
 > - For advanced configuration options, see the [rclone config command documentation](https://rclone.org/commands/rclone_config/)
 
@@ -606,10 +618,10 @@ If password reset emails don't send:
 If client worker fails:
 
 1. **Check Server URL**: Verify Django server is accessible (test in browser)
-2. **Check .env File**: Ensure `SAVENLOAD_SERVER_URL` is set correctly in client worker directory
+2. **Check .env File**: Ensure `SAVENLOAD_SERVER_URL` is set correctly in client worker directory (and optionally `VERSION_GITHUB_URL` for version checking)
 3. **Check Session Cookie**: Ensure valid session cookie (log in via web interface first)
-4. **Check Rclone**: Verify `rclone.exe` exists in `client_worker/rclone/` directory
-5. **Check Rclone Config**: Verify `rclone.conf` has correct FTP settings (host, user, pass)
+4. **Check Rclone**: Rclone is bundled in the executable - if FTP connection fails, the rclone configuration may need to be updated and the executable rebuilt
+5. **Check Rclone Config**: The rclone configuration is bundled in the executable - verify FTP settings were correct during build (host, user, pass in `client_worker/rclone/rclone.conf`)
 6. **Check FTP Server**: Verify the FTP server is accessible and credentials are correct
 7. **Check Network**: Ensure client can reach both Django server and FTP server
 8. **Check Admin Privileges**: Client worker requires admin privileges for file operations
@@ -629,7 +641,7 @@ If client worker build fails:
 
 1. **Check Python Version**: Ensure Python 3.12 is installed
 2. **Check Dependencies**: Run `pip install -r requirements.txt` in client_worker directory
-3. **Check Rclone**: Ensure `rclone.exe` is in `client_worker/rclone/` directory
+3. **Check Rclone**: Ensure `rclone.exe` is in `client_worker/rclone/` directory before building (it will be bundled into the executable)
 4. **Check Virtual Environment**: Ensure virtual environment is activated
 5. **Check PyInstaller**: Verify PyInstaller is installed: `pip install pyinstaller`
 
@@ -640,13 +652,14 @@ SaveNLoadModern/
 ├── client_worker/              # Client worker application
 │   ├── client_service_rclone.py # Main client worker service
 │   ├── rclone_client.py         # Rclone-based FTP client
-│   ├── rclone/                  # Rclone executable and config
-│   │   ├── rclone.exe          # Rclone Windows executable
-│   │   └── rclone.conf         # Rclone FTP configuration
+│   ├── rclone/                  # Rclone executable and config (for building)
+│   │   ├── rclone.exe          # Rclone Windows executable (bundled into .exe)
+│   │   └── rclone.conf         # Rclone FTP configuration (bundled into .exe)
 │   ├── build_exe.py            # PyInstaller build script
 │   ├── SaveNLoadClient.spec    # PyInstaller spec file
 │   ├── requirements.txt        # Client worker dependencies
 │   ├── dist/                    # Build output (after building)
+│   │   └── SaveNLoadClient.exe # Self-contained executable (includes rclone)
 │   └── build/                   # Build artifacts (can be deleted)
 │
 ├── config/                     # Django project configuration
@@ -752,9 +765,10 @@ SaveNLoadModern/
 
 ### Client Worker Packages
 
-- **requests**: HTTP client
-- **python-dotenv**: Environment variables
+- **requests**: HTTP client for API communication
+- **python-dotenv**: Environment variable management
 - **PyInstaller**: Executable building
+- **rich**: Rich text and beautiful formatting for terminal output
 - **rclone**: External executable for FTP operations (included in `rclone/` directory)
 
 ## Manual Production Deployment
