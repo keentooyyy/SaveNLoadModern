@@ -40,7 +40,7 @@
     <div id="availableGamesContainer" class="row g-4">
         {% if available_games %}
             {% for game in available_games %}
-            <div class="col-12 col-sm-6 col-md-4 col-lg-3 col-xl-2 col-xxl-2 game-item" data-game-id="{{ game.id }}" data-game-title="{{ game.title|lower }}">
+            <div class="col-12 col-sm-6 col-md-4 col-lg-3 col-xxl-2 game-item" data-game-id="{{ game.id }}" data-game-title="{{ game.title|lower }}">
                 {% if not is_user %}
                     {% url 'admin:game_detail' game.id as game_detail_url %}
                     {% url 'admin:game_delete' game.id as game_delete_url %}
