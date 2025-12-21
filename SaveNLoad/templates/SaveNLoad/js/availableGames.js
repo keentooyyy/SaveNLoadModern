@@ -107,7 +107,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Render each game
         games.forEach(game => {
             const gameCol = document.createElement('div');
-            gameCol.className = 'col-12 col-sm-6 col-md-4 col-lg-3 game-item';
+            gameCol.className = 'col-12 col-sm-6 col-md-4 col-lg-3 col-xl-2 col-xxl-2 game-item';
             gameCol.setAttribute('data-game-id', game.id);
             gameCol.setAttribute('data-game-title', game.title.toLowerCase());
             
