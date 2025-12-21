@@ -5,8 +5,12 @@ from django.conf import settings
 
 
 def app_version(request):
-    """Add application version to template context"""
+    """
+    Add application version to template context.
+    
+    If version couldn't be retrieved, will display error message.
+    """
     return {
-        'APP_VERSION': getattr(settings, 'APP_VERSION', '1.0.0')
+        'APP_VERSION': getattr(settings, 'APP_VERSION', "couldn't get version from online")
     }
 

@@ -8,17 +8,34 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
+# Add parent directory to path to import version utility
+SCRIPT_DIR = Path(__file__).parent.absolute()
+PROJECT_ROOT = SCRIPT_DIR.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from SaveNLoad.utils.version_utils import get_app_version
+
 # Load environment variables
 load_dotenv()
 
-# Get version from environment variable (default: 1.0.0)
-APP_VERSION = os.getenv('APP_VERSION')
-
-# Get the directory where this script is located
-SCRIPT_DIR = Path(__file__).parent.absolute()
+# Get version from GitHub or local version.txt file
+# Can override GitHub URL via VERSION_GITHUB_URL environment variable
+APP_VERSION = get_app_version(
+    base_dir=PROJECT_ROOT,
+    github_url=os.getenv('VERSION_GITHUB_URL')
+)
 
 def semantic_to_windows_version(semantic_version: str) -> str:
-    """Convert semantic version (e.g., '1.0.0') to Windows format (e.g., '1.0.0.0')"""
+    """
+    Convert semantic version (e.g., '1.0.0') to Windows format (e.g., '1.0.0.0').
+    
+    If version couldn't be retrieved (error message), returns '0.0.0.0' as fallback.
+    """
+    # Handle error case where version couldn't be retrieved
+    if 'couldn\'t get version' in semantic_version.lower() or not semantic_version:
+        print("Warning: Using fallback version '0.0.0.0' for Windows manifest", file=sys.stderr)
+        return '0.0.0.0'
+    
     parts = semantic_version.split('.')
     while len(parts) < 3:
         parts.append('0')
@@ -27,7 +44,14 @@ def semantic_to_windows_version(semantic_version: str) -> str:
     return '.'.join(parts[:4])
 
 def generate_manifest(manifest_path: Path):
-    """Generate Windows manifest XML with version from environment variable"""
+    """
+    Generate Windows manifest XML with version from GitHub or local version.txt file.
+    
+    The version is fetched from:
+    1. GitHub (if VERSION_GITHUB_URL is set and accessible)
+    2. Local version.txt file (fallback)
+    3. Error message if both fail (will use '0.0.0.0' for Windows manifest)
+    """
     version = semantic_to_windows_version(APP_VERSION)
     
     manifest_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -51,7 +75,7 @@ def generate_manifest(manifest_path: Path):
     
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(manifest_xml, encoding='utf-8')
-    print(f"Generated manifest with version {version} (from APP_VERSION={APP_VERSION})")
+    print(f"Generated manifest with version {version} (semantic version: {APP_VERSION})")
 
 def build_exe():
     """Build standalone executable using PyInstaller"""
@@ -59,9 +83,10 @@ def build_exe():
     print("=" * 60)
     print("Building SaveNLoad Client Worker Standalone Executable")
     print("=" * 60)
+    print(f"Version: {APP_VERSION}")
     print()
     
-    # Generate manifest with version from environment variable
+    # Generate manifest with version from GitHub or local version.txt
     manifest_path = SCRIPT_DIR / "SaveNLoadClient.manifest"
     generate_manifest(manifest_path)
     print()

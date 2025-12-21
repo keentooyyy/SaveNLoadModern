@@ -20,8 +20,14 @@ load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Application version - matches client worker version
-APP_VERSION = os.getenv('APP_VERSION')
+# Application version - fetched from GitHub or local version.txt file
+# Can override GitHub URL via VERSION_GITHUB_URL environment variable
+# Priority: GitHub URL > local version.txt > error message if both fail
+from SaveNLoad.utils.version_utils import get_app_version
+APP_VERSION = get_app_version(
+    base_dir=BASE_DIR,
+    github_url=os.getenv('VERSION_GITHUB_URL')
+)
 
 
 # Quick-start development settings - unsuitable for production
