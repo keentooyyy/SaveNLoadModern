@@ -8,18 +8,19 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Add parent directory to path to import version utility
+# Get script directory
 SCRIPT_DIR = Path(__file__).parent.absolute()
 PROJECT_ROOT = SCRIPT_DIR.parent
-sys.path.insert(0, str(PROJECT_ROOT))
 
-from SaveNLoad.utils.version_utils import get_app_version
+# Import standalone version utility (no Django dependencies)
+from version_utils import get_app_version
 
 # Load environment variables
 load_dotenv()
 
 # Get version from GitHub or local version.txt file
 # Can override GitHub URL via VERSION_GITHUB_URL environment variable
+# Checks parent directory (project root) first, then current directory
 APP_VERSION = get_app_version(
     base_dir=PROJECT_ROOT,
     github_url=os.getenv('VERSION_GITHUB_URL')
