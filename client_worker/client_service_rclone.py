@@ -115,7 +115,7 @@ class ClientWorkerServiceRclone:
                         'error': 'The save directory is empty. There are no files to save. Make sure you have played the game and saved your progress.'
                     }
                 
-/                # Create progress callback if operation_id is available
+                # Create progress callback if operation_id is available
                 progress_callback = None
                 if operation_id:
                     progress_callback = lambda current, total, msg: self._update_progress(operation_id, current, total, msg)
