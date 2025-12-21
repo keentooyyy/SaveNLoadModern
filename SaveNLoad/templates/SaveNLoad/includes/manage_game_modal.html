@@ -1,13 +1,9 @@
 <div class="modal fade" id="gameManageModal" tabindex="-1" aria-labelledby="gameManageModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content bg-primary text-white border-0">
-            <div class="modal-header bg-primary border-secondary">
-                <h5 class="modal-title text-white" id="gameManageModalLabel">Edit Game</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body bg-primary">
-                {% if not is_user %}
-                <ul class="nav nav-tabs border-bottom border-secondary mb-3" role="tablist">
+            {% if not is_user %}
+            <div class="modal-header bg-primary border-0 d-flex align-items-center">
+                <ul class="nav nav-tabs border-0 mb-0" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active text-white d-flex align-items-center" id="edit-tab" data-bs-toggle="tab" data-bs-target="#edit-pane" type="button" role="tab">
                             <i class="fas fa-edit me-2"></i>
@@ -21,6 +17,8 @@
                         </button>
                     </li>
                 </ul>
+            </div>
+            <div class="modal-body bg-primary">
                 <div class="tab-content">
                     <div class="tab-pane fade show active" id="edit-pane" role="tabpanel">
                         <form id="gameManageForm">
@@ -40,8 +38,23 @@
                         </div>
                     </div>
                 </div>
-                {% else %}
-                {# User view - show only saves tab #}
+            </div>
+            <div class="modal-footer bg-primary border-secondary d-flex justify-content-end">
+                <div id="edit-tab-buttons" class="d-flex gap-2 me-auto">
+                    <button type="button" class="btn btn-outline-danger text-white" id="deleteGameBtn">
+                        <i class="fas fa-trash-alt me-1"></i>Delete
+                    </button>
+                    <button type="button" class="btn btn-secondary text-white" id="saveGameBtn">Save changes</button>
+                </div>
+                <button type="button" class="btn btn-outline-secondary text-white" data-bs-dismiss="modal">Close</button>
+            </div>
+            {% else %}
+            {# User view - show only saves tab #}
+            <div class="modal-header bg-primary border-secondary">
+                <h5 class="modal-title text-white" id="gameManageModalLabel">Available Saves</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body bg-primary">
                 <div id="saves-pane">
                     <div id="savesListContainer">
                         <div class="text-center py-4">
@@ -52,23 +65,11 @@
                         </div>
                     </div>
                 </div>
-                {% endif %}
             </div>
-            <div class="modal-footer bg-primary border-secondary d-flex justify-content-between">
-                {% if not is_user %}
-                <button type="button" class="btn btn-outline-danger text-white" id="deleteGameBtn">
-                    <i class="fas fa-trash-alt me-1"></i>Delete
-                </button>
-                {% else %}
-                <div></div>
-                {% endif %}
-                <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-outline-secondary text-white" data-bs-dismiss="modal">Close</button>
-                    {% if not is_user %}
-                    <button type="button" class="btn btn-secondary text-white" id="saveGameBtn">Save changes</button>
-                    {% endif %}
-                </div>
+            <div class="modal-footer bg-primary border-secondary d-flex justify-content-end">
+                <button type="button" class="btn btn-outline-secondary text-white" data-bs-dismiss="modal">Close</button>
             </div>
+            {% endif %}
         </div>
     </div>
 </div>

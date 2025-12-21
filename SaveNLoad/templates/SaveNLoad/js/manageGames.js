@@ -54,6 +54,11 @@ window.openGameEditModal = function(gameId, hideSavesTab = false) {
     if (hideSavesTab) {
         if (loadGameRef) {
             loadGameRef(currentDetailUrlRef, true).then(function () {
+                // Ensure buttons are visible when only edit tab is available
+                const editTabButtons = document.getElementById('edit-tab-buttons');
+                const saveGameBtn = document.getElementById('saveGameBtn');
+                if (editTabButtons) editTabButtons.classList.remove('d-none');
+                if (saveGameBtn) saveGameBtn.classList.remove('d-none');
                 modalInstance.show();
             });
         }
@@ -63,6 +68,21 @@ window.openGameEditModal = function(gameId, hideSavesTab = false) {
                 loadGameRef(currentDetailUrlRef, false),
                 loadSaveFoldersRef(gameId)
             ]).then(function () {
+                // Ensure buttons are shown/hidden based on initial active tab
+                const editPane = document.getElementById('edit-pane');
+                const savesPane = document.getElementById('saves-pane');
+                const editTabButtons = document.getElementById('edit-tab-buttons');
+                const saveGameBtn = document.getElementById('saveGameBtn');
+                
+                if (editPane && savesPane && editTabButtons && saveGameBtn) {
+                    if (editPane.classList.contains('active') && editPane.classList.contains('show')) {
+                        editTabButtons.classList.remove('d-none');
+                        saveGameBtn.classList.remove('d-none');
+                    } else if (savesPane.classList.contains('active') && savesPane.classList.contains('show')) {
+                        editTabButtons.classList.add('d-none');
+                        saveGameBtn.classList.add('d-none');
+                    }
+                }
                 modalInstance.show();
             });
         }
@@ -1205,6 +1225,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 loadGame(currentDetailUrlRef, false),
                 loadSaveFolders(gameId)
             ]).then(function () {
+                // Ensure buttons are shown/hidden based on initial active tab
+                const editPane = document.getElementById('edit-pane');
+                const savesPane = document.getElementById('saves-pane');
+                const editTabButtons = document.getElementById('edit-tab-buttons');
+                const saveGameBtn = document.getElementById('saveGameBtn');
+                
+                if (editPane && savesPane && editTabButtons && saveGameBtn) {
+                    if (editPane.classList.contains('active') && editPane.classList.contains('show')) {
+                        editTabButtons.classList.remove('d-none');
+                        saveGameBtn.classList.remove('d-none');
+                    } else if (savesPane.classList.contains('active') && savesPane.classList.contains('show')) {
+                        editTabButtons.classList.add('d-none');
+                        saveGameBtn.classList.add('d-none');
+                    }
+                }
                 modal.show();
             });
         }
@@ -1233,16 +1268,56 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Handle tab switching to update active states
+    // Handle tab switching to update active states and show/hide buttons
     const editTab = document.getElementById('edit-tab');
     const savesTab = document.getElementById('saves-tab');
+    const editTabButtons = document.getElementById('edit-tab-buttons');
+    const saveGameBtn = document.getElementById('saveGameBtn');
+    
+    // Function to show/hide edit buttons based on active tab
+    function toggleEditButtons(show) {
+        if (editTabButtons) {
+            if (show) {
+                editTabButtons.classList.remove('d-none');
+            } else {
+                editTabButtons.classList.add('d-none');
+            }
+        }
+        if (saveGameBtn) {
+            if (show) {
+                saveGameBtn.classList.remove('d-none');
+            } else {
+                saveGameBtn.classList.add('d-none');
+            }
+        }
+    }
     
     if (editTab && savesTab) {
+        // Initial state - show buttons if edit tab is active by default
+        const editPane = document.getElementById('edit-pane');
+        const savesPane = document.getElementById('saves-pane');
+        if (editPane && savesPane) {
+            // Check which pane is actually shown (Bootstrap uses 'show' class)
+            if (editPane.classList.contains('show') && editPane.classList.contains('active')) {
+                toggleEditButtons(true);
+            } else if (savesPane.classList.contains('show') && savesPane.classList.contains('active')) {
+                toggleEditButtons(false);
+            } else {
+                // Default to showing buttons if edit tab button is active
+                if (editTab.classList.contains('active')) {
+                    toggleEditButtons(true);
+                } else {
+                    toggleEditButtons(false);
+                }
+            }
+        }
+        
         editTab.addEventListener('shown.bs.tab', function () {
             editTab.classList.add('active', 'text-white');
             editTab.classList.remove('text-white-50');
             savesTab.classList.remove('active', 'text-white');
             savesTab.classList.add('text-white-50');
+            toggleEditButtons(true);
         });
         
         savesTab.addEventListener('shown.bs.tab', function () {
@@ -1250,6 +1325,7 @@ document.addEventListener('DOMContentLoaded', function () {
             savesTab.classList.remove('text-white-50');
             editTab.classList.remove('active', 'text-white');
             editTab.classList.add('text-white-50');
+            toggleEditButtons(false);
         });
     }
 
