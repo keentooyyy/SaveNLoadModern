@@ -388,3 +388,8 @@ body {
 .min-vh-80 {
     min-height: 80vh;
 }
+
+/* Transition utility for background color */
+.transition-bg {
+    transition: background-color 0.2s ease;
+}

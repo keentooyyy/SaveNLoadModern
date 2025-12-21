@@ -44,9 +44,9 @@ window.openGameEditModal = function(gameId, hideSavesTab = false) {
     const savesTabContainer = document.getElementById('saves-tab-container');
     if (savesTabContainer) {
         if (hideSavesTab) {
-            savesTabContainer.style.display = 'none';
+            savesTabContainer.classList.add('d-none');
         } else {
-            savesTabContainer.style.display = '';
+            savesTabContainer.classList.remove('d-none');
         }
     }
     
@@ -151,10 +151,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const img = document.createElement('img');
         img.src = bannerUrl;
         img.alt = 'Banner preview';
-        img.style.width = '100%';
-        img.style.height = '100%';
+        img.className = 'img-thumbnail w-100 h-100';
         img.style.objectFit = 'contain';
-        img.className = 'img-thumbnail';
         // Security attributes
         img.loading = 'lazy';
         img.referrerPolicy = 'no-referrer';
@@ -213,9 +211,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const savesTabContainer = document.getElementById('saves-tab-container');
             if (savesTabContainer) {
                 if (hideSavesTab) {
-                    savesTabContainer.style.display = 'none';
+                    savesTabContainer.classList.add('d-none');
                 } else {
-                    savesTabContainer.style.display = '';
+                    savesTabContainer.classList.remove('d-none');
                 }
             }
         } catch (e) {
@@ -709,7 +707,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const link = document.createElement('a');
                 link.href = '#';
                 link.className = 'list-group-item list-group-item-action bg-primary text-white border-secondary';
-                link.style.transition = 'background-color 0.2s ease';
+                link.classList.add('transition-bg');
                 link.dataset.folderNumber = folder.folder_number;
 
                 link.addEventListener('mouseenter', function() {
@@ -1209,7 +1207,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Show saves tab for normal game cards
             const savesTabContainer = document.getElementById('saves-tab-container');
             if (savesTabContainer) {
-                savesTabContainer.style.display = '';
+                savesTabContainer.classList.remove('d-none');
             }
             Promise.all([
                 loadGame(currentDetailUrlRef, false),
