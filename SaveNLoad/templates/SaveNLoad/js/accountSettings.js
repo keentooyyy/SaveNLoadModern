@@ -266,11 +266,8 @@ document.addEventListener('DOMContentLoaded', function () {
         toggleCurrentPassword.addEventListener('click', function () {
             const type = currentPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
             currentPasswordInput.setAttribute('type', type);
-            const icon = toggleCurrentPassword.querySelector('i');
-            if (icon) {
-                icon.classList.toggle('fa-eye');
-                icon.classList.toggle('fa-eye-slash');
-            }
+            toggleCurrentPassword.classList.toggle('fa-eye');
+            toggleCurrentPassword.classList.toggle('fa-eye-slash');
         });
     }
     
@@ -278,11 +275,8 @@ document.addEventListener('DOMContentLoaded', function () {
         toggleNewPassword.addEventListener('click', function () {
             const type = newPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
             newPasswordInput.setAttribute('type', type);
-            const icon = toggleNewPassword.querySelector('i');
-            if (icon) {
-                icon.classList.toggle('fa-eye');
-                icon.classList.toggle('fa-eye-slash');
-            }
+            toggleNewPassword.classList.toggle('fa-eye');
+            toggleNewPassword.classList.toggle('fa-eye-slash');
         });
     }
     
@@ -290,11 +284,8 @@ document.addEventListener('DOMContentLoaded', function () {
         toggleConfirmPassword.addEventListener('click', function () {
             const type = confirmPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
             confirmPasswordInput.setAttribute('type', type);
-            const icon = toggleConfirmPassword.querySelector('i');
-            if (icon) {
-                icon.classList.toggle('fa-eye');
-                icon.classList.toggle('fa-eye-slash');
-            }
+            toggleConfirmPassword.classList.toggle('fa-eye');
+            toggleConfirmPassword.classList.toggle('fa-eye-slash');
         });
     }
 });

@@ -23,10 +23,10 @@
                     
                     <!-- Email Field -->
                     <div class="mb-3">
-                        <label for="email" class="form-label text-white">Email</label>
+                        <label for="email" class="fs-6 opacity-50">EMAIL</label>
                         <input 
                             type="email" 
-                            class="form-control bg-primary border border-secondary text-white" 
+                            class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white" 
                             id="email" 
                             name="email"
                             placeholder="Enter your email"
@@ -35,47 +35,41 @@
                     
                     <!-- Password Fields (Optional - only fill if you want to change password) -->
                     <div class="mb-3">
-                        <label for="currentPassword" class="form-label text-white">Current Password <span class="text-white-50">(optional)</span></label>
-                        <div class="input-group">
+                        <label for="currentPassword" class="fs-6 mb-0 opacity-50">CURRENT PASSWORD <span class="text-white-50">(optional)</span></label>
+                        <div class="position-relative">
                             <input 
                                 type="password" 
-                                class="form-control bg-primary border border-secondary text-white" 
+                                class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white pe-5" 
                                 id="currentPassword" 
                                 name="current_password"
                                 placeholder="Enter current password">
-                            <button class="btn btn-outline-secondary text-white" type="button" id="toggleCurrentPassword">
-                                <i class="fas fa-eye"></i>
-                            </button>
+                            <i class="fas fa-eye-slash position-absolute top-50 end-0 translate-middle-y me-3 text-white-50 fw-light" id="toggleCurrentPassword" role="button"></i>
                         </div>
                     </div>
                     
                     <div class="mb-3">
-                        <label for="newPassword" class="form-label text-white">New Password <span class="text-white-50">(optional)</span></label>
-                        <div class="input-group">
+                        <label for="newPassword" class="fs-6 mb-0 opacity-50">NEW PASSWORD <span class="text-white-50">(optional)</span></label>
+                        <div class="position-relative">
                             <input 
                                 type="password" 
-                                class="form-control bg-primary border border-secondary text-white" 
+                                class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white pe-5" 
                                 id="newPassword" 
                                 name="new_password"
                                 placeholder="Enter new password">
-                            <button class="btn btn-outline-secondary text-white" type="button" id="toggleNewPassword">
-                                <i class="fas fa-eye"></i>
-                            </button>
+                            <i class="fas fa-eye-slash position-absolute top-50 end-0 translate-middle-y me-3 text-white-50 fw-light" id="toggleNewPassword" role="button"></i>
                         </div>
                     </div>
                     
                     <div class="mb-3">
-                        <label for="confirmPassword" class="form-label text-white">Confirm New Password <span class="text-white-50">(optional)</span></label>
-                        <div class="input-group">
+                        <label for="confirmPassword" class="fs-6 mb-0 opacity-50">CONFIRM NEW PASSWORD <span class="text-white-50">(optional)</span></label>
+                        <div class="position-relative">
                             <input 
                                 type="password" 
-                                class="form-control bg-primary border border-secondary text-white" 
+                                class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white pe-5" 
                                 id="confirmPassword" 
                                 name="confirm_password"
                                 placeholder="Confirm new password">
-                            <button class="btn btn-outline-secondary text-white" type="button" id="toggleConfirmPassword">
-                                <i class="fas fa-eye"></i>
-                            </button>
+                            <i class="fas fa-eye-slash position-absolute top-50 end-0 translate-middle-y me-3 text-white-50 fw-light" id="toggleConfirmPassword" role="button"></i>
                         </div>
                     </div>
                     
