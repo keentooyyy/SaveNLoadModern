@@ -154,10 +154,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const img = document.createElement('img');
         img.src = bannerUrl;
         img.alt = 'Banner preview';
-        img.style.width = '100%';
-        img.style.height = '100%';
+        img.className = 'img-thumbnail w-100 h-100';
         img.style.objectFit = 'contain';
-        img.className = 'img-thumbnail';
         // Security attributes
         img.loading = 'lazy';
         img.referrerPolicy = 'no-referrer';

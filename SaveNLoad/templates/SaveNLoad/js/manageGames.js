@@ -811,9 +811,8 @@ document.addEventListener('DOMContentLoaded', function () {
         modalBody.className = 'modal-body bg-primary';
         
         const progressBarWrapper = document.createElement('div');
-        progressBarWrapper.className = 'progress';
+        progressBarWrapper.className = 'progress mb-3';
         progressBarWrapper.style.height = '30px';
-        progressBarWrapper.style.marginBottom = '15px';
         progressBarWrapper.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
         
         const progressBar = document.createElement('div');
@@ -826,15 +825,11 @@ document.addEventListener('DOMContentLoaded', function () {
         progressBar.setAttribute('aria-valuemax', '100');
         
         const progressText = document.createElement('div');
-        progressText.className = 'text-center mt-3';
-        progressText.style.fontSize = '0.9rem';
-        progressText.style.fontWeight = '500';
-        progressText.style.color = '#ffffff';
+        progressText.className = 'text-center mt-3 text-white fs-6 fw-medium';
         progressText.textContent = 'Starting...';
         
         const progressDetails = document.createElement('div');
-        progressDetails.className = 'text-center text-white-50 mt-2';
-        progressDetails.style.fontSize = '0.85rem';
+        progressDetails.className = 'text-center text-white-50 mt-2 small';
         progressDetails.textContent = 'Please wait while the operation completes...';
         
         progressBarWrapper.appendChild(progressBar);
