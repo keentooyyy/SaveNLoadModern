@@ -10,14 +10,16 @@
                 <!-- Results rendered by settings.js -->
             </div>
             <div class="modal-footer bg-primary border-secondary d-flex gap-2">
-                <button type="button" class="btn btn-secondary text-white" id="modal_search_btn" onclick="triggerModalSearch()">
-                    Search
-                </button>
-                <input 
-                    type="text" 
-                    class="form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white flex-fill" 
-                    id="modal_search_input" 
-                    placeholder="Type game name to search...">
+                <div class="input-group flex-fill">
+                    <button type="button" class="btn btn-secondary text-white" id="modal_search_btn" onclick="triggerModalSearch()">
+                        <i class="fas fa-search me-1"></i>Search
+                    </button>
+                    <input 
+                        type="text" 
+                        class="form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white" 
+                        id="modal_search_input" 
+                        placeholder="Type game name to search...">
+                </div>
                 <button type="button" class="btn btn-outline-secondary text-white" data-bs-dismiss="modal">Cancel</button>
             </div>
         </div>
