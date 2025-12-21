@@ -1,9 +1,46 @@
 /* Custom styles for SaveNLoad Modern - Minimal CSS using Bootstrap where possible */
 
 :root {
+    /* Layout */
     --sidebar-width: 300px;
     --sidebar-bg: #283046;
     --body-bg: #1c222f;
+    
+    /* Primary Colors */
+    --color-primary: #5a8dee;
+    --color-primary-bootstrap: #0d6efd;
+    
+    /* Status Colors */
+    --color-success: #198754;
+    --color-danger: #dc3545;
+    --color-warning: #ffc107;
+    
+    /* Neutral Colors */
+    --color-white: #ffffff;
+    --color-black: #000000;
+    
+    /* Opacity Variants - White */
+    --white-opacity-08: rgba(255, 255, 255, 0.08);
+    --white-opacity-10: rgba(255, 255, 255, 0.1);
+    --white-opacity-15: rgba(255, 255, 255, 0.15);
+    --white-opacity-30: rgba(255, 255, 255, 0.3);
+    --white-opacity-50: rgba(255, 255, 255, 0.5);
+    --white-opacity-60: rgba(255, 255, 255, 0.6);
+    
+    /* Opacity Variants - Primary Blue */
+    --primary-opacity-15: rgba(90, 141, 238, 0.15);
+    --primary-opacity-20: rgba(90, 141, 238, 0.2);
+    --primary-opacity-30: rgba(90, 141, 238, 0.3);
+    
+    /* Opacity Variants - Black */
+    --black-opacity-30: rgba(0, 0, 0, 0.3);
+    --black-opacity-40: rgba(0, 0, 0, 0.4);
+    --black-opacity-50: rgba(0, 0, 0, 0.5);
+    --black-opacity-80: rgba(0, 0, 0, 0.8);
+    --black-opacity-90: rgba(0, 0, 0, 0.9);
+    
+    /* Overlay */
+    --overlay-bg: rgba(28, 34, 47, 0.85);
 }
 
 body {
@@ -20,13 +57,13 @@ body {
 
 /* Placeholder text for primary background inputs */
 .bg-primary::placeholder {
-    color: rgba(255, 255, 255, 0.6) !important;
+    color: var(--white-opacity-60) !important;
 }
 
 /* Custom checkbox for dark theme */
 .form-check-input.bg-primary:checked {
-    background-color: #5a8dee !important;
-    border-color: #5a8dee !important;
+    background-color: var(--color-primary) !important;
+    border-color: var(--color-primary) !important;
 }
 
 /* Remove Bootstrap validation icons */
@@ -119,16 +156,16 @@ body {
 }
 
 .sidebar-nav-link:hover:not(.active) {
-    background-color: rgba(255, 255, 255, 0.08) !important;
+    background-color: var(--white-opacity-08) !important;
 }
 
 .sidebar-nav-link.active {
-    background-color: rgba(90, 141, 238, 0.15) !important;
-    color: #5a8dee !important;
+    background-color: var(--primary-opacity-15) !important;
+    color: var(--color-primary) !important;
 }
 
 .sidebar-nav-link.active i {
-    color: #5a8dee !important;
+    color: var(--color-primary) !important;
 }
 
 .sidebar-nav-link i {
@@ -176,17 +213,17 @@ body {
 }
 
 .overflow-x-auto::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--white-opacity-10);
     border-radius: 4px;
 }
 
 .overflow-x-auto::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.3);
+    background: var(--white-opacity-30);
     border-radius: 4px;
 }
 
 .overflow-x-auto::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.5);
+    background: var(--white-opacity-50);
 }
 
 /* Game card hover effects */
@@ -208,42 +245,42 @@ body {
 }
 
 .game-card-overlay {
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.4) 50%, transparent 100%);
+    background: linear-gradient(to top, var(--black-opacity-80) 0%, var(--black-opacity-40) 50%, transparent 100%);
     transition: opacity 0.3s ease;
 }
 
 .game-card:hover .game-card-overlay {
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.5) 50%, transparent 100%);
+    background: linear-gradient(to top, var(--black-opacity-90) 0%, var(--black-opacity-50) 50%, transparent 100%);
 }
 
 /* Game Manage Modal Tabs */
 #gameManageModal .nav-tabs {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--white-opacity-10);
 }
 
 #gameManageModal .nav-tabs .nav-link {
     border: none;
     border-bottom: 2px solid transparent;
-    color: rgba(255, 255, 255, 0.5) !important;
+    color: var(--white-opacity-50) !important;
     transition: all 0.2s ease;
     background-color: transparent;
 }
 
 #gameManageModal .nav-tabs .nav-link.active {
-    color: #ffffff !important;
-    background-color: rgba(90, 141, 238, 0.3) !important;
-    border-color: #5a8dee #5a8dee transparent !important;
+    color: var(--color-white) !important;
+    background-color: var(--primary-opacity-30) !important;
+    border-color: var(--color-primary) var(--color-primary) transparent !important;
     border-bottom-width: 3px !important;
     font-weight: 600;
 }
 
 #gameManageModal .nav-tabs .nav-link.active i {
-    color: #5a8dee !important;
+    color: var(--color-primary) !important;
 }
 
 #gameManageModal .nav-tabs .nav-link:not(.active):hover {
-    color: #ffffff !important;
-    background-color: rgba(255, 255, 255, 0.08);
+    color: var(--color-white) !important;
+    background-color: var(--white-opacity-08);
 }
 
 /* Grid fixes for available games */
@@ -300,7 +337,7 @@ body {
 .operation-queue-header.active .operation-queue-icon,
 .operation-queue-header.active .operation-queue-title,
 .operation-queue-header.active .operation-queue-chevron {
-    color: #5A8DEE !important;
+    color: var(--color-primary) !important;
 }
 
 /* Recent game card hover */
@@ -313,7 +350,7 @@ body {
 }
 
 .recent-game-card:hover .card {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+    box-shadow: 0 4px 12px var(--black-opacity-30) !important;
 }
 
 /* Utility classes for common patterns */
@@ -335,11 +372,11 @@ body {
     padding: 0.75rem 1rem;
     cursor: pointer;
     transition: background-color 0.2s ease;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--white-opacity-08);
 }
 
 .search-list-item:hover {
-    background-color: rgba(90, 141, 238, 0.15);
+    background-color: var(--primary-opacity-15);
 }
 
 .search-img-container {
@@ -349,7 +386,7 @@ body {
     margin-right: 1rem;
     border-radius: 4px;
     overflow: hidden;
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: var(--white-opacity-10);
 }
 
 .search-text-container {
@@ -358,7 +395,7 @@ body {
 }
 
 .search-title {
-    color: #ffffff;
+    color: var(--color-white);
     font-size: 1rem;
     font-weight: 500;
     margin-bottom: 0.25rem;
@@ -368,7 +405,7 @@ body {
 }
 
 .search-subtitle {
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--white-opacity-50);
     font-size: 0.875rem;
     white-space: nowrap;
     overflow: hidden;
@@ -396,5 +433,5 @@ body {
 
 /* Hover effect for list items */
 .list-group-item-hover:hover {
-    background-color: rgba(90, 141, 238, 0.2) !important;
+    background-color: var(--primary-opacity-20) !important;
 }

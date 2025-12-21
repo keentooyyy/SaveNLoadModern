@@ -1,4 +1,9 @@
 document.addEventListener('DOMContentLoaded', function () {
+    // Helper function to get CSS variable value
+    function getCSSVariable(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+    
     const searchInput = document.getElementById('search_input');
     const modalElement = document.getElementById('gameSearchModal');
     const searchResults = document.getElementById('modal_search_results');
@@ -28,7 +33,7 @@ document.addEventListener('DOMContentLoaded', function () {
         loadingOverlay.id = 'search_loading_overlay';
         loadingOverlay.className = 'position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center';
         loadingOverlay.style.cssText = `
-            background-color: rgba(28, 34, 47, 0.85);
+            background-color: ${getCSSVariable('--overlay-bg')};
             z-index: 9998;
         `;
 
@@ -43,7 +48,7 @@ document.addEventListener('DOMContentLoaded', function () {
             width: 3rem;
             height: 3rem;
             border-width: 0.25em;
-            border-color: #5a8dee;
+            border-color: ${getCSSVariable('--color-primary')};
             border-right-color: transparent;
         `;
         spinner.setAttribute('role', 'status');

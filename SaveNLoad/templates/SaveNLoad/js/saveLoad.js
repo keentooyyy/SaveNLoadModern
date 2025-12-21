@@ -1,4 +1,9 @@
 document.addEventListener('DOMContentLoaded', function () {
+    // Helper function to get CSS variable value
+    function getCSSVariable(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+    
     const csrfInput = document.querySelector('#gameCsrfForm input[name="csrfmiddlewaretoken"]');
     const csrfToken = csrfInput ? csrfInput.value : null;
 
@@ -46,13 +51,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const progressBarWrapper = document.createElement('div');
         progressBarWrapper.className = 'progress mb-3';
         progressBarWrapper.style.height = '30px';
-        progressBarWrapper.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        progressBarWrapper.style.backgroundColor = getCSSVariable('--white-opacity-10');
         
         const progressBar = document.createElement('div');
         progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated';
         progressBar.setAttribute('role', 'progressbar');
         progressBar.style.width = '0%';
-        progressBar.style.backgroundColor = '#0d6efd';
+        progressBar.style.backgroundColor = getCSSVariable('--color-primary-bootstrap');
         progressBar.setAttribute('aria-valuenow', '0');
         progressBar.setAttribute('aria-valuemin', '0');
         progressBar.setAttribute('aria-valuemax', '100');
@@ -140,7 +145,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 if (data.completed) {
                     progressBar.classList.remove('progress-bar-animated');
-                    progressBar.style.backgroundColor = '#198754';
+                    progressBar.style.backgroundColor = getCSSVariable('--color-success');
                     progressBar.style.width = '100%';
                     progressBar.setAttribute('aria-valuenow', '100');
                     progressText.textContent = 'Operation Complete!';
@@ -158,7 +163,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     return true;
                 } else if (data.failed) {
                     progressBar.classList.remove('progress-bar-animated');
-                    progressBar.style.backgroundColor = '#dc3545';
+                    progressBar.style.backgroundColor = getCSSVariable('--color-danger');
                     progressText.textContent = 'Operation Failed';
                     progressDetails.textContent = data.message || 'An error occurred';
                     showToast(data.message || 'Save operation failed', 'error');
@@ -208,7 +213,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 clearInterval(poll);
                 if (attempts >= maxAttempts && !completed) {
                     progressBar.classList.remove('progress-bar-animated');
-                    progressBar.style.backgroundColor = '#ffc107';
+                    progressBar.style.backgroundColor = getCSSVariable('--color-warning');
                     progressText.textContent = 'Operation Timed Out';
                     progressDetails.textContent = 'The operation is taking longer than expected. Please check the operation status manually.';
                     showToast('Operation is taking longer than expected. Please refresh the page.', 'error');
@@ -571,13 +576,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const progressBarWrapper = document.createElement('div');
         progressBarWrapper.className = 'progress mb-3';
         progressBarWrapper.style.height = '30px';
-        progressBarWrapper.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        progressBarWrapper.style.backgroundColor = getCSSVariable('--white-opacity-10');
         
         const progressBar = document.createElement('div');
         progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated';
         progressBar.setAttribute('role', 'progressbar');
         progressBar.style.width = '0%';
-        progressBar.style.backgroundColor = '#0d6efd';
+        progressBar.style.backgroundColor = getCSSVariable('--color-primary-bootstrap');
         progressBar.setAttribute('aria-valuenow', '0');
         progressBar.setAttribute('aria-valuemin', '0');
         progressBar.setAttribute('aria-valuemax', '100');
@@ -665,7 +670,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 if (data.completed) {
                     progressBar.classList.remove('progress-bar-animated');
-                    progressBar.style.backgroundColor = '#198754';
+                    progressBar.style.backgroundColor = getCSSVariable('--color-success');
                     progressBar.style.width = '100%';
                     progressBar.setAttribute('aria-valuenow', '100');
                     progressText.textContent = 'Operation Complete!';
@@ -689,7 +694,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     return true;
                 } else if (data.failed) {
                     progressBar.classList.remove('progress-bar-animated');
-                    progressBar.style.backgroundColor = '#dc3545';
+                    progressBar.style.backgroundColor = getCSSVariable('--color-danger');
                     progressText.textContent = 'Operation Failed';
                     progressDetails.textContent = data.message || 'An error occurred';
                     showToast(data.message || 'Load operation failed', 'error');
@@ -739,7 +744,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 clearInterval(poll);
                 if (attempts >= maxAttempts && !completed) {
                     progressBar.classList.remove('progress-bar-animated');
-                    progressBar.style.backgroundColor = '#ffc107';
+                    progressBar.style.backgroundColor = getCSSVariable('--color-warning');
                     progressText.textContent = 'Operation Timed Out';
                     progressDetails.textContent = 'The operation is taking longer than expected. Please check the operation status manually.';
                     showToast('Operation is taking longer than expected. Please refresh the page.', 'error');
