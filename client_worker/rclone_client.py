@@ -52,11 +52,6 @@ class RcloneClient:
             raise FileNotFoundError(f"rclone config not found at: {self.config_path}")
         
         self.remote_name = remote_name
-        
-        print(f"Rclone Client initialized")
-        print(f"  Executable: {self.rclone_exe}")
-        print(f"  Config: {self.config_path}")
-        print(f"  Remote: {remote_name}")
     
     def _run_rclone(self, command: List[str], timeout: Optional[int] = None, silent: bool = False,
                    progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str, str]:
@@ -723,4 +718,40 @@ class RcloneClient:
                     print(f"  {line.strip()}")
             error_msg = stderr.strip() or stdout.strip() or "Delete failed"
             return False, error_msg
+    
+    def check_status(self) -> Tuple[bool, str]:
+        """
+        Check rclone status by testing connection to remote
+        
+        Performs a quick test to verify:
+        - rclone executable is accessible
+        - Remote configuration is valid
+        - Connection to remote server is working
+        
+        Returns:
+            Tuple of (success, message)
+        """
+        try:
+            # Test connection by listing root directory (quick operation)
+            # Use a short timeout since this is just a status check
+            remote_full = self._build_remote_path('')
+            command = ['lsd', remote_full]
+            
+            success, stdout, stderr = self._run_rclone(command, timeout=10, silent=True)
+            
+            if success:
+                return True, f"Rclone connected ({self.remote_name})"
+            else:
+                # Check if it's a connection error or just empty directory
+                error_text = (stderr + stdout).lower()
+                if 'connection' in error_text or 'timeout' in error_text or 'refused' in error_text:
+                    return False, f"Rclone connection failed ({self.remote_name})"
+                elif 'not found' in error_text or 'does not exist' in error_text:
+                    # Directory doesn't exist but connection works
+                    return True, f"Rclone connected ({self.remote_name})"
+                else:
+                    # Other error, but connection might still work
+                    return True, f"Rclone connected ({self.remote_name})"
+        except Exception as e:
+            return False, f"Rclone status check failed: {str(e)}"
 

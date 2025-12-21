@@ -18,6 +18,10 @@ from typing import Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 from dotenv import load_dotenv
+from rich.console import Console, Group
+from rich.panel import Panel
+from rich.align import Align
+from rich.text import Text
 from rclone_client import RcloneClient
 
 # Load environment variables
@@ -61,10 +65,11 @@ class ClientWorkerServiceRclone:
         self._heartbeat_thread = None
         self._current_client_id = None
         
+        # Setup rich console for formatted output
+        self.console = Console()
+        
         # Setup rclone client - it handles everything
         self.rclone_client = RcloneClient(remote_name=remote_name)
-        
-        print("Client Worker Service (Rclone) ready")
     
     def _update_progress(self, operation_id: int, current: int, total: int, message: str = ''):
         """Send progress update to server"""
@@ -490,7 +495,7 @@ class ClientWorkerServiceRclone:
     
     def _heartbeat_loop(self, client_id: str):
         """Background thread that continuously sends heartbeats"""
-        heartbeat_interval = 10
+        heartbeat_interval = 5
         while self.running:
             try:
                 self.send_heartbeat(client_id)
@@ -514,10 +519,37 @@ class ClientWorkerServiceRclone:
     
     def run(self):
         """Run the service (polling mode)"""
-        print("Starting Client Worker Service (Rclone)...")
+        # ASCII art banner using rich
+        ascii_art = """  $$$$$$\\  $$\\       $$$$$$\\ $$$$$$$$\\ $$\\   $$\\ $$$$$$$$\\
+  $$  __$$\\ $$ |      \\_$$  _|$$  _____|$$$\\  $$ |\\__$$  __|
+  $$ /  \\__|$$ |        $$ |  $$ |      $$$$\\ $$ |   $$ |
+  $$ |      $$ |        $$ |  $$$$$\\    $$ $$\\$$ |   $$ |
+  $$ |      $$ |        $$ |  $$  __|   $$ \\$$$$ |   $$ |
+  $$ |  $$\\ $$ |        $$ |  $$ |      $$ |\\$$$ |   $$ |
+  \\$$$$$$  |$$$$$$$$\\ $$$$$$\\ $$$$$$$$\\ $$ | \\$$ |   $$ |
+   \\______/ \\________|\\______|\\________|\\__|  \\__|   \\__|"""
+        
+        # Create the banner content with properly centered text
+        ascii_text = Text(ascii_art, style="bold")
+        starting_text = Text("Client Worker Service Starting...", style="bold")
+        
+        # Use rich's renderable composition to properly center the text
+        banner_content = Group(
+            ascii_text,
+            Text(),  # Empty line
+            Align.center(starting_text, pad=False)
+        )
+        
+        banner_panel = Panel(
+            banner_content,
+            border_style="bright_white",
+            padding=(1, 2),
+            width=80
+        )
+        self.console.print(banner_panel)
         
         if not self.check_permissions():
-            print("Warning: Insufficient permissions - you may need elevated privileges")
+            self.console.print("[yellow][WARNING][/yellow] Insufficient permissions - you may need elevated privileges\n")
         
         self.running = True
         
@@ -549,24 +581,62 @@ class ClientWorkerServiceRclone:
                     client_id_file.write_text(client_id)
         
         if not self.register_with_server(client_id):
-            print("Error: Failed to register with server. Exiting.")
+            self.console.print("[red][ERROR][/red] Failed to register with server. Exiting.")
             return
         
         self._current_client_id = client_id
         
-        print(f"Connected to server")
-        print(f"Service running (checking for operations every {self.poll_interval} second(s))...")
+        # Check rclone status
+        rclone_success, rclone_message = self.rclone_client.check_status()
+        rclone_status = "[green][OK][/green]" if rclone_success else "[red][FAIL][/red]"
+        
+        # Status output using rich Panel with ASCII-safe indicators
+        status_content = f"""[green][OK][/green] Connected to server
+[green][OK][/green] Service running (polling every {self.poll_interval}s)
+[green][OK][/green] Client ID: {client_id}
+{rclone_status} {rclone_message}"""
         
         self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, args=(client_id,), daemon=True)
         self._heartbeat_thread.start()
-        print("Heartbeat thread started (sending heartbeats every 10 seconds)")
+        status_content += "\n[green][OK][/green] Heartbeat active (every 5s)"
+        
+        status_panel = Panel(
+            status_content,
+            title="[bold]STATUS[/bold]",
+            border_style="bright_white",
+            padding=(1, 2),
+            width=80
+        )
+        self.console.print(status_panel)
         
         try:
             webbrowser.open(self.server_url)
         except Exception:
             pass
         
-        print(f"\nServer URL: {self.server_url}")
+        # Important message panel
+        info_panel = Panel(
+            "[bold yellow]IMPORTANT:[/bold yellow] Do not close this terminal window.\n"
+            "The service must remain running to process save/load operations.\n"
+            "Press [bold]Ctrl+C[/bold] to stop the service gracefully.",
+            border_style="yellow",
+            padding=(1, 2),
+            width=80
+        )
+        self.console.print()
+        self.console.print(info_panel)
+        
+        # Server URL at the bottom - make it stand out
+        server_url_panel = Panel(
+            Align.center(f"[bold bright_cyan]{self.server_url}[/bold bright_cyan]"),
+            title="[bold bright_cyan]Server URL[/bold bright_cyan]",
+            border_style="bright_cyan",
+            padding=(1, 2),
+            width=80
+        )
+        self.console.print()
+        self.console.print(server_url_panel)
+        self.console.print()
         
         try:
             while self.running:
@@ -585,7 +655,7 @@ class ClientWorkerServiceRclone:
                 
                 time.sleep(self.poll_interval)
         except KeyboardInterrupt:
-            print("\nShutting down...")
+            self.console.print("\n[yellow]Shutting down...[/yellow]")
             self.running = False
         finally:
             if self._heartbeat_thread and self._heartbeat_thread.is_alive():
