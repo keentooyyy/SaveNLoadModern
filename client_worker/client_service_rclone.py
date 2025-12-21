@@ -5,6 +5,7 @@ Runs on client PC to handle save/load operations - rclone does all the heavy lif
 import os
 import sys
 import time
+import signal
 import requests
 import webbrowser
 import threading
@@ -517,6 +518,43 @@ class ClientWorkerServiceRclone:
         except Exception:
             return False
     
+    def _shutdown(self, client_id: Optional[str] = None):
+        """Perform graceful shutdown - cleanup and unregister from server"""
+        if not self.running:
+            return  # Already shutting down
+        
+        try:
+            self.console.print("\n[yellow]Shutting down gracefully...[/yellow]")
+        except Exception:
+            pass  # Console might be closed, but continue with cleanup
+        
+        self.running = False
+        
+        # Wait for heartbeat thread to finish
+        if self._heartbeat_thread and self._heartbeat_thread.is_alive():
+            try:
+                self.console.print("[dim]Waiting for heartbeat thread...[/dim]")
+            except Exception:
+                pass
+            self._heartbeat_thread.join(timeout=2)
+        
+        # Unregister from server
+        if client_id:
+            try:
+                self.console.print("[dim]Unregistering from server...[/dim]")
+            except Exception:
+                pass
+            try:
+                self.unregister_from_server(client_id)
+            except Exception:
+                pass
+        
+        try:
+            self.console.print("[green]Shutdown complete.[/green]")
+            time.sleep(0.5)  # Brief pause to ensure message is visible
+        except Exception:
+            pass  # Console might be closed
+    
     def run(self):
         """Run the service (polling mode)"""
         # ASCII art banner using rich
@@ -529,19 +567,11 @@ class ClientWorkerServiceRclone:
   \\$$$$$$  |$$$$$$$$\\ $$$$$$\\ $$$$$$$$\\ $$ | \\$$ |   $$ |
    \\______/ \\________|\\______|\\________|\\__|  \\__|   \\__|"""
         
-        # Create the banner content with properly centered text
+        # Create centered ASCII art banner
         ascii_text = Text(ascii_art, style="bold")
-        starting_text = Text("Client Worker Service Starting...", style="bold")
-        
-        # Use rich's renderable composition to properly center the text
-        banner_content = Group(
-            ascii_text,
-            Text(),  # Empty line
-            Align.center(starting_text, pad=False)
-        )
         
         banner_panel = Panel(
-            banner_content,
+            Align.center(ascii_text),
             border_style="bright_white",
             padding=(1, 2),
             width=80
@@ -616,9 +646,10 @@ class ClientWorkerServiceRclone:
         
         # Important message panel
         info_panel = Panel(
-            "[bold yellow]IMPORTANT:[/bold yellow] Do not close this terminal window.\n"
+            "Do not close this terminal window.\n"
             "The service must remain running to process save/load operations.\n"
             "Press [bold]Ctrl+C[/bold] to stop the service gracefully.",
+            title="[bold yellow]IMPORTANT[/bold yellow]",
             border_style="yellow",
             padding=(1, 2),
             width=80
@@ -638,6 +669,39 @@ class ClientWorkerServiceRclone:
         self.console.print(server_url_panel)
         self.console.print()
         
+        # Setup signal handlers for graceful shutdown
+        def signal_handler(signum, frame):
+            """Handle shutdown signals"""
+            self._shutdown(client_id)
+            sys.exit(0)
+        
+        # Register signal handlers
+        signal.signal(signal.SIGINT, signal_handler)
+        if hasattr(signal, 'SIGTERM'):
+            signal.signal(signal.SIGTERM, signal_handler)
+        
+        # Windows-specific: Handle console close event
+        if platform.system() == 'Windows':
+            try:
+                import ctypes
+                from ctypes import wintypes
+                
+                # Define handler function type
+                HandlerRoutine = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.DWORD)
+                
+                # Handler for console close event
+                def console_handler(dwCtrlType):
+                    if dwCtrlType == 0:  # CTRL_CLOSE_EVENT
+                        self._shutdown(client_id)
+                        return True  # Handled
+                    return False  # Not handled, let default handler process it
+                
+                # Register console control handler
+                kernel32 = ctypes.windll.kernel32
+                kernel32.SetConsoleCtrlHandler(HandlerRoutine(console_handler), True)
+            except Exception:
+                pass  # Fallback to signal handlers if this fails
+        
         try:
             while self.running:
                 try:
@@ -655,15 +719,12 @@ class ClientWorkerServiceRclone:
                 
                 time.sleep(self.poll_interval)
         except KeyboardInterrupt:
-            self.console.print("\n[yellow]Shutting down...[/yellow]")
-            self.running = False
+            # This will be caught by signal handler, but handle it here too
+            self._shutdown(client_id)
         finally:
-            if self._heartbeat_thread and self._heartbeat_thread.is_alive():
-                self._heartbeat_thread.join(timeout=2)
-            try:
-                self.unregister_from_server(client_id)
-            except Exception:
-                pass
+            # Final cleanup (in case signal handler didn't run)
+            if self.running:
+                self._shutdown(client_id)
     
     def _process_operation(self, operation: Dict[str, Any]):
         """Process a pending operation from the server"""
