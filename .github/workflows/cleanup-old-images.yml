@@ -175,19 +175,3 @@ jobs:
           echo "  Deleted: $DELETED_COUNT versions"
           echo "========================================="
 
-      - name: Summary
-        run: |
-          echo "## Cleanup Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Old Docker image versions have been cleaned up automatically" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Retention Policy:**" >> $GITHUB_STEP_SUMMARY
-          echo "- Always keep: \`latest\`, \`prod-latest\`, \`main\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Always keep: Version tags (\`v*\`)" >> $GITHUB_STEP_SUMMARY
-          echo "- Delete ALL dev builds (\`dev-*\` including \`dev-latest\` - dev is local only)" >> $GITHUB_STEP_SUMMARY
-          echo "- Delete all old commit-based prod versions (\`prod-*\` that aren't tagged as prod-latest)" >> $GITHUB_STEP_SUMMARY
-          echo "- Always keep the most recent untagged version (prevents breaking cached pulls)" >> $GITHUB_STEP_SUMMARY
-          echo "- Delete other untagged versions older than 7 days (grace period for cached manifests)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "[View Packages](https://github.com/${{ github.repository }}/pkgs/container/${{ env.PACKAGE_OWNER }}/${{ env.PACKAGE_NAME }})" >> $GITHUB_STEP_SUMMARY
-
