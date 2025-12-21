@@ -6,9 +6,52 @@ import PyInstaller.__main__
 import os
 import sys
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Get version from environment variable (default: 1.0.0)
+APP_VERSION = os.getenv('APP_VERSION')
 
 # Get the directory where this script is located
 SCRIPT_DIR = Path(__file__).parent.absolute()
+
+def semantic_to_windows_version(semantic_version: str) -> str:
+    """Convert semantic version (e.g., '1.0.0') to Windows format (e.g., '1.0.0.0')"""
+    parts = semantic_version.split('.')
+    while len(parts) < 3:
+        parts.append('0')
+    if len(parts) == 3:
+        parts.append('0')
+    return '.'.join(parts[:4])
+
+def generate_manifest(manifest_path: Path):
+    """Generate Windows manifest XML with version from environment variable"""
+    version = semantic_to_windows_version(APP_VERSION)
+    
+    manifest_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity
+    version="{version}"
+    processorArchitecture="*"
+    name="SaveNLoadClient"
+    type="win32"
+  />
+  <description>SaveNLoad Client Worker - Requires administrator privileges for file operations</description>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+</assembly>
+'''
+    
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(manifest_xml, encoding='utf-8')
+    print(f"Generated manifest with version {version} (from APP_VERSION={APP_VERSION})")
 
 def build_exe():
     """Build standalone executable using PyInstaller"""
@@ -16,6 +59,11 @@ def build_exe():
     print("=" * 60)
     print("Building SaveNLoad Client Worker Standalone Executable")
     print("=" * 60)
+    print()
+    
+    # Generate manifest with version from environment variable
+    manifest_path = SCRIPT_DIR / "SaveNLoadClient.manifest"
+    generate_manifest(manifest_path)
     print()
     
     # Check if spec file exists
