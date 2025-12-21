@@ -115,9 +115,7 @@ class ClientWorkerServiceRclone:
                         'error': 'The save directory is empty. There are no files to save. Make sure you have played the game and saved your progress.'
                     }
                 
-                print("Starting upload (rclone handling all transfers with parallel workers)...")
-                
-                # Create progress callback if operation_id is available
+/                # Create progress callback if operation_id is available
                 progress_callback = None
                 if operation_id:
                     progress_callback = lambda current, total, msg: self._update_progress(operation_id, current, total, msg)
@@ -233,8 +231,6 @@ class ClientWorkerServiceRclone:
                     'success': False,
                     'error': f'Local save path is not a directory: {local_save_path}'
                 }
-            
-            print("Starting download (rclone handling all transfers with parallel workers)...")
             
             # Create progress callback if operation_id is available
             progress_callback = None
