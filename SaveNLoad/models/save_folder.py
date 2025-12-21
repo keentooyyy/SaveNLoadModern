@@ -54,15 +54,22 @@ class SaveFolder(models.Model):
     
     @classmethod
     def get_or_create_next(cls, user: SimpleUsers, game: Game) -> 'SaveFolder':
-        """Get the next available save folder, creating a new one if needed (optimized)"""
-        # Single query to get all existing folder numbers
-        existing_numbers = set(
-            cls.objects.filter(user=user, game=game)
-            .values_list('folder_number', flat=True)
-        )
+        """
+        Get the next available save folder, creating a new one if needed (sequential numbering).
+        
+        Uses sequential numbering (highest + 1) instead of reusing deleted slots.
+        This prevents conflicts with empty folders left on FTP server.
+        """
+        # Get the highest existing folder number (sequential numbering)
+        max_folder = cls.objects.filter(user=user, game=game).aggregate(
+            max_num=models.Max('folder_number')
+        )['max_num']
+        
+        # Count existing folders
+        existing_count = cls.objects.filter(user=user, game=game).count()
         
         # If we have max folders, reuse the oldest one
-        if len(existing_numbers) >= cls.MAX_SAVE_FOLDERS:
+        if existing_count >= cls.MAX_SAVE_FOLDERS:
             oldest_folder = cls.objects.filter(user=user, game=game).order_by('created_at').first()
             if oldest_folder:
                 # Reset created_at for reuse and update remote path (in case game name changed)
@@ -71,12 +78,9 @@ class SaveFolder(models.Model):
                 oldest_folder.save(update_fields=['created_at', 'smb_path'])
                 return oldest_folder
         
-        # Find the next available number
-        next_number = 1
-        for i in range(1, cls.MAX_SAVE_FOLDERS + 1):
-            if i not in existing_numbers:
-                next_number = i
-                break
+        # Use next sequential number (highest + 1, or 1 if none exist)
+        # This ensures we don't reuse deleted slots, preventing conflicts with empty folders
+        next_number = (max_folder + 1) if max_folder else 1
         
         # Generate remote path
         smb_path = cls._generate_remote_path(user.username, game.name, next_number)

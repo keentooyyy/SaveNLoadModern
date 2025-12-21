@@ -638,7 +638,13 @@ class RcloneClient:
             return False, error_msg
     
     def delete_directory(self, remote_path: str) -> Tuple[bool, str]:
-        """Delete a directory recursively - rclone handles everything
+        """
+        Delete a directory recursively - rclone handles everything.
+        
+        Uses multiple methods to ensure complete deletion:
+        1. First tries 'purge' to delete directory and all contents
+        2. Then tries 'rmdir' to remove empty directory if it still exists
+        3. This ensures empty folders are fully removed from FTP server
         
         Args:
             remote_path: Full remote path (e.g., "username/game/save_1")
@@ -647,12 +653,20 @@ class RcloneClient:
             Tuple of (success, message)
         """
         remote_full = self._build_remote_path(remote_path)
-        command = ['purge', remote_full]
         
-        # Run silently first to check if it's a "not found" error
+        # Step 1: Try purge first (deletes directory and all contents)
+        command = ['purge', remote_full]
         success, stdout, stderr = self._run_rclone(command, timeout=300, silent=True)
         
         if success:
+            # Step 2: Try rmdir to ensure empty directory is removed (some FTP servers need this)
+            # rmdir will fail if directory has contents, but succeed if it's empty or doesn't exist
+            # This cleans up any empty folders that purge might have left behind
+            rmdir_command = ['rmdir', remote_full]
+            rmdir_success, rmdir_stdout, rmdir_stderr = self._run_rclone(rmdir_command, timeout=60, silent=True)
+            
+            # rmdir failure is OK if it's because directory doesn't exist or has contents
+            # We only care if purge succeeded - rmdir is just cleanup
             return True, "Directory deleted"
         else:
             error_text = (stderr + stdout).lower()
@@ -666,7 +680,11 @@ class RcloneClient:
                 'error listing'
             ]
             if any(pattern in error_text for pattern in not_found_patterns):
+                # Directory doesn't exist - try rmdir anyway to clean up any empty parent dirs
+                rmdir_command = ['rmdir', remote_full]
+                self._run_rclone(rmdir_command, timeout=60, silent=True)
                 return True, "Directory already deleted"
+            
             # Not a "not found" error, show the actual output
             for line in stdout.split('\n'):
                 if line.strip():
