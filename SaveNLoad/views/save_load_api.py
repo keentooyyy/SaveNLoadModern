@@ -127,9 +127,24 @@ def save_game(request, game_id):
     # Create operations for each path using path mappings
     operation_ids = []
     for path in save_paths:
-        # Get or create path_index using mapping (ensures consistent mapping)
+        # Validate path is in game's configured paths
+        normalized_path = os.path.normpath(path)
+        game_paths = {os.path.normpath(p) for p in game.save_file_locations if p}
+        
+        if normalized_path not in game_paths:
+            return json_response_error(
+                f'Path "{path}" is not configured for this game. Please edit the game to add this path.',
+                status=400
+            )
+        
+        # Get path_index from existing mapping (no auto-creation)
         if use_subfolders:
             path_index = game.get_path_index(path)
+            if path_index is None:
+                return json_response_error(
+                    f'Path "{path}" is not mapped. Please edit the game to configure path mappings.',
+                    status=400
+                )
         else:
             path_index = None
         
@@ -242,13 +257,23 @@ def load_game(request, game_id):
     # Create operations for each path using path mappings
     operation_ids = []
     for path in load_paths:
+        # Validate path is in game's configured paths
+        normalized_path = os.path.normpath(path)
+        game_paths = {os.path.normpath(p) for p in game.save_file_locations if p}
+        
+        if normalized_path not in game_paths:
+            return json_response_error(
+                f'Path "{path}" is not configured for this game. Please edit the game to add this path.',
+                status=400
+            )
+        
         # Get path_index from mapping (or None if not mapped and single path)
         if use_subfolders:
-            path_index = game.get_path_index_or_none(path)
+            path_index = game.get_path_index(path)
             # If path not mapped, this is an error - can't load without knowing which server path
             if path_index is None:
                 return json_response_error(
-                    f'Path "{path}" is not mapped to a server location. Please save this path first to create the mapping.',
+                    f'Path "{path}" is not mapped. Please edit the game to configure path mappings.',
                     status=400
                 )
         else:

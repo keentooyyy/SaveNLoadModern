@@ -52,49 +52,16 @@ class Game(models.Model):
         # Fallback to original URL if local file doesn't exist
         return self.banner_url or ''
     
-    def get_path_index(self, local_path: str) -> int:
+    def get_path_index(self, local_path: str):
         """
         Get the path_index for a local path.
-        If mapping doesn't exist, creates a new one.
+        Does NOT create new mappings - mappings must be set via generate_path_mappings().
         
         Args:
             local_path: Local save file path
             
         Returns:
-            path_index (1-based) for this path
-        """
-        if not self.path_mappings:
-            self.path_mappings = {}
-        
-        # Normalize path for consistent mapping (handle both / and \)
-        normalized_path = os.path.normpath(local_path)
-        
-        # Check if path already has a mapping
-        if normalized_path in self.path_mappings:
-            return self.path_mappings[normalized_path]
-        
-        # Find next available path_index
-        existing_indices = set(self.path_mappings.values()) if self.path_mappings else set()
-        next_index = 1
-        while next_index in existing_indices:
-            next_index += 1
-        
-        # Create new mapping
-        self.path_mappings[normalized_path] = next_index
-        self.save(update_fields=['path_mappings', 'updated_at'])
-        
-        return next_index
-    
-    def get_path_index_or_none(self, local_path: str) -> int:
-        """
-        Get the path_index for a local path, or None if not mapped.
-        Does not create new mappings.
-        
-        Args:
-            local_path: Local save file path
-            
-        Returns:
-            path_index (1-based) or None if not found
+            path_index (1-based) or None if not mapped
         """
         if not self.path_mappings:
             return None
@@ -120,4 +87,57 @@ class Game(models.Model):
             for path in paths_to_remove:
                 del self.path_mappings[path]
             self.save(update_fields=['path_mappings', 'updated_at'])
+    
+    def generate_path_mappings(self):
+        """
+        Generate path_mappings for all paths in save_file_locations.
+        Only creates mappings if there are 2+ paths (multi-path games).
+        For single path games, path_mappings should remain empty.
+        
+        This should be called when creating or editing a game.
+        """
+        if not self.save_file_locations:
+            self.path_mappings = {}
+            return
+        
+        # Only create mappings for multiple paths
+        if len(self.save_file_locations) <= 1:
+            # Single path - clear mappings (don't need path_index)
+            self.path_mappings = {}
+            self.save(update_fields=['path_mappings', 'updated_at'])
+            return
+        
+        # Multiple paths - generate mappings
+        if not self.path_mappings:
+            self.path_mappings = {}
+        
+        # Normalize all current paths
+        current_paths = {os.path.normpath(path) for path in self.save_file_locations if path}
+        
+        # Get existing indices that are still valid
+        existing_indices = set()
+        valid_mappings = {}
+        
+        # Keep mappings for paths that still exist
+        for path, index in self.path_mappings.items():
+            normalized = os.path.normpath(path)
+            if normalized in current_paths:
+                valid_mappings[normalized] = index
+                existing_indices.add(index)
+        
+        # Assign indices to new paths (paths without mappings)
+        new_paths = current_paths - set(valid_mappings.keys())
+        next_index = 1
+        
+        for path in sorted(new_paths):  # Sort for consistent ordering
+            # Find next available index
+            while next_index in existing_indices:
+                next_index += 1
+            valid_mappings[path] = next_index
+            existing_indices.add(next_index)
+            next_index += 1
+        
+        # Update mappings
+        self.path_mappings = valid_mappings
+        self.save(update_fields=['path_mappings', 'updated_at'])
 

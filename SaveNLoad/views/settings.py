@@ -104,6 +104,9 @@ def create_game(request):
         
         game = Game.objects.create(**game_data)
         
+        # Generate path mappings if multiple paths
+        game.generate_path_mappings()
+        
         # Try to download and cache banner image (non-blocking - if fails, URL is stored)
         if banner:
             success, message, file_obj = download_image_from_url(banner)
@@ -361,6 +364,10 @@ def game_detail(request, game_id):
 
     game.name = name
     game.save_file_locations = save_file_locations
+    
+    # Clean up old mappings and generate new ones
+    game.cleanup_path_mappings()  # Remove mappings for deleted paths
+    game.generate_path_mappings()  # Generate mappings for current paths
     
     # Handle banner update
     if banner:
