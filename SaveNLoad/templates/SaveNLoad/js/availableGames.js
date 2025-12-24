@@ -4,20 +4,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const gamesContainer = document.getElementById('availableGamesContainer');
     const isUserView = typeof window.IS_USER_VIEW !== 'undefined' && window.IS_USER_VIEW;
     
-    // Get the search URL based on user type
-    let searchUrl;
-    if (isUserView) {
-        if (!window.USER_SEARCH_GAMES_URL) {
-            console.error('USER_SEARCH_GAMES_URL not defined');
-            return;
-        }
-        searchUrl = window.USER_SEARCH_GAMES_URL;
-    } else {
-        if (!window.ADMIN_SEARCH_GAMES_URL) {
-            console.error('ADMIN_SEARCH_GAMES_URL not defined');
-            return;
-        }
-        searchUrl = window.ADMIN_SEARCH_GAMES_URL;
+    // Both admin and user search URLs point to the same backend endpoint
+    const searchUrl = window.USER_SEARCH_GAMES_URL || window.ADMIN_SEARCH_GAMES_URL;
+    if (!searchUrl) {
+        console.error('Search URL not defined');
+        return;
     }
     
     let searchTimeout = null;

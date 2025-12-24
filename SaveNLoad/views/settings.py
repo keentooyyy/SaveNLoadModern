@@ -34,9 +34,10 @@ def settings_view(request):
         return redirect(reverse('user:dashboard'))
     
     context = {
+        'is_user': False,  # Add this line
         'user': user
     }
-    return render(request, 'SaveNLoad/admin/settings.html', context)
+    return render(request, 'SaveNLoad/settings.html', context)
 
 
 @login_required
@@ -48,7 +49,7 @@ def user_settings_view(request):
         'is_user': True,
         'user': user
     }
-    return render(request, 'SaveNLoad/user/settings.html', context)
+    return render(request, 'SaveNLoad/settings.html', context)
 
 
 @login_required

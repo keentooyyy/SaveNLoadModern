@@ -115,10 +115,11 @@ def admin_dashboard(request):
     context = {
         'recent_games': recent_games,
         'available_games': available_games,
+        'is_user': False,  # Add this line
         'user': user
     }
     
-    return render(request, 'SaveNLoad/admin/dashboard.html', context)
+    return render(request, 'SaveNLoad/dashboard.html', context)
 
 
 @login_required
@@ -192,7 +193,7 @@ def user_dashboard(request):
         'user': user
     }
     
-    return render(request, 'SaveNLoad/user/dashboard.html', context)
+    return render(request, 'SaveNLoad/dashboard.html', context)
 
 
 @login_required
