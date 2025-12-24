@@ -4,9 +4,6 @@ from django.http import JsonResponse
 from functools import wraps
 from SaveNLoad.models import SimpleUsers
 from SaveNLoad.models.client_worker import ClientWorker
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 def login_required(view_func):

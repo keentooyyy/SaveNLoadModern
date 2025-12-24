@@ -8,9 +8,6 @@ from urllib.parse import urlparse
 from django.core.files import File
 from django.core.files.temp import NamedTemporaryFile
 from django.conf import settings
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 def download_image_from_url(image_url, save_path=None, timeout=10):
@@ -84,7 +81,7 @@ def download_image_from_url(image_url, save_path=None, timeout=10):
     except requests.exceptions.RequestException as e:
         return False, f"Failed to download image: {str(e)}", None
     except Exception as e:
-        logger.error(f"Error downloading image: {str(e)}", exc_info=True)
+        print(f"ERROR: Error downloading image: {str(e)}")
         return False, f"Unexpected error: {str(e)}", None
 
 

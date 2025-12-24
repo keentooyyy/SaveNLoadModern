@@ -6,9 +6,6 @@ from django.core.management.base import BaseCommand
 from django.db import IntegrityError, OperationalError, ProgrammingError
 from SaveNLoad.models.user import SimpleUsers, UserRole
 import os
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -50,7 +47,7 @@ class Command(BaseCommand):
                 print('ERROR: Database tables do not exist. Please run migrations first:')
                 print('  python manage.py makemigrations')
                 print('  python manage.py migrate')
-                logger.error(f'Database tables do not exist: {str(e)}')
+                print(f'ERROR: Database tables do not exist: {str(e)}')
                 return
             else:
                 # Re-raise if it's a different database error
@@ -96,9 +93,9 @@ class Command(BaseCommand):
             admin_user.save()
 
             print(f'Successfully created admin user: {admin_username} (email: {admin_email})')
-            logger.info(f'Default admin user created: {admin_username}')
+            print(f'Default admin user created: {admin_username}')
 
         except IntegrityError as e:
             print(f'Failed to create admin user: {str(e)}')
-            logger.error(f'Failed to create admin user: {str(e)}')
+            print(f'ERROR: Failed to create admin user: {str(e)}')
 

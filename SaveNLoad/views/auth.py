@@ -204,9 +204,6 @@ def forgot_password(request):
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             from SaveNLoad.models.password_reset_otp import PasswordResetOTP
             from SaveNLoad.utils.email_service import send_otp_email
-            import logging
-            
-            logger = logging.getLogger(__name__)
             
             data, error_response = parse_json_body(request)
             if error_response:
@@ -251,13 +248,13 @@ def forgot_password(request):
                         message='OTP code has been sent to your email address. Please check your inbox.'
                     )
                 else:
-                    logger.error(f"Failed to send OTP email to registered email: {registered_email}")
+                    print(f"ERROR: Failed to send OTP email to registered email: {registered_email}")
                     return json_response_error(
                         'Failed to send email. Please try again later.',
                         status=500
                     )
             except Exception as e:
-                logger.error(f"Error generating/sending OTP: {str(e)}")
+                print(f"ERROR: Error generating/sending OTP: {str(e)}")
                 return json_response_error(
                     'An error occurred. Please try again later.',
                     status=500
@@ -286,9 +283,6 @@ def verify_otp(request):
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             from SaveNLoad.models.password_reset_otp import PasswordResetOTP
             from SaveNLoad.utils.email_service import send_otp_email
-            import logging
-            
-            logger = logging.getLogger(__name__)
             
             data, error_response = parse_json_body(request)
             if error_response:
@@ -310,7 +304,7 @@ def verify_otp(request):
                             message='A new OTP code has been sent to your email address.'
                         )
                     else:
-                        logger.error(f"Failed to resend OTP email to {email}")
+                        print(f"ERROR: Failed to resend OTP email to {email}")
                         return json_response_error(
                             'Failed to send email. Please try again later.',
                             status=500
@@ -318,7 +312,7 @@ def verify_otp(request):
                 except SimpleUsers.DoesNotExist:
                     return json_response_error('User not found.', status=404)
                 except Exception as e:
-                    logger.error(f"Error resending OTP: {str(e)}")
+                    print(f"ERROR: Error resending OTP: {str(e)}")
                     return json_response_error(
                         'An error occurred. Please try again later.',
                         status=500
@@ -379,9 +373,6 @@ def reset_password(request):
         # Handle AJAX requests
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             from SaveNLoad.models.password_reset_otp import PasswordResetOTP
-            import logging
-            
-            logger = logging.getLogger(__name__)
             
             data, error_response = parse_json_body(request)
             if error_response:
@@ -440,7 +431,7 @@ def reset_password(request):
             except PasswordResetOTP.DoesNotExist:
                 return json_response_error('Invalid session. Please start over.', status=400)
             except Exception as e:
-                logger.error(f"Error resetting password: {str(e)}")
+                print(f"ERROR: Error resetting password: {str(e)}")
                 return json_response_error(
                     'An error occurred. Please try again.',
                     status=500

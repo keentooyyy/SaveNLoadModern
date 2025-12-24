@@ -26,14 +26,11 @@ from SaveNLoad.models.save_folder import SaveFolder
 from SaveNLoad.models import Game
 import json
 import os
-import logging
 import zipfile
 import tempfile
 import io
 from pathlib import Path
 from django.conf import settings
-
-logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -338,7 +335,7 @@ def delete_save_folder(request, game_id, folder_number):
         )
         
     except Exception as e:
-        logger.error(f"Failed to delete save folder: {e}")
+        print(f"ERROR: Failed to delete save folder: {e}")
         return json_response_error(f'Failed to delete save folder: {str(e)}', status=500)
 
 
@@ -452,7 +449,7 @@ def list_saves(request, game_id):
             return json_response_error(error_msg, status=500)
         
     except Exception as e:
-        logger.error(f"List saves failed: {e}")
+        print(f"ERROR: List saves failed: {e}")
         return json_response_error(f'List saves failed: {str(e)}', status=500)
 
 
@@ -534,7 +531,7 @@ def delete_all_saves(request, game_id):
                 # Validate save folder has required information
                 validated_folder, error_response = validate_save_folder_or_error(save_folder)
                 if error_response:
-                    logger.warning(f'Save folder {save_folder.id} validation failed: {error_response.content.decode() if hasattr(error_response, "content") else "validation error"}, skipping')
+                    print(f'WARNING: Save folder {save_folder.id} validation failed: {error_response.content.decode() if hasattr(error_response, "content") else "validation error"}, skipping')
                     invalid_folders.append(save_folder)
                     continue
                 
@@ -551,7 +548,7 @@ def delete_all_saves(request, game_id):
                 operation_ids.append(operation.id)
                     
             except Exception as e:
-                logger.error(f"Failed to create delete operation for save folder {save_folder.folder_number}: {e}")
+                print(f"ERROR: Failed to create delete operation for save folder {save_folder.folder_number}: {e}")
                 invalid_folders.append(save_folder)
         
         # Delete invalid folders from database immediately
@@ -578,7 +575,7 @@ def delete_all_saves(request, game_id):
         )
         
     except Exception as e:
-        logger.error(f"Failed to delete all saves: {e}")
+        print(f"ERROR: Failed to delete all saves: {e}")
         return json_response_error(f'Failed to delete all saves: {str(e)}', status=500)
 
 

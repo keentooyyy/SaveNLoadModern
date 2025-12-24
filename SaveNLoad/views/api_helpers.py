@@ -12,10 +12,7 @@ from SaveNLoad.utils.image_utils import get_image_url_or_fallback
 from django.utils import timezone
 from datetime import timedelta
 import json
-import logging
 import os
-
-logger = logging.getLogger(__name__)
 
 
 def delete_game_banner_file(game):
@@ -31,10 +28,10 @@ def delete_game_banner_file(game):
             banner_path = game.banner.path
             if os.path.exists(banner_path):
                 os.remove(banner_path)
-                logger.info(f"Deleted banner file for game {game.id} ({game.name}): {banner_path}")
+                print(f"Deleted banner file for game {game.id} ({game.name}): {banner_path}")
             return True
     except Exception as e:
-        logger.warning(f"Failed to delete banner file for game {game.id} ({game.name}): {e}")
+        print(f"WARNING: Failed to delete banner file for game {game.id} ({game.name}): {e}")
         return False
     
     return True
@@ -419,7 +416,7 @@ def safe_delete_operations(queryset, expected_model='SaveNLoad.OperationQueue'):
     if deleted_objects:
         if expected_model not in deleted_objects or len(deleted_objects) > 1:
             is_safe = False
-            logger.warning(f"Unexpected objects deleted: {deleted_objects}")
+            print(f"WARNING: Unexpected objects deleted: {deleted_objects}")
     
     return deleted_count, is_safe
 
@@ -487,22 +484,3 @@ def cleanup_operations_by_age(days, no_items_message, success_message_template):
         message=success_message_template.format(count=deleted_count),
         data={'deleted_count': deleted_count}
     )
-
-
-def handle_exception_with_logging(exception, error_message, logger_instance=None, status=500):
-    """
-    Standardized exception handling with logging
-    Returns: JsonResponse error
-    
-    Args:
-        exception: Exception instance
-        error_message: User-facing error message
-        logger_instance: Optional logger (defaults to module logger)
-        status: HTTP status code
-    """
-    if logger_instance is None:
-        logger_instance = logger
-    
-    logger_instance.error(f"{error_message}: {exception}", exc_info=True)
-    return json_response_error(error_message, status=status)
-

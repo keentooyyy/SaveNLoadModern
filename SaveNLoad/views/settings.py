@@ -17,10 +17,7 @@ from SaveNLoad.utils.image_utils import download_image_from_url, get_image_url_o
 from django.core.files import File
 from urllib.parse import urlparse
 import json
-import logging
 import os
-
-logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -123,7 +120,7 @@ def create_game(request):
                     if hasattr(file_obj, 'name'):
                         os.unlink(file_obj.name)
                 except Exception as e:
-                    logger.warning(f"Failed to save cached banner for game {game.id}: {e}")
+                    print(f"WARNING: Failed to save cached banner for game {game.id}: {e}")
                     # Continue - banner_url is already stored as fallback
         
         return json_response_success(
@@ -138,7 +135,7 @@ def create_game(request):
             }
         )
     except Exception as e:
-        logger.error(f"Error creating game: {str(e)}", exc_info=True)
+        print(f"ERROR: Error creating game: {str(e)}")
         return json_response_error(f'Failed to create game: {str(e)}', status=500)
 
 
@@ -177,9 +174,7 @@ def search_game(request):
         
         return JsonResponse({'games': results})
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Error in search_game view: {e}", exc_info=True)
+        print(f"ERROR: Error in search_game view: {e}")
         return JsonResponse({'games': [], 'error': 'Failed to search games'}, status=500)
 
 
@@ -207,7 +202,7 @@ def _queue_game_deletion_operations(game: Game, admin_user, request=None):
         save_folders = SaveFolder.objects.filter(game=game)
         
         if not save_folders.exists():
-            logger.info(f"No save folders found for game {game.id} ({game.name}), no FTP cleanup needed")
+            print(f"No save folders found for game {game.id} ({game.name}), no FTP cleanup needed")
             # No saves to clean up, so we can return a special flag indicating immediate deletion is safe
             return (True, "no_saves")  # Special flag: no saves means immediate deletion is safe
         
@@ -219,7 +214,7 @@ def _queue_game_deletion_operations(game: Game, admin_user, request=None):
         client_worker, error_response = get_client_worker_or_error(admin_user, request)
         if error_response:
             error_msg = f"No active client worker available. Cannot delete FTP saves for game '{game.name}'. Please ensure a client worker is running and try again."
-            logger.warning(f"No active client worker available for admin {admin_user.username}, cannot delete FTP saves for game {game.id}")
+            print(f"WARNING: No active client worker available for admin {admin_user.username}, cannot delete FTP saves for game {game.id}")
             return (False, error_msg)
         
         # Build safe game name (same logic as SaveFolder._generate_remote_path)
@@ -249,19 +244,19 @@ def _queue_game_deletion_operations(game: Game, admin_user, request=None):
                     client_worker=client_worker  # Admin's worker handles all deletions
                 )
                 operations_created += 1
-                logger.info(f"Queued delete operation for game directory: {game_directory_path} (assigned to admin's worker: {client_worker.client_id})")
+                print(f"Queued delete operation for game directory: {game_directory_path} (assigned to admin's worker: {client_worker.client_id})")
             except Exception as e:
-                logger.error(f"Failed to create delete operation for user {user_id}: {e}")
+                print(f"ERROR: Failed to create delete operation for user {user_id}: {e}")
                 return (False, f"Failed to queue FTP cleanup operation: {str(e)}")
         
         if operations_created > 0:
-            logger.info(f"Queued {operations_created} delete operation(s) for game {game.id} ({game.name}) - all assigned to admin's worker")
+            print(f"Queued {operations_created} delete operation(s) for game {game.id} ({game.name}) - all assigned to admin's worker")
             return (True, None)
         else:
             return (False, "Failed to create any FTP cleanup operations")
     except Exception as e:
         error_msg = f"Error queueing game deletion operations: {str(e)}"
-        logger.error(f"Error queueing game deletion operations for game {game.id}: {e}")
+        print(f"ERROR: Error queueing game deletion operations for game {game.id}: {e}")
         return (False, error_msg)
 
 
@@ -331,12 +326,12 @@ def game_detail(request, game_id):
             # Delete banner file before deleting game
             delete_game_banner_file(game)
             game.delete()
-            logger.info(f"Game {game.id} ({game.name}) deleted immediately - no FTP saves to clean up")
+            print(f"Game {game.id} ({game.name}) deleted immediately - no FTP saves to clean up")
         else:
             # Mark game for deletion - actual deletion happens after all FTP operations complete successfully
             game.pending_deletion = True
             game.save()
-            logger.info(f"Game {game.id} ({game.name}) marked for deletion - will be deleted after all FTP cleanup operations complete")
+            print(f"Game {game.id} ({game.name}) marked for deletion - will be deleted after all FTP cleanup operations complete")
         return json_response_success()
 
     # POST - update
@@ -372,7 +367,7 @@ def game_detail(request, game_id):
                         if os.path.exists(old_path):
                             os.remove(old_path)
                     except Exception as e:
-                        logger.warning(f"Failed to delete old banner: {e}")
+                        print(f"WARNING: Failed to delete old banner: {e}")
                 
                 # Determine file extension
                 parsed = urlparse(banner)
@@ -382,7 +377,7 @@ def game_detail(request, game_id):
                 if hasattr(file_obj, 'name'):
                     os.unlink(file_obj.name)
             except Exception as e:
-                logger.warning(f"Failed to cache banner for game {game.id}: {e}")
+                print(f"WARNING: Failed to cache banner for game {game.id}: {e}")
                 # Continue - banner_url is stored as fallback
     else:
         # If banner is cleared, also clear cached file
@@ -392,7 +387,7 @@ def game_detail(request, game_id):
                 if os.path.exists(old_path):
                     os.remove(old_path)
             except Exception as e:
-                logger.warning(f"Failed to delete banner: {e}")
+                print(f"WARNING: Failed to delete banner: {e}")
         game.banner = None
         game.banner_url = None
     
@@ -436,12 +431,12 @@ def delete_game(request, game_id):
         # Delete banner file before deleting game
         delete_game_banner_file(game)
         game.delete()
-        logger.info(f"Game {game.id} ({game.name}) deleted immediately - no FTP saves to clean up")
+        print(f"Game {game.id} ({game.name}) deleted immediately - no FTP saves to clean up")
     else:
         # Mark game for deletion - actual deletion happens after all FTP operations complete successfully
         game.pending_deletion = True
         game.save()
-        logger.info(f"Game {game.id} ({game.name}) marked for deletion - will be deleted after all FTP cleanup operations complete")
+        print(f"Game {game.id} ({game.name}) marked for deletion - will be deleted after all FTP cleanup operations complete")
     return json_response_success()
 
 
@@ -663,7 +658,7 @@ def operation_queue_cleanup(request):
         # Verify only OperationQueue was deleted (safety check)
         # Allow empty dict (nothing to delete) or exactly one key that is OperationQueue
         if deleted_objects and ('SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1):
-            logger.warning(f"Unexpected objects deleted: {deleted_objects}")
+            print(f"WARNING: Unexpected objects deleted: {deleted_objects}")
         return json_response_success(
             message=f'Deleted {deleted_count} completed operation(s)',
             data={'deleted_count': deleted_count}
@@ -682,7 +677,7 @@ def operation_queue_cleanup(request):
         deleted_count, deleted_objects = OperationQueue.objects.filter(status=OperationStatus.FAILED).delete()
         # Allow empty dict (nothing to delete) or exactly one key that is OperationQueue
         if deleted_objects and ('SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1):
-            logger.warning(f"Unexpected objects deleted: {deleted_objects}")
+            print(f"WARNING: Unexpected objects deleted: {deleted_objects}")
         return json_response_success(
             message=f'Deleted {deleted_count} failed operation(s)',
             data={'deleted_count': deleted_count}
@@ -702,7 +697,7 @@ def operation_queue_cleanup(request):
         deleted_count, deleted_objects = OperationQueue.objects.filter(created_at__lt=thirty_days_ago).delete()
         # Allow empty dict (nothing to delete) or exactly one key that is OperationQueue
         if deleted_objects and ('SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1):
-            logger.warning(f"Unexpected objects deleted: {deleted_objects}")
+            print(f"WARNING: Unexpected objects deleted: {deleted_objects}")
         return json_response_success(
             message=f'Deleted {deleted_count} old operation(s) (30+ days)',
             data={'deleted_count': deleted_count}
@@ -722,7 +717,7 @@ def operation_queue_cleanup(request):
         # Safety check: verify only OperationQueue was deleted (or nothing if empty)
         # Allow empty dict (nothing to delete) or exactly one key that is OperationQueue
         if deleted_objects and ('SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1):
-            logger.error(f"CRITICAL: Unexpected objects deleted during cleanup: {deleted_objects}")
+            print(f"CRITICAL ERROR: Unexpected objects deleted during cleanup: {deleted_objects}")
             return json_response_error(
                 f'Cleanup deleted unexpected objects: {deleted_objects}. Aborted to prevent data loss.',
                 status=500

@@ -63,8 +63,6 @@ def get_popular_games(limit: int = 10) -> List[Dict]:
         return []
     except Exception as e:
         print(f"Unexpected error in get_popular_games: {e}")
-        import traceback
-        traceback.print_exc()
         return []
 
 
@@ -116,8 +114,6 @@ def search_game(query: str) -> Optional[Dict]:
         return None
     except Exception as e:
         print(f"Unexpected error in search_game: {e}")
-        import traceback
-        traceback.print_exc()
         return None
 
 
@@ -208,7 +204,5 @@ def search_games(query: str, limit: int = 10) -> List[Dict]:
         return []
     except Exception as e:
         print(f"Unexpected error in search_games: {e}")
-        import traceback
-        traceback.print_exc()
         return []
 

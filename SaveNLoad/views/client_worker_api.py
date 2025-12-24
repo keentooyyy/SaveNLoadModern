@@ -15,10 +15,7 @@ from SaveNLoad.views.api_helpers import (
     delete_game_banner_file
 )
 import json
-import logging
 import os
-
-logger = logging.getLogger(__name__)
 
 
 @csrf_exempt
@@ -66,14 +63,14 @@ def register_client(request):
                     request.session.pop('client_id', None)
                     request.session.modified = True
         
-        logger.info(f"Client worker registered: {client_id}")
+        print(f"Client worker registered: {client_id}")
         return json_response_success(
             message='Client worker registered successfully',
             data={'client_id': client_id}
         )
         
     except Exception as e:
-        logger.error(f"Failed to register client: {e}")
+        print(f"ERROR: Failed to register client: {e}")
         return json_response_error(str(e), status=500)
 
 
@@ -115,7 +112,7 @@ def heartbeat(request):
         return json_response_success()
         
     except Exception as e:
-        logger.error(f"Failed to process heartbeat: {e}")
+        print(f"ERROR: Failed to process heartbeat: {e}")
         return json_response_error(str(e), status=500)
 
 
@@ -136,11 +133,11 @@ def unregister_client(request):
         
         worker.is_active = False
         worker.save()
-        logger.info(f"Client worker unregistered: {client_id}")
+        print(f"Client worker unregistered: {client_id}")
         return json_response_success(message='Client worker unregistered')
         
     except Exception as e:
-        logger.error(f"Failed to unregister client: {e}")
+        print(f"ERROR: Failed to unregister client: {e}")
         return json_response_error(str(e), status=500)
 
 
@@ -248,7 +245,7 @@ def get_pending_operations(request, client_id):
                 stuck_ids = list(stuck_operations.values_list('id', flat=True))
                 for op in stuck_operations:
                     op.mark_failed('Operation timed out after 30 minutes')
-                logger.warning(f"Marked {len(stuck_ids)} stuck operations as failed (operation timeout)")
+                print(f"WARNING: Marked {len(stuck_ids)} stuck operations as failed (operation timeout)")
         
         # Get pending operations assigned to this worker ONLY
         # Operations must be pre-assigned when created to prevent race conditions
@@ -316,7 +313,7 @@ def update_operation_progress(request, operation_id):
     except OperationQueue.DoesNotExist:
         return json_response_error('Operation not found', status=404)
     except Exception as e:
-        logger.error(f"Failed to update operation progress: {e}")
+        print(f"ERROR: Failed to update operation progress: {e}")
         return json_response_error(str(e), status=500)
 
 
@@ -350,9 +347,9 @@ def complete_operation(request, operation_id):
                     )
                     if save_folder:
                         save_folder.delete()
-                        logger.info(f"Deleted save folder {operation.save_folder_number} from database after successful SMB deletion")
+                        print(f"Deleted save folder {operation.save_folder_number} from database after successful SMB deletion")
                 except Exception as e:
-                    logger.warning(f"Failed to delete save folder from database after operation: {e}")
+                    print(f"WARNING: Failed to delete save folder from database after operation: {e}")
             
             # Check if game is pending deletion and all operations are complete
             from SaveNLoad.utils.operation_utils import (
@@ -385,13 +382,13 @@ def complete_operation(request, operation_id):
                         delete_game_banner_file(operation.game)
                         
                         operation.game.delete()  # This will CASCADE delete all SaveFolders and OperationQueue records
-                        logger.info(f"Game {game_id} ({game_name}) deleted from database after all FTP cleanup operations completed successfully")
+                        print(f"Game {game_id} ({game_name}) deleted from database after all FTP cleanup operations completed successfully")
                     else:
                         # Some operations failed - keep the game, clear pending_deletion flag
                         operation.game.pending_deletion = False
                         operation.game.save()
                         failed_count = all_operations.filter(status=OperationStatus.FAILED).count()
-                        logger.warning(f"Game {operation.game.id} ({operation.game.name}) deletion cancelled - {failed_count} FTP operation(s) failed")
+                        print(f"WARNING: Game {operation.game.id} ({operation.game.name}) deletion cancelled - {failed_count} FTP operation(s) failed")
         else:
             error_message = data.get('error', data.get('message', 'Operation failed'))
             
@@ -431,13 +428,13 @@ def complete_operation(request, operation_id):
                         delete_game_banner_file(operation.game)
                         
                         operation.game.delete()  # This will CASCADE delete all SaveFolders and OperationQueue records
-                        logger.info(f"Game {game_id} ({game_name}) deleted from database after all FTP cleanup operations completed successfully")
+                        print(f"Game {game_id} ({game_name}) deleted from database after all FTP cleanup operations completed successfully")
                     else:
                         # Some operations failed - keep the game, clear pending_deletion flag
                         operation.game.pending_deletion = False
                         operation.game.save()
                         failed_count = all_operations.filter(status=OperationStatus.FAILED).count()
-                        logger.warning(f"Game {operation.game.id} ({operation.game.name}) deletion cancelled - {failed_count} FTP operation(s) failed")
+                        print(f"WARNING: Game {operation.game.id} ({operation.game.name}) deletion cancelled - {failed_count} FTP operation(s) failed")
             
             # Cleanup: If SAVE operation failed due to missing local path or empty saves, delete the save folder
             # This prevents orphaned save folders when user provides invalid path or empty saves
@@ -479,16 +476,16 @@ def complete_operation(request, operation_id):
                             if save_folder.created_at >= time_threshold:
                                 # Delete the save folder
                                 save_folder.delete()
-                                logger.info(f"Deleted save folder {save_folder.folder_number} due to failed save operation (error: {error_message})")
+                                print(f"Deleted save folder {save_folder.folder_number} due to failed save operation (error: {error_message})")
                     except Exception as e:
-                        logger.warning(f"Failed to cleanup save folder after failed operation: {e}")
+                        print(f"WARNING: Failed to cleanup save folder after failed operation: {e}")
         
         return json_response_success()
         
     except OperationQueue.DoesNotExist:
         return json_response_error('Operation not found', status=404)
     except Exception as e:
-        logger.error(f"Failed to complete operation: {e}")
+        print(f"ERROR: Failed to complete operation: {e}")
         return json_response_error(str(e), status=500)
 
 

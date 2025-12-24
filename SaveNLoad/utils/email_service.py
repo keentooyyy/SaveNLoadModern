@@ -4,9 +4,6 @@ Email service for sending emails via Gmail SMTP
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.conf import settings
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 def send_otp_email(email: str, otp_code: str, username: str = None) -> bool:
@@ -28,12 +25,12 @@ def send_otp_email(email: str, otp_code: str, username: str = None) -> bool:
         
         # Check if email is configured
         if not from_email or not settings.EMAIL_HOST_USER:
-            logger.error("Email configuration is missing. Please set GMAIL_USER and GMAIL_APP_PASSWORD in environment variables.")
+            print("ERROR: Email configuration is missing. Please set GMAIL_USER and GMAIL_APP_PASSWORD in environment variables.")
             return False
         
         # Check if password is configured
         if not settings.EMAIL_HOST_PASSWORD:
-            logger.error("GMAIL_APP_PASSWORD is not set in environment variables. You need a Gmail App Password (not your regular password).")
+            print("ERROR: GMAIL_APP_PASSWORD is not set in environment variables. You need a Gmail App Password (not your regular password).")
             return False
         
         # Get icon URL from external hosting (imgbb, imgur, etc.)
@@ -75,16 +72,16 @@ def send_otp_email(email: str, otp_code: str, username: str = None) -> bool:
         # Send email
         msg.send()
         
-        logger.info(f"OTP email sent successfully to {email}")
+        print(f"OTP email sent successfully to {email}")
         return True
         
     except Exception as e:
         error_msg = str(e)
-        logger.error(f"Failed to send OTP email to {email}: {error_msg}")
+        print(f"ERROR: Failed to send OTP email to {email}: {error_msg}")
         
         # Provide helpful error messages for common Gmail issues
         if "535" in error_msg or "BadCredentials" in error_msg or "Username and Password not accepted" in error_msg:
-            logger.error(
+            print(
                 "GMAIL AUTHENTICATION ERROR: Gmail rejected the credentials.\n"
                 "SOLUTION:\n"
                 "1. Make sure you're using a Gmail App Password (NOT your regular Gmail password)\n"
@@ -94,7 +91,7 @@ def send_otp_email(email: str, otp_code: str, username: str = None) -> bool:
                 "5. Make sure GMAIL_USER is your full Gmail address (e.g., yourname@gmail.com)"
             )
         elif "534" in error_msg or "Application-specific password required" in error_msg:
-            logger.error(
+            print(
                 "GMAIL ERROR: Application-specific password required.\n"
                 "Generate an App Password at: https://myaccount.google.com/apppasswords"
             )
