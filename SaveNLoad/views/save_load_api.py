@@ -79,9 +79,16 @@ def save_game(request, game_id):
         if error_response:
             return error_response
         
-        # Create operations for each path with path_index
+        # Only use path_index if there are 2+ paths
+        # Single path = no subfolder (backward compatible)
+        use_subfolders = len(save_paths) > 1
+        
+        # Create operations for each path
         operation_ids = []
         for index, path in enumerate(save_paths, start=1):
+            # Only set path_index if using subfolders (2+ paths)
+            path_index = index if use_subfolders else None
+            
             operation = OperationQueue.create_operation(
                 operation_type=OperationType.SAVE,
                 user=user,
@@ -90,7 +97,7 @@ def save_game(request, game_id):
                 save_folder_number=save_folder.folder_number,
                 smb_path=save_folder.smb_path,
                 client_worker=client_worker,
-                path_index=index  # 1-based index for path_1, path_2, etc.
+                path_index=path_index  # None for single path, 1/2/3... for multiple
             )
             operation_ids.append(operation.id)
         
@@ -183,9 +190,16 @@ def load_game(request, game_id):
         if error_response:
             return error_response
         
-        # Create operations for each path with path_index
+        # Only use path_index if there are 2+ paths
+        # Single path = no subfolder (backward compatible)
+        use_subfolders = len(load_paths) > 1
+        
+        # Create operations for each path
         operation_ids = []
         for index, path in enumerate(load_paths, start=1):
+            # Only set path_index if using subfolders (2+ paths)
+            path_index = index if use_subfolders else None
+            
             operation = OperationQueue.create_operation(
                 operation_type=OperationType.LOAD,
                 user=user,
@@ -194,7 +208,7 @@ def load_game(request, game_id):
                 save_folder_number=save_folder_number,
                 smb_path=save_folder.smb_path,
                 client_worker=client_worker,
-                path_index=index  # 1-based index for path_1, path_2, etc.
+                path_index=path_index  # None for single path, 1/2/3... for multiple
             )
             operation_ids.append(operation.id)
         
