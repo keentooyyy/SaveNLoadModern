@@ -213,15 +213,51 @@ class RcloneClient:
                 except Exception:
                     pass
     
-    def _build_remote_path(self, path: str) -> str:
-        """Build remote path string for rclone"""
-        # Remove leading/trailing slashes and normalize
-        path = path.replace('\\', '/').strip('/')
-        # For FTP, path format is: ftp:/absolute/path (absolute path starting with /)
-        if path:
-            return f"{self.remote_name}:/{path}"
+    def _normalize_path(self, path: str) -> str:
+        """
+        Normalize a path by converting backslashes to forward slashes and stripping
+        Returns: Normalized path string
+        """
+        return path.replace('\\', '/').strip('/')
+    
+    def _build_remote_path_with_index(self, username: Optional[str] = None, 
+                                      game_name: Optional[str] = None, 
+                                      folder_number: Optional[int] = None,
+                                      remote_path_custom: Optional[str] = None,
+                                      path_index: Optional[int] = None,
+                                      additional_path: Optional[str] = None) -> str:
+        """
+        Build remote path with support for path_index subfolders
+        
+        Args:
+            username: Username for path organization (required if remote_path_custom not provided)
+            game_name: Game name for path organization (required if remote_path_custom not provided)
+            folder_number: Save folder number (required if remote_path_custom not provided)
+            remote_path_custom: Optional custom remote path (if provided, uses this as base)
+            path_index: Optional path index (1-based) to create path_1, path_2 subfolders
+            additional_path: Optional additional path to append (e.g., filename)
+        
+        Returns:
+            Normalized remote path string
+        """
+        if remote_path_custom:
+            # Use custom path as base
+            remote_path = self._normalize_path(remote_path_custom)
+            # Append path_index subfolder if provided
+            if path_index is not None:
+                remote_path = f"{remote_path}/path_{path_index}"
         else:
-            return f"{self.remote_name}:/"
+            # Build path from components
+            if not all([username, game_name, folder_number is not None]):
+                raise ValueError("username, game_name, and folder_number required when remote_path_custom not provided")
+            remote_path = self._get_full_path(username, game_name, folder_number, path_index=path_index)
+        
+        # Append additional path if provided (e.g., filename)
+        if additional_path:
+            additional_path = self._normalize_path(additional_path)
+            remote_path = f"{remote_path}/{additional_path}"
+        
+        return remote_path
     
     def _parse_bytes_transferred(self, output: str) -> int:
         """Parse total bytes transferred from rclone output
@@ -351,15 +387,14 @@ class RcloneClient:
         if not os.path.exists(local_dir):
             return False, f"Local directory not found: {local_dir}", [], [], 0, 0
         
-        # Build remote path
-        if remote_path_custom:
-            remote_path = remote_path_custom.replace('\\', '/').strip('/')
-            # If path_index is provided, append it to the custom path
-            if path_index is not None:
-                remote_path = f"{remote_path}/path_{path_index}"
-        else:
-            remote_path = self._get_full_path(username, game_name, folder_number, path_index=path_index)
-        
+        # Build remote path using helper
+        remote_path = self._build_remote_path_with_index(
+            username=username,
+            game_name=game_name,
+            folder_number=folder_number,
+            remote_path_custom=remote_path_custom,
+            path_index=path_index
+        )
         remote_full = self._build_remote_path(remote_path)
         
         # Let rclone handle everything - parallel transfers, retries, resume
@@ -413,15 +448,15 @@ class RcloneClient:
         if remote_filename is None:
             remote_filename = os.path.basename(local_file_path)
         
-        # Build remote path
-        if remote_path_custom:
-            remote_path = remote_path_custom.replace('\\', '/').strip('/')
-            if remote_filename:
-                remote_path = f"{remote_path}/{remote_filename}"
-        else:
-            base_path = self._get_full_path(username, game_name, folder_number, path_index=path_index)
-            remote_path = f"{base_path}/{remote_filename}"
-        
+        # Build remote path using helper
+        remote_path = self._build_remote_path_with_index(
+            username=username,
+            game_name=game_name,
+            folder_number=folder_number,
+            remote_path_custom=remote_path_custom,
+            path_index=path_index,
+            additional_path=remote_filename
+        )
         remote_full = self._build_remote_path(remote_path)
         
         # Let rclone handle everything - retries, resume, connection management
@@ -464,15 +499,15 @@ class RcloneClient:
         Returns:
             Tuple of (success, message)
         """
-        # Build remote path
-        if remote_path_custom:
-            remote_path = remote_path_custom.replace('\\', '/').strip('/')
-            if remote_filename:
-                remote_path = f"{remote_path}/{remote_filename}"
-        else:
-            base_path = self._get_full_path(username, game_name, folder_number, path_index=path_index)
-            remote_path = f"{base_path}/{remote_filename}"
-        
+        # Build remote path using helper
+        remote_path = self._build_remote_path_with_index(
+            username=username,
+            game_name=game_name,
+            folder_number=folder_number,
+            remote_path_custom=remote_path_custom,
+            path_index=path_index,
+            additional_path=remote_filename
+        )
         remote_full = self._build_remote_path(remote_path)
         
         # Create local directory if needed
@@ -545,7 +580,8 @@ class RcloneClient:
             return False, error_msg, [], []
     
     def list_saves(self, username: str, game_name: str, folder_number: int,
-                  remote_path_custom: Optional[str] = None) -> Tuple[bool, List[dict], List[str], str]:
+                  remote_path_custom: Optional[str] = None,
+                  path_index: Optional[int] = None) -> Tuple[bool, List[dict], List[str], str]:
         """List all save files recursively via rclone
         
         Args:
@@ -557,12 +593,14 @@ class RcloneClient:
         Returns:
             Tuple of (success, files_list, directories_list, message)
         """
-        # Build remote path
-        if remote_path_custom:
-            remote_path = remote_path_custom.replace('\\', '/').strip('/')
-        else:
-            remote_path = self._get_full_path(username, game_name, folder_number)
-        
+        # Build remote path using helper
+        remote_path = self._build_remote_path_with_index(
+            username=username,
+            game_name=game_name,
+            folder_number=folder_number,
+            remote_path_custom=remote_path_custom,
+            path_index=path_index
+        )
         remote_full = self._build_remote_path(remote_path)
         
         # Use lsjson for structured output
@@ -622,7 +660,8 @@ class RcloneClient:
         return True, files, directories, f"Found {len(files)} file(s) and {len(directories)} directory(ies)"
     
     def create_directory(self, username: str, game_name: str, folder_number: int,
-                        remote_dir_path: str, remote_path_custom: Optional[str] = None) -> Tuple[bool, str]:
+                        remote_dir_path: str, remote_path_custom: Optional[str] = None,
+                        path_index: Optional[int] = None) -> Tuple[bool, str]:
         """Create directory - rclone handles everything
         
         Args:
@@ -635,18 +674,15 @@ class RcloneClient:
         Returns:
             Tuple of (success, message)
         """
-        # Build remote path
-        if remote_path_custom:
-            base_path = remote_path_custom.replace('\\', '/').strip('/')
-        else:
-            base_path = self._get_full_path(username, game_name, folder_number)
-        
-        if remote_dir_path:
-            remote_dir_path = remote_dir_path.replace('\\', '/').strip('/')
-            remote_path = f"{base_path}/{remote_dir_path}"
-        else:
-            remote_path = base_path
-        
+        # Build remote path using helper
+        remote_path = self._build_remote_path_with_index(
+            username=username,
+            game_name=game_name,
+            folder_number=folder_number,
+            remote_path_custom=remote_path_custom,
+            path_index=path_index,
+            additional_path=remote_dir_path
+        )
         remote_full = self._build_remote_path(remote_path)
         
         # Let rclone handle it

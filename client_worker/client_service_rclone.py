@@ -83,6 +83,127 @@ class ClientWorkerServiceRclone:
         except Exception:
             pass
     
+    # ========== HELPER METHODS FOR CODE REUSE ==========
+    
+    def _create_progress_callback(self, operation_id: Optional[int]) -> Optional[Callable]:
+        """
+        Create a progress callback function if operation_id is provided
+        
+        Args:
+            operation_id: Optional operation ID for progress tracking
+            
+        Returns:
+            Progress callback function or None
+        """
+        if operation_id:
+            return lambda current, total, msg: self._update_progress(operation_id, current, total, msg)
+        return None
+    
+    def _sanitize_game_name(self, game_name: str) -> str:
+        """
+        Sanitize game name for use in file paths
+        
+        Args:
+            game_name: Original game name
+            
+        Returns:
+            Sanitized game name safe for file paths
+        """
+        safe_name = "".join(c for c in game_name if c.isalnum() or c in (' ', '-', '_')).strip()
+        return safe_name.replace(' ', '_')
+    
+    def _build_remote_path_base(self, username: str, game_name: str, 
+                                save_folder_number: Optional[int] = None,
+                                path_index: Optional[int] = None,
+                                remote_path: Optional[str] = None) -> str:
+        """
+        Build base remote path with optional path_index subfolder
+        
+        Args:
+            username: Username for path
+            game_name: Game name (will be sanitized)
+            save_folder_number: Optional save folder number
+            path_index: Optional path index (1-based) for subfolder
+            remote_path: Optional custom remote path (takes precedence)
+            
+        Returns:
+            Remote path string
+        """
+        if remote_path:
+            return remote_path.replace('\\', '/').strip('/')
+        
+        safe_game_name = self._sanitize_game_name(game_name)
+        path_parts = [username, safe_game_name]
+        
+        if save_folder_number is not None:
+            path_parts.append(f"save_{save_folder_number}")
+        
+        if path_index is not None:
+            path_parts.append(f"path_{path_index}")
+        
+        return '/'.join(path_parts)
+    
+    def _create_error_response(self, error_message: str, **kwargs) -> Dict[str, Any]:
+        """
+        Create standardized error response dictionary
+        
+        Args:
+            error_message: Error message string
+            **kwargs: Additional fields to include in response
+            
+        Returns:
+            Error response dictionary
+        """
+        response = {'success': False, 'error': error_message}
+        response.update(kwargs)
+        return response
+    
+    def _create_success_response(self, message: str, **kwargs) -> Dict[str, Any]:
+        """
+        Create standardized success response dictionary
+        
+        Args:
+            message: Success message string
+            **kwargs: Additional fields to include in response
+            
+        Returns:
+            Success response dictionary
+        """
+        response = {'success': True, 'message': message}
+        response.update(kwargs)
+        return response
+    
+    def _handle_operation_exception(self, operation_name: str, exception: Exception) -> Dict[str, Any]:
+        """
+        Handle exceptions during operations with consistent error reporting
+        
+        Args:
+            operation_name: Name of the operation (e.g., 'Save', 'Load')
+            exception: Exception that was raised
+            
+        Returns:
+            Error response dictionary
+        """
+        error_msg = f'{operation_name} operation failed: {str(exception)}'
+        print(f"Error: {error_msg}")
+        return self._create_error_response(error_msg)
+    
+    def _safe_console_print(self, message: str, style: str = ""):
+        """
+        Safely print to console with error handling
+        
+        Args:
+            message: Message to print
+            style: Optional rich style string
+        """
+        try:
+            if style:
+                self.console.print(message, style=style)
+            else:
+                self.console.print(message)
+        except Exception:
+            pass  # Console might be closed, but continue execution
+    
     def check_permissions(self) -> bool:
         """Check if we have necessary permissions to access files"""
         try:
@@ -106,10 +227,9 @@ class ClientWorkerServiceRclone:
         print(f"Backing up save files...")
         
         if not os.path.exists(local_save_path):
-            return {
-                'success': False,
-                'error': 'Oops! You don\'t have any save files to save. Maybe you haven\'t played the game yet, or the save location is incorrect.'
-            }
+            return self._create_error_response(
+                'Oops! You don\'t have any save files to save. Maybe you haven\'t played the game yet, or the save location is incorrect.'
+            )
         
         try:
             if os.path.isdir(local_save_path):
@@ -121,15 +241,17 @@ class ClientWorkerServiceRclone:
                         break  # Found at least one file, no need to continue
                 
                 if file_count == 0:
-                    return {
-                        'success': False,
-                        'error': 'The save directory is empty. There are no files to save. Make sure you have played the game and saved your progress.'
-                    }
+                    return self._create_error_response(
+                        'The save directory is empty. There are no files to save. Make sure you have played the game and saved your progress.'
+                    )
                 
-                # Create progress callback if operation_id is available
-                progress_callback = None
-                if operation_id:
-                    progress_callback = lambda current, total, msg: self._update_progress(operation_id, current, total, msg)
+                # Create progress callback using helper
+                progress_callback = self._create_progress_callback(operation_id)
+                
+                # Build remote path using helper
+                remote_path_custom = self._build_remote_path_base(
+                    username, game_name, save_folder_number, path_index, remote_path
+                )
                 
                 # Pass path_index to upload_directory
                 success, message, uploaded_files, failed_files, bytes_transferred, files_transferred = self.rclone_client.upload_directory(
@@ -137,7 +259,7 @@ class ClientWorkerServiceRclone:
                     username=username,
                     game_name=game_name,
                     folder_number=save_folder_number,
-                    remote_path_custom=remote_path,
+                    remote_path_custom=remote_path_custom,
                     path_index=path_index,  # Pass path_index
                     transfers=10,  # Parallel transfers
                     progress_callback=progress_callback
@@ -146,54 +268,39 @@ class ClientWorkerServiceRclone:
                 if success:
                     # Check if anything was actually transferred
                     if bytes_transferred == 0:
-                        return {
-                            'success': False,
-                            'error': 'No files were transferred. The save directory appears to be empty or contains no valid files to upload.'
-                        }
+                        return self._create_error_response(
+                            'No files were transferred. The save directory appears to be empty or contains no valid files to upload.'
+                        )
                     
                     print(f"Upload complete")
-                    return {
-                        'success': True,
-                        'message': message,
-                        'uploaded_files': uploaded_files
-                    }
+                    return self._create_success_response(
+                        message,
+                        uploaded_files=uploaded_files
+                    )
                 else:
                     print(f"Upload failed: {message}")
-                    return {
-                        'success': False,
-                        'error': message,
-                        'uploaded_files': uploaded_files,
-                        'failed_files': failed_files
-                    }
+                    return self._create_error_response(
+                        message,
+                        uploaded_files=uploaded_files,
+                        failed_files=failed_files
+                    )
             else:
                 # Single file upload - check if file is empty
                 file_size = os.path.getsize(local_save_path)
                 if file_size == 0:
-                    return {
-                        'success': False,
-                        'error': 'The save file is empty (0 bytes). There is nothing to save.'
-                    }
+                    return self._create_error_response(
+                        'The save file is empty (0 bytes). There is nothing to save.'
+                    )
                 
                 print(f"Uploading single file: {os.path.basename(local_save_path)}")
                 
-                # Create progress callback if operation_id is available
-                progress_callback = None
-                if operation_id:
-                    progress_callback = lambda current, total, msg: self._update_progress(operation_id, current, total, msg)
+                # Create progress callback using helper
+                progress_callback = self._create_progress_callback(operation_id)
                 
-                # For single files, also use path_index if provided
-                if path_index:
-                    # Build custom remote path with subfolder
-                    if remote_path:
-                        remote_path_base = remote_path.replace('\\', '/').strip('/')
-                    else:
-                        safe_game_name = "".join(c for c in game_name if c.isalnum() or c in (' ', '-', '_')).strip()
-                        safe_game_name = safe_game_name.replace(' ', '_')
-                        remote_path_base = f"{username}/{safe_game_name}/save_{save_folder_number}/path_{path_index}"
-                    
-                    remote_path_custom = remote_path_base
-                else:
-                    remote_path_custom = remote_path
+                # Build remote path using helper
+                remote_path_custom = self._build_remote_path_base(
+                    username, game_name, save_folder_number, path_index, remote_path
+                )
                 
                 success, message, bytes_transferred = self.rclone_client.upload_save(
                     username=username,
@@ -208,20 +315,18 @@ class ClientWorkerServiceRclone:
                 if success:
                     # Check if anything was actually transferred
                     if bytes_transferred == 0:
-                        return {
-                            'success': False,
-                            'error': 'No data was transferred. The save file appears to be empty.'
-                        }
+                        return self._create_error_response(
+                            'No data was transferred. The save file appears to be empty.'
+                        )
                     
                     print(f"Upload complete: {os.path.basename(local_save_path)}")
-                    return {'success': True, 'message': message}
+                    return self._create_success_response(message)
                 else:
                     print(f"Upload failed: {message}")
-                    return {'success': False, 'error': message}
+                    return self._create_error_response(message)
                     
         except Exception as e:
-            print(f"Error: Save operation failed - {str(e)}")
-            return {'success': False, 'error': f'Save operation failed: {str(e)}'}
+            return self._handle_operation_exception('Save', e)
     
     def load_game(self, game_id: int, local_save_path: str,
                  username: str, game_name: str, save_folder_number: int, 
@@ -235,17 +340,10 @@ class ClientWorkerServiceRclone:
         print(f"Preparing to download save files...")
         
         try:
-            # Build remote path with path_index subfolder
-            if remote_path:
-                remote_path_base = remote_path.replace('\\', '/').strip('/')
-            else:
-                safe_game_name = "".join(c for c in game_name if c.isalnum() or c in (' ', '-', '_')).strip()
-                safe_game_name = safe_game_name.replace(' ', '_')
-                remote_path_base = f"{username}/{safe_game_name}/save_{save_folder_number}"
-                
-                # Add path_index subfolder if provided
-                if path_index is not None:
-                    remote_path_base = f"{remote_path_base}/path_{path_index}"
+            # Build remote path using helper
+            remote_path_base = self._build_remote_path_base(
+                username, game_name, save_folder_number, path_index, remote_path
+            )
             
             # Ensure local directory exists
             if os.path.isfile(local_save_path):
@@ -255,21 +353,17 @@ class ClientWorkerServiceRclone:
                 os.makedirs(local_save_path, exist_ok=True)
             except OSError as e:
                 print(f"Error: Failed to create directory - {str(e)}")
-                return {
-                    'success': False,
-                    'error': f'Failed to create directory: {local_save_path} - {str(e)}'
-                }
+                return self._create_error_response(
+                    f'Failed to create directory: {local_save_path} - {str(e)}'
+                )
             
             if not os.path.isdir(local_save_path):
-                return {
-                    'success': False,
-                    'error': f'Local save path is not a directory: {local_save_path}'
-                }
+                return self._create_error_response(
+                    f'Local save path is not a directory: {local_save_path}'
+                )
             
-            # Create progress callback if operation_id is available
-            progress_callback = None
-            if operation_id:
-                progress_callback = lambda current, total, msg: self._update_progress(operation_id, current, total, msg)
+            # Create progress callback using helper
+            progress_callback = self._create_progress_callback(operation_id)
             
             # Pass path_index to download_directory
             success, message, downloaded_files, failed_files = self.rclone_client.download_directory(
@@ -281,23 +375,20 @@ class ClientWorkerServiceRclone:
             
             if success:
                 print(f"Download complete")
-                return {
-                    'success': True,
-                    'message': message,
-                    'downloaded_files': downloaded_files
-                }
+                return self._create_success_response(
+                    message,
+                    downloaded_files=downloaded_files
+                )
             else:
                 print(f"Download failed: {message}")
-                return {
-                    'success': False,
-                    'error': message,
-                    'downloaded_files': downloaded_files,
-                    'failed_files': failed_files
-                }
+                return self._create_error_response(
+                    message,
+                    downloaded_files=downloaded_files,
+                    failed_files=failed_files
+                )
                     
         except Exception as e:
-            print(f"Error: Load operation failed - {str(e)}")
-            return {'success': False, 'error': f'Load operation failed: {str(e)}'}
+            return self._handle_operation_exception('Load', e)
     
     def list_saves(self, game_id: int, username: str, game_name: str, 
                   save_folder_number: int, remote_path: Optional[str] = None) -> Dict[str, Any]:
@@ -313,21 +404,16 @@ class ClientWorkerServiceRclone:
             )
             
             if not success:
-                return {
-                    'success': False,
-                    'error': f'Failed to list saves: {message}'
-                }
+                return self._create_error_response(f'Failed to list saves: {message}')
             
             print(f"Found {len(files)} file(s) and {len(directories)} directory(ies)")
-            return {
-                'success': True,
-                'files': files,
-                'directories': directories,
-                'message': message
-            }
+            return self._create_success_response(
+                message,
+                files=files,
+                directories=directories
+            )
         except Exception as e:
-            print(f"ERROR: List operation failed: {e}")
-            return {'success': False, 'error': f'List operation failed: {str(e)}'}
+            return self._handle_operation_exception('List', e)
     
     def delete_save_folder(self, game_id: int, username: str, game_name: str,
                           save_folder_number: int, remote_path: Optional[str] = None,
@@ -336,10 +422,9 @@ class ClientWorkerServiceRclone:
         print(f"Deleting save folder...")
         
         if not remote_path:
-            return {
-                'success': False,
-                'error': 'Remote path is required for delete operation'
-            }
+            return self._create_error_response(
+                'Remote path is required for delete operation'
+            )
         
         try:
             # Let rclone delete it
@@ -347,20 +432,13 @@ class ClientWorkerServiceRclone:
             
             if success:
                 print(f"Delete complete")
-                return {
-                    'success': True,
-                    'message': message
-                }
+                return self._create_success_response(message)
             else:
                 print(f"Delete failed: {message}")
-                return {
-                    'success': False,
-                    'error': message
-                }
+                return self._create_error_response(message)
                     
         except Exception as e:
-            print(f"Error: Delete operation failed - {str(e)}")
-            return {'success': False, 'error': f'Delete operation failed: {str(e)}'}
+            return self._handle_operation_exception('Delete', e)
     
     def backup_all_saves(self, game_id: int, username: str, game_name: str,
                         operation_id: Optional[int] = None) -> Dict[str, Any]:
@@ -368,20 +446,16 @@ class ClientWorkerServiceRclone:
         print(f"Backing up all saves for {game_name}...")
         
         try:
-            # Build base remote path
-            safe_game_name = "".join(c for c in game_name if c.isalnum() or c in (' ', '-', '_')).strip()
-            safe_game_name = safe_game_name.replace(' ', '_')
-            remote_path_base = f"{username}/{safe_game_name}"
+            # Build base remote path using helper
+            remote_path_base = self._build_remote_path_base(username, game_name)
             
             # Create temp directory for downloads
             temp_dir = tempfile.mkdtemp(prefix='sn_backup_')
             print(f"Downloading from FTP to temp directory: {temp_dir}")
             
             try:
-                # Create progress callback if operation_id is available
-                progress_callback = None
-                if operation_id:
-                    progress_callback = lambda current, total, msg: self._update_progress(operation_id, current, total, msg)
+                # Create progress callback using helper
+                progress_callback = self._create_progress_callback(operation_id)
                 
                 # Download all saves using rclone
                 success, message, downloaded_files, failed_files = self.rclone_client.download_directory(
@@ -393,21 +467,15 @@ class ClientWorkerServiceRclone:
                 
                 if not success:
                     shutil.rmtree(temp_dir, ignore_errors=True)
-                    return {
-                        'success': False,
-                        'error': f'Failed to download saves: {message}'
-                    }
+                    return self._create_error_response(f'Failed to download saves: {message}')
                 
                 # Check if we got any files
                 if not os.listdir(temp_dir):
                     shutil.rmtree(temp_dir, ignore_errors=True)
-                    return {
-                        'success': False,
-                        'error': 'No save files found to backup'
-                    }
+                    return self._create_error_response('No save files found to backup')
                 
                 # Create zip file
-                safe_game_name_zip = safe_game_name.replace(' ', '_')
+                safe_game_name_zip = self._sanitize_game_name(game_name)
                 zip_filename = f"{safe_game_name_zip}_saves_bak.zip"
                 
                 # Get Downloads folder
@@ -431,12 +499,11 @@ class ClientWorkerServiceRclone:
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 
                 print(f"Backup complete: {zip_path}")
-                return {
-                    'success': True,
-                    'message': f'Backup saved to: {zip_path}',
-                    'zip_path': str(zip_path),
-                    'zip_filename': zip_filename
-                }
+                return self._create_success_response(
+                    f'Backup saved to: {zip_path}',
+                    zip_path=str(zip_path),
+                    zip_filename=zip_filename
+                )
                 
             except Exception as e:
                 # Clean up temp directory on error
@@ -444,8 +511,7 @@ class ClientWorkerServiceRclone:
                 raise e
                     
         except Exception as e:
-            print(f"Error: Backup operation failed - {str(e)}")
-            return {'success': False, 'error': f'Backup operation failed: {str(e)}'}
+            return self._handle_operation_exception('Backup', e)
     
     def open_folder(self, local_path: str, operation_id: Optional[int] = None) -> Dict[str, Any]:
         """Open a folder location in the file explorer"""
@@ -454,17 +520,11 @@ class ClientWorkerServiceRclone:
         try:
             # Check if folder exists
             if not os.path.exists(local_path):
-                return {
-                    'success': False,
-                    'error': 'Folder or directory does not exist'
-                }
+                return self._create_error_response('Folder or directory does not exist')
             
             # Check if it's actually a directory
             if not os.path.isdir(local_path):
-                return {
-                    'success': False,
-                    'error': 'Path is not a directory'
-                }
+                return self._create_error_response('Path is not a directory')
             
             # Open folder based on OS
             system = platform.system()
@@ -477,27 +537,17 @@ class ClientWorkerServiceRclone:
                 elif system == 'Linux':
                     subprocess.Popen(['xdg-open', local_path])
                 else:
-                    return {
-                        'success': False,
-                        'error': f'Unsupported operating system: {system}'
-                    }
+                    return self._create_error_response(f'Unsupported operating system: {system}')
                 
                 print(f"Folder opened successfully: {local_path}")
-                return {
-                    'success': True,
-                    'message': 'Folder opened successfully'
-                }
+                return self._create_success_response('Folder opened successfully')
                 
             except Exception as e:
                 print(f"Error: Failed to open folder - {str(e)}")
-                return {
-                    'success': False,
-                    'error': f'Failed to open folder: {str(e)}'
-                }
+                return self._create_error_response(f'Failed to open folder: {str(e)}')
                 
         except Exception as e:
-            print(f"Error: Open folder operation failed - {str(e)}")
-            return {'success': False, 'error': f'Open folder operation failed: {str(e)}'}
+            return self._handle_operation_exception('Open folder', e)
     
     def register_with_server(self, client_id: str) -> bool:
         """Register this client with the Django server"""
@@ -551,37 +601,25 @@ class ClientWorkerServiceRclone:
         if not self.running:
             return  # Already shutting down
         
-        try:
-            self.console.print("\n[yellow]Shutting down gracefully...[/yellow]")
-        except Exception:
-            pass  # Console might be closed, but continue with cleanup
+        self._safe_console_print("\n[yellow]Shutting down gracefully...[/yellow]")
         
         self.running = False
         
         # Wait for heartbeat thread to finish
         if self._heartbeat_thread and self._heartbeat_thread.is_alive():
-            try:
-                self.console.print("[dim]Waiting for heartbeat thread...[/dim]")
-            except Exception:
-                pass
+            self._safe_console_print("[dim]Waiting for heartbeat thread...[/dim]")
             self._heartbeat_thread.join(timeout=2)
         
         # Unregister from server
         if client_id:
-            try:
-                self.console.print("[dim]Unregistering from server...[/dim]")
-            except Exception:
-                pass
+            self._safe_console_print("[dim]Unregistering from server...[/dim]")
             try:
                 self.unregister_from_server(client_id)
             except Exception:
                 pass
         
-        try:
-            self.console.print("[green]Shutdown complete.[/green]")
-            time.sleep(0.5)  # Brief pause to ensure message is visible
-        except Exception:
-            pass  # Console might be closed
+        self._safe_console_print("[green]Shutdown complete.[/green]")
+        time.sleep(0.5)  # Brief pause to ensure message is visible
     
     def run(self):
         """Run the service (polling mode)"""
