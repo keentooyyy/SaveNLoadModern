@@ -114,29 +114,37 @@ class ClientWorkerServiceRclone:
     
     def _build_remote_path_base(self, username: str, game_name: str, 
                                 save_folder_number: Optional[int] = None,
-                                remote_path: Optional[str] = None) -> str:
+                                remote_path: Optional[str] = None,
+                                path_index: Optional[int] = None) -> str:
         """
-        Build base remote path
+        Build base remote path with optional path_index support
         
         Args:
             username: Username for path
             game_name: Game name (will be sanitized)
             save_folder_number: Optional save folder number
-            remote_path: Optional custom remote path (takes precedence - already includes path_index if needed)
+            remote_path: Optional custom remote path (base path like "username/gamename/save_1")
+            path_index: Optional path index (1-based) to append path_X subfolder
             
         Returns:
-            Remote path string
+            Remote path string (includes path_X if path_index provided)
         """
         if remote_path:
-            return remote_path.replace('\\', '/').strip('/')
+            base_path = remote_path.replace('\\', '/').strip('/')
+        else:
+            safe_game_name = self._sanitize_game_name(game_name)
+            path_parts = [username, safe_game_name]
+            
+            if save_folder_number is not None:
+                path_parts.append(f"save_{save_folder_number}")
+            
+            base_path = '/'.join(path_parts)
         
-        safe_game_name = self._sanitize_game_name(game_name)
-        path_parts = [username, safe_game_name]
+        # Append path_X if path_index is provided (for multi-path support)
+        if path_index is not None:
+            base_path = f"{base_path}/path_{path_index}"
         
-        if save_folder_number is not None:
-            path_parts.append(f"save_{save_folder_number}")
-        
-        return '/'.join(path_parts)
+        return base_path
     
     def _create_error_response(self, error_message: str, **kwargs) -> Dict[str, Any]:
         """
@@ -212,7 +220,8 @@ class ClientWorkerServiceRclone:
     
     def save_game(self, game_id: int, local_save_path: str, 
                  username: str, game_name: str, save_folder_number: int, 
-                 remote_path: Optional[str] = None, operation_id: Optional[int] = None) -> Dict[str, Any]:
+                 remote_path: Optional[str] = None, operation_id: Optional[int] = None,
+                 path_index: Optional[int] = None) -> Dict[str, Any]:
         """Save game - rclone handles everything with parallel transfers"""
         print(f"Backing up save files...")
         
@@ -238,19 +247,19 @@ class ClientWorkerServiceRclone:
                 # Create progress callback using helper
                 progress_callback = self._create_progress_callback(operation_id)
                 
-                # Build remote path using helper (remote_path from backend already includes path_index if needed)
+                # Build remote path with path_index support
                 remote_path_custom = self._build_remote_path_base(
-                    username, game_name, save_folder_number, remote_path
+                    username, game_name, save_folder_number, remote_path, path_index
                 )
                 
-                # Use remote_path_custom directly - backend already includes path_index
+                # Use remote_path_custom directly - it now includes path_X if path_index provided
                 success, message, uploaded_files, failed_files, bytes_transferred, files_transferred = self.rclone_client.upload_directory(
                     local_dir=local_save_path,
                     username=username,
                     game_name=game_name,
                     folder_number=save_folder_number,
                     remote_path_custom=remote_path_custom,
-                    path_index=None,  # Not needed - already in remote_path_custom
+                    path_index=None,  # Already included in remote_path_custom
                     transfers=10,  # Parallel transfers
                     progress_callback=progress_callback
                 )
@@ -287,9 +296,9 @@ class ClientWorkerServiceRclone:
                 # Create progress callback using helper
                 progress_callback = self._create_progress_callback(operation_id)
                 
-                # Build remote path using helper (remote_path from backend already includes path_index if needed)
+                # Build remote path with path_index support
                 remote_path_custom = self._build_remote_path_base(
-                    username, game_name, save_folder_number, remote_path
+                    username, game_name, save_folder_number, remote_path, path_index
                 )
                 
                 success, message, bytes_transferred = self.rclone_client.upload_save(
@@ -299,7 +308,7 @@ class ClientWorkerServiceRclone:
                     folder_number=save_folder_number,
                     remote_filename=os.path.basename(local_save_path),
                     remote_path_custom=remote_path_custom,
-                    path_index=None,  # Not needed - already in remote_path_custom
+                    path_index=None,  # Already included in remote_path_custom
                     progress_callback=progress_callback
                 )
                 
@@ -321,24 +330,52 @@ class ClientWorkerServiceRclone:
     
     def load_game(self, game_id: int, local_save_path: str,
                  username: str, game_name: str, save_folder_number: int, 
-                 remote_path: Optional[str] = None, operation_id: Optional[int] = None) -> Dict[str, Any]:
+                 remote_path: Optional[str] = None, operation_id: Optional[int] = None,
+                 path_index: Optional[int] = None) -> Dict[str, Any]:
         """Load game - rclone handles everything with parallel transfers"""
-        print(f"Preparing to download save files...")
+        print(f"\n{'='*60}")
+        print(f"LOAD OPERATION - Step 1: Initializing")
+        print(f"{'='*60}")
+        print(f"  Game ID: {game_id}")
+        print(f"  Game Name: {game_name}")
+        print(f"  Username: {username}")
+        print(f"  Save Folder Number: {save_folder_number}")
+        print(f"  Path Index: {path_index}")
+        print(f"  Remote Path (provided): {remote_path}")
+        print(f"  Local Save Path (provided): {local_save_path}")
+        print(f"  Operation ID: {operation_id}")
         
         try:
-            # Build remote path using helper (remote_path from backend already includes path_index if needed)
+            # Build remote path with path_index support
+            print(f"\n{'='*60}")
+            print(f"LOAD OPERATION - Step 2: Building Remote Path")
+            print(f"{'='*60}")
             remote_path_base = self._build_remote_path_base(
-                username, game_name, save_folder_number, remote_path
+                username, game_name, save_folder_number, remote_path, path_index
             )
+            print(f"  Built Remote Path Base: {remote_path_base}")
+            
+            # Detect if remote path includes path_X folder (e.g., path_1, path_2)
+            # If so, we need to strip it to avoid creating path_X subfolder locally
+            strip_prefix = None
+            if path_index is not None:
+                strip_prefix = f"path_{path_index}"
+                print(f"  Strip Prefix (to avoid path_X subfolder): {strip_prefix}")
             
             # Ensure local directory exists
+            print(f"\n{'='*60}")
+            print(f"LOAD OPERATION - Step 3: Preparing Local Directory")
+            print(f"{'='*60}")
             if os.path.isfile(local_save_path):
                 local_save_path = os.path.dirname(local_save_path)
+                print(f"  Local path was a file, using directory: {local_save_path}")
             
             try:
                 os.makedirs(local_save_path, exist_ok=True)
+                print(f"  Local Directory: {local_save_path}")
+                print(f"  Directory exists/created: {os.path.exists(local_save_path)}")
             except OSError as e:
-                print(f"Error: Failed to create directory - {str(e)}")
+                print(f"  ERROR: Failed to create directory - {str(e)}")
                 return self._create_error_response(
                     f'Failed to create directory: {local_save_path} - {str(e)}'
                 )
@@ -348,25 +385,81 @@ class ClientWorkerServiceRclone:
                     f'Local save path is not a directory: {local_save_path}'
                 )
             
+            # List available files before download
+            print(f"\n{'='*60}")
+            print(f"LOAD OPERATION - Step 4: Listing Available Files on Remote")
+            print(f"{'='*60}")
+            list_success, files_list, directories_list, list_message = self.rclone_client.list_saves(
+                username=username,
+                game_name=game_name,
+                folder_number=save_folder_number,
+                remote_path_custom=remote_path_base
+            )
+            
+            if list_success:
+                print(f"  {list_message}")
+                print(f"  Files found: {len(files_list)}")
+                if files_list:
+                    print(f"  File list:")
+                    for file_info in files_list[:20]:  # Show first 20 files
+                        file_name = file_info.get('name', 'unknown')
+                        file_size = file_info.get('size', 0)
+                        size_str = f"{file_size:,} bytes" if file_size > 0 else "0 bytes"
+                        print(f"    - {file_name} ({size_str})")
+                    if len(files_list) > 20:
+                        print(f"    ... and {len(files_list) - 20} more files")
+                else:
+                    print(f"  WARNING: No files found in remote directory!")
+                
+                print(f"  Directories found: {len(directories_list)}")
+                if directories_list:
+                    print(f"  Directory list:")
+                    for dir_name in directories_list[:10]:  # Show first 10 directories
+                        print(f"    - {dir_name}/")
+                    if len(directories_list) > 10:
+                        print(f"    ... and {len(directories_list) - 10} more directories")
+            else:
+                print(f"  WARNING: Failed to list files: {list_message}")
+            
             # Create progress callback using helper
+            print(f"\n{'='*60}")
+            print(f"LOAD OPERATION - Step 5: Starting Download")
+            print(f"{'='*60}")
             progress_callback = self._create_progress_callback(operation_id)
             
-            # Use remote_path_base directly - backend already includes path_index if needed
+            # Use remote_path_base which includes path_X if path_index provided
+            # Pass strip_prefix to avoid creating path_X subfolder locally
+            print(f"  Remote Path Base: {remote_path_base}")
+            print(f"  Local Directory: {local_save_path}")
+            print(f"  Strip Prefix: {strip_prefix}")
+            print(f"  Parallel Transfers: 10")
+            print(f"  Starting download...")
+            
             success, message, downloaded_files, failed_files = self.rclone_client.download_directory(
                 remote_path_base=remote_path_base,
                 local_dir=local_save_path,
                 transfers=10,  # Parallel transfers
-                progress_callback=progress_callback
+                progress_callback=progress_callback,
+                strip_path_prefix=strip_prefix  # Strip path_X to avoid creating subfolder
             )
             
+            print(f"\n{'='*60}")
+            print(f"LOAD OPERATION - Step 6: Download Complete")
+            print(f"{'='*60}")
             if success:
-                print(f"Download complete")
+                print(f"  Status: SUCCESS")
+                print(f"  Message: {message}")
+                print(f"  Downloaded Files: {len(downloaded_files) if downloaded_files else 'N/A'}")
+                print(f"  Failed Files: {len(failed_files) if failed_files else 0}")
                 return self._create_success_response(
                     message,
                     downloaded_files=downloaded_files
                 )
             else:
-                print(f"Download failed: {message}")
+                print(f"  Status: FAILED")
+                print(f"  Error: {message}")
+                print(f"  Downloaded Files: {len(downloaded_files) if downloaded_files else 0}")
+                print(f"  Failed Files: {len(failed_files) if failed_files else 0}")
                 return self._create_error_response(
                     message,
                     downloaded_files=downloaded_files,
@@ -374,19 +467,29 @@ class ClientWorkerServiceRclone:
                 )
                     
         except Exception as e:
+            print(f"\n{'='*60}")
+            print(f"LOAD OPERATION - ERROR: Exception occurred")
+            print(f"{'='*60}")
+            print(f"  Exception: {str(e)}")
+            print(f"  Exception Type: {type(e).__name__}")
             return self._handle_operation_exception('Load', e)
     
     def list_saves(self, game_id: int, username: str, game_name: str, 
-                  save_folder_number: int, remote_path: Optional[str] = None) -> Dict[str, Any]:
+                  save_folder_number: int, remote_path: Optional[str] = None,
+                  path_index: Optional[int] = None) -> Dict[str, Any]:
         """List all save files - rclone handles it"""
         print(f"Listing save files...")
         
         try:
+            # Update to use _build_remote_path_base with path_index
+            remote_path_base = self._build_remote_path_base(
+                username, game_name, save_folder_number, remote_path, path_index
+            )
             success, files, directories, message = self.rclone_client.list_saves(
                 username=username,
                 game_name=game_name,
                 folder_number=save_folder_number,
-                remote_path_custom=remote_path
+                remote_path_custom=remote_path_base
             )
             
             if not success:
@@ -403,7 +506,8 @@ class ClientWorkerServiceRclone:
     
     def delete_save_folder(self, game_id: int, username: str, game_name: str,
                           save_folder_number: int, remote_path: Optional[str] = None,
-                          operation_id: Optional[int] = None) -> Dict[str, Any]:
+                          operation_id: Optional[int] = None,
+                          path_index: Optional[int] = None) -> Dict[str, Any]:
         """Delete save folder - rclone handles it"""
         print(f"Deleting save folder...")
         
@@ -413,8 +517,12 @@ class ClientWorkerServiceRclone:
             )
         
         try:
+            # Update to use _build_remote_path_base with path_index
+            remote_path_base = self._build_remote_path_base(
+                username, game_name, save_folder_number, remote_path, path_index
+            )
             # Let rclone delete it
-            success, message = self.rclone_client.delete_directory(remote_path)
+            success, message = self.rclone_client.delete_directory(remote_path_base)
             
             if success:
                 print(f"Delete complete")
@@ -500,40 +608,84 @@ class ClientWorkerServiceRclone:
             return self._handle_operation_exception('Backup', e)
     
     def open_folder(self, local_path: str, operation_id: Optional[int] = None) -> Dict[str, Any]:
-        """Open a folder location in the file explorer"""
-        print(f"Opening folder: {local_path}")
+        """
+        Open folder location(s) in the file explorer
+        Supports single path (string) or multiple paths (JSON array string)
+        """
+        import json
+        
+        print(f"Opening folder(s): {local_path}")
         
         try:
-            # Check if folder exists
-            if not os.path.exists(local_path):
-                return self._create_error_response('Folder or directory does not exist')
-            
-            # Check if it's actually a directory
-            if not os.path.isdir(local_path):
-                return self._create_error_response('Path is not a directory')
-            
-            # Open folder based on OS
-            system = platform.system()
+            # Try to parse as JSON array (multiple paths)
             try:
-                if system == 'Windows':
-                    # Use explorer.exe on Windows
-                    subprocess.Popen(['explorer', local_path], shell=False)
-                elif system == 'Darwin':  # macOS
-                    subprocess.Popen(['open', local_path])
-                elif system == 'Linux':
-                    subprocess.Popen(['xdg-open', local_path])
-                else:
-                    return self._create_error_response(f'Unsupported operating system: {system}')
-                
-                print(f"Folder opened successfully: {local_path}")
-                return self._create_success_response('Folder opened successfully')
-                
-            except Exception as e:
-                print(f"Error: Failed to open folder - {str(e)}")
-                return self._create_error_response(f'Failed to open folder: {str(e)}')
-                
+                paths = json.loads(local_path)
+                if isinstance(paths, list):
+                    # Multiple paths - open all of them
+                    opened_count = 0
+                    errors = []
+                    
+                    for path in paths:
+                        if not path or not isinstance(path, str):
+                            continue
+                        
+                        result = self._open_single_folder(path)
+                        if result['success']:
+                            opened_count += 1
+                        else:
+                            errors.append(f"{path}: {result.get('error', 'Unknown error')}")
+                    
+                    if opened_count > 0:
+                        message = f'Opened {opened_count} folder{"s" if opened_count > 1 else ""}'
+                        if errors:
+                            message += f" ({len(errors)} failed)"
+                        print(f"Success: {message}")
+                        return self._create_success_response(message)
+                    else:
+                        error_msg = f'Failed to open all folders: {"; ".join(errors)}'
+                        return self._create_error_response(error_msg)
+            except (json.JSONDecodeError, TypeError):
+                # Not JSON, treat as single path
+                pass
+            
+            # Single path - original behavior
+            return self._open_single_folder(local_path)
+            
         except Exception as e:
             return self._handle_operation_exception('Open folder', e)
+
+    def _open_single_folder(self, local_path: str) -> Dict[str, Any]:
+        """
+        Helper method to open a single folder
+        Returns success/error response dict
+        """
+        # Check if folder exists
+        if not os.path.exists(local_path):
+            return self._create_error_response('Folder or directory does not exist')
+        
+        # Check if it's actually a directory
+        if not os.path.isdir(local_path):
+            return self._create_error_response('Path is not a directory')
+        
+        # Open folder based on OS
+        system = platform.system()
+        try:
+            if system == 'Windows':
+                # Use explorer.exe on Windows
+                subprocess.Popen(['explorer', local_path], shell=False)
+            elif system == 'Darwin':  # macOS
+                subprocess.Popen(['open', local_path])
+            elif system == 'Linux':
+                subprocess.Popen(['xdg-open', local_path])
+            else:
+                return self._create_error_response(f'Unsupported operating system: {system}')
+            
+            print(f"Folder opened successfully: {local_path}")
+            return self._create_success_response('Folder opened successfully')
+            
+        except Exception as e:
+            print(f"Error: Failed to open folder - {str(e)}")
+            return self._create_error_response(f'Failed to open folder: {str(e)}')
     
     def register_with_server(self, client_id: str) -> bool:
         """Register this client with the Django server"""
@@ -787,8 +939,8 @@ class ClientWorkerServiceRclone:
         username = operation.get('username')
         game_name = operation.get('game_name')
         save_folder_number = operation.get('save_folder_number')
-        remote_path = operation.get('remote_path')
-        # path_index removed - backend already includes it in remote_path
+        remote_path = operation.get('remote_path')  # Base path like "username/gamename/save_1"
+        path_index = operation.get('path_index')  # Extract path_index from operation
         
         op_type_display = op_type.capitalize()
         print(f"\nProcessing: {op_type_display} operation for {game_name}")
@@ -807,14 +959,15 @@ class ClientWorkerServiceRclone:
             print(f"Error: Backup operation missing username")
             return
         
+        # Pass path_index to operations that need it
         if op_type == 'save':
-            result = self.save_game(game_id, local_path, username, game_name, save_folder_number, remote_path, operation_id)
+            result = self.save_game(game_id, local_path, username, game_name, save_folder_number, remote_path, operation_id, path_index)
         elif op_type == 'load':
-            result = self.load_game(game_id, local_path, username, game_name, save_folder_number, remote_path, operation_id)
+            result = self.load_game(game_id, local_path, username, game_name, save_folder_number, remote_path, operation_id, path_index)
         elif op_type == 'list':
-            result = self.list_saves(game_id, username, game_name, save_folder_number, remote_path)
+            result = self.list_saves(game_id, username, game_name, save_folder_number, remote_path, path_index)
         elif op_type == 'delete':
-            result = self.delete_save_folder(game_id, username, game_name, save_folder_number, remote_path, operation_id)
+            result = self.delete_save_folder(game_id, username, game_name, save_folder_number, remote_path, operation_id, path_index)
         elif op_type == 'backup':
             result = self.backup_all_saves(game_id, username, game_name, operation_id)
         elif op_type == 'open_folder':

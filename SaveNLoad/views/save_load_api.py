@@ -124,10 +124,14 @@ def save_game(request, game_id):
     # Only use path_index if there are 2+ paths
     use_subfolders = len(save_paths) > 1
     
-    # Create operations for each path
+    # Create operations for each path using path mappings
     operation_ids = []
-    for index, path in enumerate(save_paths, start=1):
-        path_index = index if use_subfolders else None
+    for path in save_paths:
+        # Get or create path_index using mapping (ensures consistent mapping)
+        if use_subfolders:
+            path_index = game.get_path_index(path)
+        else:
+            path_index = None
         
         operation = OperationQueue.create_operation(
             operation_type=OperationType.SAVE,
@@ -235,10 +239,20 @@ def load_game(request, game_id):
     # Only use path_index if there are 2+ paths
     use_subfolders = len(load_paths) > 1
     
-    # Create operations for each path
+    # Create operations for each path using path mappings
     operation_ids = []
-    for index, path in enumerate(load_paths, start=1):
-        path_index = index if use_subfolders else None
+    for path in load_paths:
+        # Get path_index from mapping (or None if not mapped and single path)
+        if use_subfolders:
+            path_index = game.get_path_index_or_none(path)
+            # If path not mapped, this is an error - can't load without knowing which server path
+            if path_index is None:
+                return json_response_error(
+                    f'Path "{path}" is not mapped to a server location. Please save this path first to create the mapping.',
+                    status=400
+                )
+        else:
+            path_index = None
         
         operation = OperationQueue.create_operation(
             operation_type=OperationType.LOAD,
@@ -628,9 +642,11 @@ def get_game_save_location(request, game_id):
 def open_save_location(request, game_id):
     """
     Open the save file location for a game - queues operation for client worker
+    Handles multiple save paths by opening all of them
     """
     from SaveNLoad.models.client_worker import ClientWorker
     from SaveNLoad.models.operation_queue import OperationQueue, OperationType
+    import json
     
     user = get_current_user(request)
     
@@ -644,26 +660,33 @@ def open_save_location(request, game_id):
     if error_response:
         return error_response
     
-    # Get first save path for opening folder (use first path if multiple exist)
+    # Get all save paths for opening folders
     save_paths = game.save_file_locations if isinstance(game.save_file_locations, list) and len(game.save_file_locations) > 0 else []
-    local_save_path = save_paths[0] if save_paths else ''
     
-    if not local_save_path:
+    if not save_paths:
         return json_response_error('No save file location found for this game', status=400)
+    
+    # Store all paths as JSON string for multi-path support
+    # Client worker will parse this and open all folders
+    paths_json = json.dumps(save_paths)
     
     # Create open folder operation in queue
     operation = OperationQueue.create_operation(
         operation_type=OperationType.OPEN_FOLDER,
         user=user,
         game=game,
-        local_save_path=local_save_path,
+        local_save_path=paths_json,  # Store JSON array of paths
         save_folder_number=None,  # Not used for open folder
         smb_path=None,  # Not used for open folder
         client_worker=client_worker
     )
     
+    # Create message indicating how many folders will be opened
+    path_count = len(save_paths)
+    message = f'Open folder operation queued ({path_count} location{"s" if path_count > 1 else ""})'
+    
     return create_operation_response(
         operation,
         client_worker,
-        message='Open folder operation queued'
+        message=message
     )

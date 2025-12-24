@@ -555,46 +555,270 @@ class RcloneClient:
             return False, error_msg
     
     def download_directory(self, remote_path_base: str, local_dir: str,
-                          transfers: int = 10, progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str, List[str], List[dict]]:
+                          transfers: int = 10, progress_callback: Optional[Callable[[int, int, str], None]] = None,
+                          strip_path_prefix: Optional[str] = None) -> Tuple[bool, str, List[str], List[dict]]:
         """Download entire directory - rclone handles everything with parallel transfers
         
         Args:
-            remote_path_base: Base remote path (e.g., "username/game/save_1")
+            remote_path_base: Base remote path (e.g., "username/game/save_1" or "username/game/save_1/path_1")
             local_dir: Local directory path
             transfers: Number of parallel transfers (default: 10)
+            strip_path_prefix: Optional path prefix to strip from source (e.g., "path_1" to avoid creating path_1 subfolder)
         
         Returns:
             Tuple of (success, message, downloaded_files, failed_files)
         """
+        print(f"\n{'='*60}")
+        print(f"DOWNLOAD_DIRECTORY - Step 1: Initialization")
+        print(f"{'='*60}")
+        print(f"  Remote Path Base: {remote_path_base}")
+        print(f"  Local Directory: {local_dir}")
+        print(f"  Transfers: {transfers}")
+        print(f"  Strip Path Prefix: {strip_path_prefix}")
+        
         # Create local directory
+        print(f"\n{'='*60}")
+        print(f"DOWNLOAD_DIRECTORY - Step 2: Creating Local Directory")
+        print(f"{'='*60}")
         try:
             os.makedirs(local_dir, exist_ok=True)
+            print(f"  Local directory created/verified: {local_dir}")
         except OSError as e:
+            print(f"  ERROR: Failed to create directory - {str(e)}")
             return False, f"Failed to create directory: {local_dir} - {str(e)}", [], []
         
+        # Build full remote path
+        print(f"\n{'='*60}")
+        print(f"DOWNLOAD_DIRECTORY - Step 3: Building Full Remote Path")
+        print(f"{'='*60}")
         remote_full = self._build_remote_path(remote_path_base)
+        print(f"  Remote Name: {self.remote_name}")
+        print(f"  Remote Path Base: {remote_path_base}")
+        print(f"  Full Remote Path: {remote_full}")
         
-        # Let rclone handle everything - parallel transfers, retries, resume
-        # Note: rclone 'copy' command always overwrites existing files (default behavior)
-        # This is desired for load operations - we want to replace local saves with server saves
-        command = [
-            'copy',
-            remote_full,
-            local_dir,
-            '--transfers', str(transfers),
-            '--checkers', str(transfers * 2),
-            '--stats', '1s',  # Show stats every second
-            '--progress',  # Show detailed progress for each file
-            '--create-empty-src-dirs',  # Copy empty directories from source
-        ]
+        # List files before download to see what's available
+        print(f"\n{'='*60}")
+        print(f"DOWNLOAD_DIRECTORY - Step 4: Listing Files on Remote")
+        print(f"{'='*60}")
         
-        success, stdout, stderr = self._run_rclone(command, timeout=3600, progress_callback=progress_callback)
+        # First, check if the directory exists (non-recursive)
+        print(f"  Checking if directory exists (non-recursive)...")
+        check_cmd = ['lsjson', remote_full]
+        check_success, check_stdout, check_stderr = self._run_rclone(check_cmd, timeout=30, silent=True)
         
-        if success:
-            return True, "Directory downloaded successfully", [], []
+        if check_success:
+            try:
+                check_items = json.loads(check_stdout) if check_stdout.strip() else []
+                print(f"  Directory exists. Items at this level: {len(check_items)}")
+                for item in check_items[:5]:
+                    item_name = item.get('Name', 'unknown')
+                    is_dir = item.get('IsDir', False)
+                    item_type = "DIR" if is_dir else "FILE"
+                    print(f"    - {item_name} ({item_type})")
+            except json.JSONDecodeError:
+                print(f"  Directory exists but could not parse contents")
         else:
-            error_msg = stderr.strip() or stdout.strip() or "Download failed"
-            return False, error_msg, [], []
+            print(f"  WARNING: Directory may not exist: {check_stderr.strip() or 'Unknown error'}")
+        
+        # Now do recursive listing
+        print(f"  Listing files recursively...")
+        list_command = ['lsjson', remote_full, '--recursive']
+        list_success, list_stdout, list_stderr = self._run_rclone(list_command, timeout=60, silent=True)
+        
+        if list_success:
+            try:
+                items = json.loads(list_stdout) if list_stdout.strip() else []
+                files = [item for item in items if not item.get('IsDir', False)]
+                dirs = [item for item in items if item.get('IsDir', False)]
+                print(f"  Files found: {len(files)}")
+                print(f"  Directories found: {len(dirs)}")
+                
+                if files:
+                    print(f"  Available files (showing full paths):")
+                    for file_item in files[:15]:  # Show first 15 files
+                        file_path = file_item.get('Path', 'unknown')
+                        file_name = file_item.get('Name', 'unknown')
+                        file_size = file_item.get('Size', 0)
+                        size_str = f"{file_size:,} bytes" if file_size > 0 else "0 bytes"
+                        # Show both relative path and what the full path would be
+                        full_path_attempt = f"{remote_full}/{file_path}" if file_path else f"{remote_full}/{file_name}"
+                        print(f"    - Path: '{file_path}' | Name: '{file_name}' | Full: '{full_path_attempt}' ({size_str})")
+                    if len(files) > 15:
+                        print(f"    ... and {len(files) - 15} more files")
+                    
+                    # Test if we can access the first file directly
+                    if files:
+                        test_file = files[0]
+                        test_path = test_file.get('Path', test_file.get('Name', ''))
+                        if test_path:
+                            # Try different path combinations to see which works
+                            test_paths = [
+                                f"{remote_full}/{test_path}",  # path_1/README.html
+                                f"{remote_full.rstrip('/path_' + strip_path_prefix if strip_path_prefix else '')}/{test_path}",  # save_1/README.html
+                            ]
+                            print(f"  Testing file access for: {test_path}")
+                            for test_full_path in test_paths:
+                                test_cmd = ['ls', test_full_path]
+                                test_success, _, _ = self._run_rclone(test_cmd, timeout=10, silent=True)
+                                status = "EXISTS" if test_success else "NOT FOUND"
+                                print(f"    - {test_full_path}: {status}")
+                else:
+                    print(f"  WARNING: No files found in remote directory!")
+                    
+            except json.JSONDecodeError:
+                print(f"  WARNING: Could not parse file list (non-JSON output)")
+                print(f"  Raw output: {list_stdout[:500]}")
+        else:
+            print(f"  WARNING: Could not list files: {list_stderr.strip() or 'Unknown error'}")
+            # Try non-recursive listing
+            list_cmd_simple = ['lsjson', remote_full]
+            simple_success, _, _ = self._run_rclone(list_cmd_simple, timeout=30, silent=True)
+            if simple_success:
+                print(f"  NOTE: Path exists but recursive listing failed")
+            else:
+                print(f"  ERROR: Path may not exist or is inaccessible")
+        
+        # Build command
+        print(f"\n{'='*60}")
+        print(f"DOWNLOAD_DIRECTORY - Step 5: Building Rclone Command")
+        print(f"{'='*60}")
+        
+        # If we need to strip path_X prefix, use rclone's include filter
+        # We'll copy everything but exclude the path_X folder name from the destination structure
+        if strip_path_prefix:
+            # PROBLEM: Wildcard /* doesn't work with FTP servers
+            # SOLUTION: Copy to temp directory, then move contents to final destination
+            # strip_path_prefix is already in format "path_1", "path_2", etc.
+            print(f"  Multi-path operation: Copying contents of {strip_path_prefix} to mapped local path")
+            print(f"  Remote source: {remote_full}")
+            print(f"  Final destination: {local_dir}")
+            
+            # Create temp directory in parent of local_dir to avoid conflicts
+            import tempfile
+            temp_parent = os.path.dirname(local_dir) or os.getcwd()
+            temp_dir = tempfile.mkdtemp(prefix='rclone_path_', dir=temp_parent)
+            
+            try:
+                print(f"  Temp directory: {temp_dir}")
+                print(f"  Step 1: Copying {remote_full} to temp directory...")
+                
+                # Copy directory directly (no wildcard) - this will create path_X subfolder in temp
+                temp_command = [
+                    'copy',
+                    remote_full,  # Copy path_X directory
+                    temp_dir,     # To temp directory
+                    '--transfers', str(transfers),
+                    '--checkers', str(transfers * 2),
+                    '--stats', '1s',
+                    '--progress',
+                    '--create-empty-src-dirs',
+                ]
+                
+                success, stdout, stderr = self._run_rclone(temp_command, timeout=3600, progress_callback=progress_callback)
+                
+                if not success:
+                    import shutil
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    error_msg = stderr.strip() or stdout.strip() or "Download failed"
+                    return False, error_msg, [], []
+                
+                # Step 2: Move files from temp/path_X/ to local_dir/
+                # strip_path_prefix is already "path_1", "path_2", etc. - use it directly
+                path_x_dir = os.path.join(temp_dir, strip_path_prefix)
+                print(f"  Step 2: Moving files from {path_x_dir} to {local_dir}")
+                
+                if os.path.exists(path_x_dir) and os.path.isdir(path_x_dir):
+                    import shutil
+                    # Move all contents from path_X subfolder to final destination
+                    moved_count = 0
+                    for item in os.listdir(path_x_dir):
+                        src = os.path.join(path_x_dir, item)
+                        dst = os.path.join(local_dir, item)
+                        
+                        try:
+                            if os.path.isdir(src):
+                                # Directory: remove destination if exists, then move
+                                if os.path.exists(dst):
+                                    shutil.rmtree(dst)
+                                shutil.move(src, dst)
+                            else:
+                                # File: remove destination if exists, then move
+                                if os.path.exists(dst):
+                                    os.remove(dst)
+                                shutil.move(src, dst)
+                            moved_count += 1
+                        except Exception as e:
+                            print(f"  WARNING: Failed to move {item}: {str(e)}")
+                    
+                    print(f"  Moved {moved_count} item(s) to final destination")
+                    
+                    # Clean up temp directory
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    print(f"  Temp directory cleaned up")
+                    
+                    return True, f"Directory downloaded successfully ({moved_count} items)", [], []
+                else:
+                    # Files might be directly in temp_dir (rclone copied contents, not directory)
+                    # This can happen with some FTP servers
+                    if os.path.exists(temp_dir):
+                        items = os.listdir(temp_dir)
+                        if items:
+                            print(f"  Files found directly in temp directory (rclone copied contents), moving {len(items)} item(s)...")
+                            import shutil
+                            moved_count = 0
+                            for item in items:
+                                src = os.path.join(temp_dir, item)
+                                dst = os.path.join(local_dir, item)
+                                try:
+                                    if os.path.exists(dst):
+                                        if os.path.isdir(dst):
+                                            shutil.rmtree(dst)
+                                        else:
+                                            os.remove(dst)
+                                    shutil.move(src, dst)
+                                    moved_count += 1
+                                except Exception as e:
+                                    print(f"  WARNING: Failed to move {item}: {str(e)}")
+                            
+                            print(f"  Moved {moved_count} item(s) to final destination")
+                            shutil.rmtree(temp_dir, ignore_errors=True)
+                            print(f"  Temp directory cleaned up")
+                            return True, f"Directory downloaded successfully ({moved_count} items)", [], []
+                    
+                    # Clean up and return error
+                    import shutil
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    return False, f"Unexpected directory structure after copy - expected {path_x_dir} or files in {temp_dir}", [], []
+                    
+            except Exception as e:
+                # Clean up temp directory on any error
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                return False, f"Error during multi-path copy: {str(e)}", [], []
+        else:
+            print(f"  No strip_path_prefix, copying entire directory")
+            print(f"  Source: {remote_full}")
+            command = [
+                'copy',
+                remote_full,
+                local_dir,
+                '--transfers', str(transfers),
+                '--checkers', str(transfers * 2),
+                '--stats', '1s',
+                '--progress',
+                '--create-empty-src-dirs',
+            ]
+            
+            print(f"  Destination: {local_dir}")
+            print(f"  Command: rclone {' '.join(command)}")
+            
+            success, stdout, stderr = self._run_rclone(command, timeout=3600, progress_callback=progress_callback)
+            
+            if success:
+                return True, "Directory downloaded successfully", [], []
+            else:
+                error_msg = stderr.strip() or stdout.strip() or "Download failed"
+                return False, error_msg, [], []
     
     def list_saves(self, username: str, game_name: str, folder_number: int,
                   remote_path_custom: Optional[str] = None,
