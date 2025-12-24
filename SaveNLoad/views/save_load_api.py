@@ -11,6 +11,7 @@ from SaveNLoad.views.api_helpers import (
     get_game_or_error,
     get_client_worker_or_error,
     get_local_save_path_or_error,
+    get_all_save_paths_or_error,
     get_save_folder_or_error,
     get_latest_save_folder_or_error,
     validate_save_folder_or_error,
@@ -62,51 +63,19 @@ def save_game(request, game_id):
     if error_response:
         return error_response
     
-    # Check if multiple paths are provided
+    # Check if multiple paths are provided OR if game has multiple paths
+    # First check if explicit paths are provided in request
     if 'local_save_paths' in data:
-        # Handle multiple save locations
+        # Handle multiple save locations from request
         save_paths, error_response = get_all_save_paths_or_error(data, game, 'local_save_paths')
         if error_response:
             return error_response
-        
-        # Create save folder
-        from SaveNLoad.models.save_folder import SaveFolder
-        save_folder = SaveFolder.get_or_create_next(user, game)
-        save_folder, error_response = validate_save_folder_or_error(save_folder)
-        if error_response:
-            return error_response
-        
-        # Only use path_index if there are 2+ paths
-        # Single path = no subfolder (backward compatible)
-        use_subfolders = len(save_paths) > 1
-        
-        # Create operations for each path
-        operation_ids = []
-        for index, path in enumerate(save_paths, start=1):
-            # Only set path_index if using subfolders (2+ paths)
-            path_index = index if use_subfolders else None
-            
-            operation = OperationQueue.create_operation(
-                operation_type=OperationType.SAVE,
-                user=user,
-                game=game,
-                local_save_path=path,
-                save_folder_number=save_folder.folder_number,
-                smb_path=save_folder.smb_path,
-                client_worker=client_worker,
-                path_index=path_index  # None for single path, 1/2/3... for multiple
-            )
-            operation_ids.append(operation.id)
-        
-        return json_response_success(
-            message=f'Save operations queued for {len(save_paths)} location(s)',
-            data={
-                'operation_ids': operation_ids,
-                'save_folder_number': save_folder.folder_number,
-                'client_id': client_worker.client_id,
-                'paths_count': len(save_paths)
-            }
-        )
+    # Check if game has multiple paths stored in JSON array
+    elif game.save_file_locations and isinstance(game.save_file_locations, list) and len(game.save_file_locations) > 1:
+        # Game has multiple paths - use them directly
+        save_paths = [path.strip() for path in game.save_file_locations if path and path.strip()]
+        if not save_paths:
+            return json_response_error('Game has invalid save file locations', status=400)
     else:
         # Single path (existing behavior) - no path_index
         local_save_path, error_response = get_local_save_path_or_error(data, game)
@@ -136,6 +105,44 @@ def save_game(request, game_id):
             message='Save operation queued',
             extra_data={'save_folder_number': save_folder.folder_number}
         )
+    
+    # Multiple paths handling (either from request or from game model)
+    # Create save folder
+    from SaveNLoad.models.save_folder import SaveFolder
+    save_folder = SaveFolder.get_or_create_next(user, game)
+    save_folder, error_response = validate_save_folder_or_error(save_folder)
+    if error_response:
+        return error_response
+    
+    # Only use path_index if there are 2+ paths
+    use_subfolders = len(save_paths) > 1
+    
+    # Create operations for each path
+    operation_ids = []
+    for index, path in enumerate(save_paths, start=1):
+        path_index = index if use_subfolders else None
+        
+        operation = OperationQueue.create_operation(
+            operation_type=OperationType.SAVE,
+            user=user,
+            game=game,
+            local_save_path=path,
+            save_folder_number=save_folder.folder_number,
+            smb_path=save_folder.smb_path,
+            client_worker=client_worker,
+            path_index=path_index
+        )
+        operation_ids.append(operation.id)
+    
+    return json_response_success(
+        message=f'Save operations queued for {len(save_paths)} location(s)',
+        data={
+            'operation_ids': operation_ids,
+            'save_folder_number': save_folder.folder_number,
+            'client_id': client_worker.client_id,
+            'paths_count': len(save_paths)
+        }
+    )
 
 
 @login_required
@@ -180,44 +187,19 @@ def load_game(request, game_id):
         if error_response:
             return error_response
     
-    # Check if multiple paths are provided
+    # Check if multiple paths are provided OR if game has multiple paths
+    # First check if explicit paths are provided in request
     if 'local_save_paths' in data:
-        # Handle multiple save locations
+        # Handle multiple save locations from request
         load_paths, error_response = get_all_save_paths_or_error(data, game, 'local_save_paths')
         if error_response:
             return error_response
-        
-        # Only use path_index if there are 2+ paths
-        # Single path = no subfolder (backward compatible)
-        use_subfolders = len(load_paths) > 1
-        
-        # Create operations for each path
-        operation_ids = []
-        for index, path in enumerate(load_paths, start=1):
-            # Only set path_index if using subfolders (2+ paths)
-            path_index = index if use_subfolders else None
-            
-            operation = OperationQueue.create_operation(
-                operation_type=OperationType.LOAD,
-                user=user,
-                game=game,
-                local_save_path=path,
-                save_folder_number=save_folder_number,
-                smb_path=save_folder.smb_path,
-                client_worker=client_worker,
-                path_index=path_index  # None for single path, 1/2/3... for multiple
-            )
-            operation_ids.append(operation.id)
-        
-        return json_response_success(
-            message=f'Load operations queued for {len(load_paths)} location(s)',
-            data={
-                'operation_ids': operation_ids,
-                'save_folder_number': save_folder_number,
-                'client_id': client_worker.client_id,
-                'paths_count': len(load_paths)
-            }
-        )
+    # Check if game has multiple paths stored in JSON array
+    elif game.save_file_locations and isinstance(game.save_file_locations, list) and len(game.save_file_locations) > 1:
+        # Game has multiple paths - use them directly
+        load_paths = [path.strip() for path in game.save_file_locations if path and path.strip()]
+        if not load_paths:
+            return json_response_error('Game has invalid save file locations', status=400)
     else:
         # Single path (existing behavior) - no path_index
         local_save_path, error_response = get_local_save_path_or_error(data, game)
@@ -241,6 +223,37 @@ def load_game(request, game_id):
             message='Load operation queued',
             extra_data={'save_folder_number': save_folder_number}
         )
+    
+    # Multiple paths handling (either from request or from game model)
+    # Only use path_index if there are 2+ paths
+    use_subfolders = len(load_paths) > 1
+    
+    # Create operations for each path
+    operation_ids = []
+    for index, path in enumerate(load_paths, start=1):
+        path_index = index if use_subfolders else None
+        
+        operation = OperationQueue.create_operation(
+            operation_type=OperationType.LOAD,
+            user=user,
+            game=game,
+            local_save_path=path,
+            save_folder_number=save_folder_number,
+            smb_path=save_folder.smb_path,
+            client_worker=client_worker,
+            path_index=path_index
+        )
+        operation_ids.append(operation.id)
+    
+    return json_response_success(
+        message=f'Load operations queued for {len(load_paths)} location(s)',
+        data={
+            'operation_ids': operation_ids,
+            'save_folder_number': save_folder_number,
+            'client_id': client_worker.client_id,
+            'paths_count': len(load_paths)
+        }
+    )
 
 
 @login_required
@@ -592,9 +605,12 @@ def get_game_save_location(request, game_id):
     if error_response:
         return error_response
     
+    # Return first path for backward compatibility, or all paths
+    save_paths = game.save_file_locations if isinstance(game.save_file_locations, list) else []
     return json_response_success(
         data={
-            'save_file_location': game.save_file_location,
+            'save_file_location': save_paths[0] if save_paths else '',
+            'save_file_locations': save_paths,
             'game_name': game.name
         }
     )
@@ -621,12 +637,19 @@ def open_save_location(request, game_id):
     if error_response:
         return error_response
     
+    # Get first save path for opening folder (use first path if multiple exist)
+    save_paths = game.save_file_locations if isinstance(game.save_file_locations, list) and len(game.save_file_locations) > 0 else []
+    local_save_path = save_paths[0] if save_paths else ''
+    
+    if not local_save_path:
+        return json_response_error('No save file location found for this game', status=400)
+    
     # Create open folder operation in queue
     operation = OperationQueue.create_operation(
         operation_type=OperationType.OPEN_FOLDER,
         user=user,
         game=game,
-        local_save_path=game.save_file_location,
+        local_save_path=local_save_path,
         save_folder_number=None,  # Not used for open folder
         smb_path=None,  # Not used for open folder
         client_worker=client_worker

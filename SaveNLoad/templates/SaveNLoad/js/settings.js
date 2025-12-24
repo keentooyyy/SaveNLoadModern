@@ -405,7 +405,14 @@ document.addEventListener('DOMContentLoaded', function () {
         games.forEach(game => {
             const gameId = String(game.id ?? '');
             const gameName = game.name ?? '';
-            const saveLocation = game.save_file_location ?? '';
+            // Handle both old format (string) and new format (array)
+            let saveLocation = '';
+            if (game.save_file_locations && Array.isArray(game.save_file_locations)) {
+                saveLocation = game.save_file_locations.join('\n');
+            } else if (game.save_file_location) {
+                // Fallback for old format
+                saveLocation = game.save_file_location;
+            }
             const bannerUrl = game.banner ?? '';
             const year = game.year ?? '';
             const company = game.company ?? '';

@@ -10,7 +10,10 @@ class Game(models.Model):
     banner = models.ImageField(upload_to='game_banners/', blank=True, null=True, help_text="Cached local banner image file")
     # Keep original URL for reference and re-download if needed
     banner_url = models.URLField(max_length=500, blank=True, null=True, help_text="Original URL to the game banner/image (from RAWG API)")
-    save_file_location = models.CharField(max_length=500, help_text="Path to the save file location")
+    save_file_locations = models.JSONField(
+        default=list,
+        help_text="List of save file location paths (array of strings)"
+    )
     # Optional timestamp for when this game was last played (for future use in dashboards, sorting, etc.)
     last_played = models.DateTimeField(blank=True, null=True)
     pending_deletion = models.BooleanField(default=False, help_text="If True, game is marked for deletion and will be deleted after all FTP cleanup operations complete")

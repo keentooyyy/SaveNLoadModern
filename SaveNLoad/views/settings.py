@@ -91,14 +91,11 @@ def create_game(request):
         if Game.objects.filter(name=name).exists():
             return json_response_error('A game with this name already exists.', status=400)
         
-        # Store multiple locations as newline-separated string (backward compatible)
-        # If single location, store as-is; if multiple, join with newlines
-        save_file_location = '\n'.join(save_file_locations) if len(save_file_locations) > 1 else save_file_locations[0]
-        
+        # Store locations as JSON array
         # Create new game
         game_data = {
             'name': name,
-            'save_file_location': save_file_location,
+            'save_file_locations': save_file_locations,
         }
         
         # Store original URL
@@ -130,7 +127,7 @@ def create_game(request):
                     'id': game.id,
                     'name': game.name,
                     'banner': get_image_url_or_fallback(game, request),
-                    'save_file_location': game.save_file_location,
+                    'save_file_locations': game.save_file_locations,
                 }
             }
         )
@@ -166,7 +163,7 @@ def search_game(request):
                     'name': game.get('title') or game.get('name') or 'Unknown',
                     'banner': game.get('image') or '',
                     # RAWG doesn't know the local save path – leave empty for manual input
-                    'save_file_location': '',
+                    'save_file_locations': [],
                     'year': game.get('year', ''),
                     'company': game.get('company', ''),
                 }
@@ -301,7 +298,7 @@ def game_detail(request, game_id):
             'id': game.id,
             'name': game.name,
             'banner': get_image_url_or_fallback(game, request),
-            'save_file_location': game.save_file_location,
+            'save_file_locations': game.save_file_locations,
             'last_played': game.last_played.isoformat() if getattr(game, "last_played", None) else None,
             'pending_deletion': getattr(game, 'pending_deletion', False),
             'deletion_operations': {
@@ -340,18 +337,30 @@ def game_detail(request, game_id):
         return error_response
 
     name = (data.get('name') or '').strip()
-    save_file_location = (data.get('save_file_location') or '').strip()
+    # Support both single and multiple save locations
+    save_file_locations = data.get('save_file_locations', [])
+    if not save_file_locations:
+        # Fallback to single location for backward compatibility
+        single_location = (data.get('save_file_location') or '').strip()
+        if single_location:
+            save_file_locations = [single_location]
+    
     banner = (data.get('banner') or '').strip()
 
-    if not name or not save_file_location:
-        return json_response_error('Game name and save file location are required.', status=400)
+    if not name or not save_file_locations:
+        return json_response_error('Game name and at least one save file location are required.', status=400)
+    
+    # Filter out empty locations
+    save_file_locations = [loc.strip() for loc in save_file_locations if loc.strip()]
+    if not save_file_locations:
+        return json_response_error('At least one valid save file location is required.', status=400)
 
     # Ensure unique name (excluding this game)
     if Game.objects.exclude(pk=game.id).filter(name=name).exists():
         return json_response_error('A game with this name already exists.', status=400)
 
     game.name = name
-    game.save_file_location = save_file_location
+    game.save_file_locations = save_file_locations
     
     # Handle banner update
     if banner:
@@ -399,7 +408,7 @@ def game_detail(request, game_id):
                 'id': game.id,
                 'name': game.name,
                 'banner': get_image_url_or_fallback(game, request),
-                'save_file_location': game.save_file_location,
+                'save_file_locations': game.save_file_locations,
             }
         }
     )

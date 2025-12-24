@@ -354,6 +354,9 @@ class RcloneClient:
         # Build remote path
         if remote_path_custom:
             remote_path = remote_path_custom.replace('\\', '/').strip('/')
+            # If path_index is provided, append it to the custom path
+            if path_index is not None:
+                remote_path = f"{remote_path}/path_{path_index}"
         else:
             remote_path = self._get_full_path(username, game_name, folder_number, path_index=path_index)
         

@@ -172,7 +172,15 @@ document.addEventListener('DOMContentLoaded', function () {
             nameInput.value = data.name || '';
             bannerInput.value = data.banner || '';
             // Use manager to populate save locations
-            manageSaveLocationManager.populateLocations(data.save_file_location || '');
+            // Handle both old format (string) and new format (array)
+            let saveLocationStr = '';
+            if (data.save_file_locations && Array.isArray(data.save_file_locations)) {
+                saveLocationStr = data.save_file_locations.join('\n');
+            } else if (data.save_file_location) {
+                // Fallback for old format
+                saveLocationStr = data.save_file_location;
+            }
+            manageSaveLocationManager.populateLocations(saveLocationStr);
             // Use shared updateBannerPreview function
             updateBannerPreview('manage_banner_preview', data.banner || '');
             

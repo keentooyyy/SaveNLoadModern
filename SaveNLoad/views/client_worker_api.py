@@ -438,6 +438,7 @@ def complete_operation(request, operation_id):
             
             # Cleanup: If SAVE operation failed due to missing local path or empty saves, delete the save folder
             # This prevents orphaned save folders when user provides invalid path or empty saves
+            # BUT: Only delete if ALL operations for this save folder have failed (for multiple save locations)
             from SaveNLoad.utils.operation_utils import is_operation_type
             if is_operation_type(operation, 'save') and operation.save_folder_number:
                 error_lower = error_message.lower() if error_message else ''
@@ -462,6 +463,7 @@ def complete_operation(request, operation_id):
                 ]
                 if any(err in error_lower for err in path_errors):
                     from SaveNLoad.models.save_folder import SaveFolder
+                    from SaveNLoad.models.operation_queue import OperationQueue, OperationStatus
                     try:
                         save_folder = SaveFolder.get_by_number(
                             operation.user, 
@@ -474,9 +476,38 @@ def complete_operation(request, operation_id):
                             from datetime import timedelta
                             time_threshold = operation.created_at - timedelta(minutes=1)
                             if save_folder.created_at >= time_threshold:
-                                # Delete the save folder
-                                save_folder.delete()
-                                print(f"Deleted save folder {save_folder.folder_number} due to failed save operation (error: {error_message})")
+                                # Check if there are other operations for this save folder that might succeed
+                                # Only delete if ALL operations for this save folder have failed or completed
+                                other_operations = OperationQueue.objects.filter(
+                                    user=operation.user,
+                                    game=operation.game,
+                                    save_folder_number=operation.save_folder_number,
+                                    operation_type=operation.operation_type
+                                ).exclude(id=operation.id)
+                                
+                                # Check if any other operations are still pending or in progress
+                                pending_or_in_progress = other_operations.filter(
+                                    status__in=[OperationStatus.PENDING, OperationStatus.IN_PROGRESS]
+                                ).exists()
+                                
+                                # Only delete if no other operations are pending/in-progress
+                                # This allows other save locations to complete even if one fails
+                                if not pending_or_in_progress:
+                                    # Check if all other operations have also failed
+                                    all_failed = not other_operations.filter(
+                                        status=OperationStatus.COMPLETED
+                                    ).exists()
+                                    
+                                    if all_failed:
+                                        # All operations failed - safe to delete save folder
+                                        save_folder.delete()
+                                        print(f"Deleted save folder {save_folder.folder_number} due to failed save operation (error: {error_message})")
+                                    else:
+                                        # Some operations succeeded - keep the save folder
+                                        print(f"Keeping save folder {save_folder.folder_number} - other operations succeeded")
+                                else:
+                                    # Other operations still pending - keep the save folder
+                                    print(f"Keeping save folder {save_folder.folder_number} - other operations still pending")
                     except Exception as e:
                         print(f"WARNING: Failed to cleanup save folder after failed operation: {e}")
         

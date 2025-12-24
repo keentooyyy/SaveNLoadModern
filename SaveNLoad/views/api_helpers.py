@@ -234,18 +234,55 @@ def get_local_save_path_or_error(data, game, field_name='local_save_path'):
     """
     Get local save path from data or game default, validate it exists
     Returns: (local_save_path_string, error_response_or_none)
+    Note: For games with multiple paths, this returns the first path
     """
     local_save_path = data.get(field_name, '').strip()
     
-    # If not provided, use game's default
+    # If not provided, use game's default (first path if multiple)
     if not local_save_path:
-        local_save_path = game.save_file_location
+        if game and game.save_file_locations:
+            # Get first path from array
+            local_save_path = game.save_file_locations[0] if isinstance(game.save_file_locations, list) and len(game.save_file_locations) > 0 else ''
     
     # Validate it's not empty
     if not local_save_path or not local_save_path.strip():
         return None, json_response_error('Local save path is required', status=400)
     
     return local_save_path, None
+
+
+def get_all_save_paths_or_error(data, game, field_name='local_save_paths'):
+    """
+    Get all save paths from data or game default, split by newlines if needed
+    Returns: (list_of_paths, error_response_or_none)
+    """
+    # First check if paths are provided in the request as a list
+    save_paths = data.get(field_name, [])
+    
+    # If not provided as list, check if it's a string (single path)
+    if not save_paths:
+        single_path = data.get('local_save_path', '').strip()
+        if single_path:
+            save_paths = [single_path]
+    
+    # If still no paths, use game's default save_file_locations
+    if not save_paths:
+        if game and game.save_file_locations:
+            # Use the JSON array directly
+            if isinstance(game.save_file_locations, list):
+                save_paths = [path.strip() for path in game.save_file_locations if path and path.strip()]
+            else:
+                # Fallback: if it's somehow still a string, treat as single path
+                save_paths = [str(game.save_file_locations).strip()] if game.save_file_locations else []
+    
+    # Filter out empty paths
+    save_paths = [path.strip() for path in save_paths if path and path.strip()]
+    
+    # Validate at least one path exists
+    if not save_paths:
+        return None, json_response_error('At least one save file location is required', status=400)
+    
+    return save_paths, None
 
 
 def get_latest_save_folder_or_error(user, game):
