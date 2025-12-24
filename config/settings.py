@@ -202,4 +202,23 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = False  # Set to True only with HTTPS
     SESSION_COOKIE_SAMESITE = 'Lax'
 
+# Permissions-Policy header configuration
+# Disable experimental/unsupported features to avoid browser warnings
+# These features are not needed for LAN deployment
+PERMISSIONS_POLICY = {
+    # Disable problematic experimental features that cause browser warnings
+    'browsing-topics': [],
+    'run-ad-auction': [],
+    'join-ad-interest-group': [],
+    'private-state-token-redemption': [],
+    'private-state-token-issuance': [],
+    'private-aggregation': [],
+    'attribution-reporting': [],
+}
+
+# Cross-Origin-Opener-Policy header
+# Disable for LAN deployment (HTTP) to avoid browser warnings
+# Only needed for HTTPS deployments with cross-origin requirements
+SECURE_CROSS_ORIGIN_OPENER_POLICY = None
+
 
