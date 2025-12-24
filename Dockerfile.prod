@@ -28,6 +28,9 @@ RUN apt-get purge -y gcc \
 # Copy project files
 COPY . /app/
 
+# Create logs directory for Django logging (required by settings.py)
+RUN mkdir -p /app/logs
+
 # Collect static files (ensures staticfiles directory exists)
 RUN python manage.py collectstatic --noinput
 
