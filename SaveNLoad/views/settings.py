@@ -8,7 +8,8 @@ from SaveNLoad.views.api_helpers import (
     get_game_or_error,
     check_admin_or_error,
     json_response_error,
-    json_response_success
+    json_response_success,
+    delete_game_banner_file
 )
 from SaveNLoad.views.rawg_api import search_games as rawg_search_games
 from SaveNLoad.models import Game
@@ -326,6 +327,8 @@ def game_detail(request, game_id):
         
         # If no saves exist, delete immediately (nothing to clean up)
         if error_message == "no_saves":
+            # Delete banner file before deleting game
+            delete_game_banner_file(game)
             game.delete()
             logger.info(f"Game {game.id} ({game.name}) deleted immediately - no FTP saves to clean up")
         else:
@@ -429,6 +432,8 @@ def delete_game(request, game_id):
     
     # If no saves exist, delete immediately (nothing to clean up)
     if error_message == "no_saves":
+        # Delete banner file before deleting game
+        delete_game_banner_file(game)
         game.delete()
         logger.info(f"Game {game.id} ({game.name}) deleted immediately - no FTP saves to clean up")
     else:

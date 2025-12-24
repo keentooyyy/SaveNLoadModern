@@ -11,10 +11,12 @@ from SaveNLoad.views.api_helpers import (
     parse_json_body,
     get_client_worker_by_id_or_error,
     json_response_error,
-    json_response_success
+    json_response_success,
+    delete_game_banner_file
 )
 import json
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -378,6 +380,10 @@ def complete_operation(request, operation_id):
                         # All operations succeeded - delete the game
                         game_name = operation.game.name
                         game_id = operation.game.id
+                        
+                        # Delete banner file before deleting game
+                        delete_game_banner_file(operation.game)
+                        
                         operation.game.delete()  # This will CASCADE delete all SaveFolders and OperationQueue records
                         logger.info(f"Game {game_id} ({game_name}) deleted from database after all FTP cleanup operations completed successfully")
                     else:
@@ -420,6 +426,10 @@ def complete_operation(request, operation_id):
                         # All operations succeeded - delete the game
                         game_name = operation.game.name
                         game_id = operation.game.id
+                        
+                        # Delete banner file before deleting game
+                        delete_game_banner_file(operation.game)
+                        
                         operation.game.delete()  # This will CASCADE delete all SaveFolders and OperationQueue records
                         logger.info(f"Game {game_id} ({game_name}) deleted from database after all FTP cleanup operations completed successfully")
                     else:

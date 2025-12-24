@@ -13,8 +13,31 @@ from django.utils import timezone
 from datetime import timedelta
 import json
 import logging
+import os
 
 logger = logging.getLogger(__name__)
+
+
+def delete_game_banner_file(game):
+    """
+    Delete the banner file associated with a game
+    Returns: True if deleted successfully or no banner exists, False on error
+    """
+    if not game or not game.banner:
+        return True
+    
+    try:
+        if game.banner.name:
+            banner_path = game.banner.path
+            if os.path.exists(banner_path):
+                os.remove(banner_path)
+                logger.info(f"Deleted banner file for game {game.id} ({game.name}): {banner_path}")
+            return True
+    except Exception as e:
+        logger.warning(f"Failed to delete banner file for game {game.id} ({game.name}): {e}")
+        return False
+    
+    return True
 
 
 def json_response_error(message: str, status: int = 400) -> JsonResponse:
