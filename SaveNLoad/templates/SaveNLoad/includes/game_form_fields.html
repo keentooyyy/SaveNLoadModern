@@ -28,10 +28,31 @@
         <input type="text" class="form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white" id="name" name="name" placeholder="Enter game name" required>
     </div>
 
-    <!-- Save file location -->
+    <!-- Save file locations (multiple) -->
     <div class="mb-3">
-        <label for="save_file_location" class="fs-6 opacity-50">SAVE FILE LOCATION</label>
-        <input type="text" class="form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white" id="save_file_location" name="save_file_location" placeholder="Enter save file location" required>
+        <label class="fs-6 opacity-50">SAVE FILE LOCATIONS</label>
+        <div id="save_locations_container">
+            <div class="input-group mb-2 save-location-row">
+                <input type="text" 
+                       class="form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white save-location-input" 
+                       placeholder="Enter save file location" 
+                       required>
+                <button type="button" 
+                        class="btn btn-outline-danger text-white remove-location-btn" 
+                        onclick="removeSaveLocation(this)"
+                        style="display: none;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <button type="button" 
+                class="btn btn-outline-secondary btn-sm text-white mt-2" 
+                onclick="addSaveLocation()">
+            <i class="fas fa-plus me-1"></i>Add Another Location
+        </button>
+        <small class="form-text text-white-50 d-block mt-2">
+            Add multiple save file locations if your game saves to different folders.
+        </small>
     </div>
 
 

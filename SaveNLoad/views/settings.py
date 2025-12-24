@@ -66,19 +66,35 @@ def create_game(request):
             if error_response:
                 return error_response
             name = (data.get('name') or '').strip()
-            save_file_location = (data.get('save_file_location') or '').strip()
+            # Support both single and multiple save locations
+            save_file_locations = data.get('save_file_locations', [])
+            if not save_file_locations:
+                # Fallback to single location for backward compatibility
+                single_location = (data.get('save_file_location') or '').strip()
+                if single_location:
+                    save_file_locations = [single_location]
             banner = (data.get('banner') or '').strip()
         else:
             name = request.POST.get('name', '').strip()
             save_file_location = request.POST.get('save_file_location', '').strip()
+            save_file_locations = [save_file_location] if save_file_location else []
             banner = request.POST.get('banner', '').strip()
         
-        if not name or not save_file_location:
-            return json_response_error('Game name and save file location are required.', status=400)
+        if not name or not save_file_locations:
+            return json_response_error('Game name and at least one save file location are required.', status=400)
+        
+        # Filter out empty locations
+        save_file_locations = [loc.strip() for loc in save_file_locations if loc.strip()]
+        if not save_file_locations:
+            return json_response_error('At least one valid save file location is required.', status=400)
         
         # Check if game with same name already exists
         if Game.objects.filter(name=name).exists():
             return json_response_error('A game with this name already exists.', status=400)
+        
+        # Store multiple locations as newline-separated string (backward compatible)
+        # If single location, store as-is; if multiple, join with newlines
+        save_file_location = '\n'.join(save_file_locations) if len(save_file_locations) > 1 else save_file_locations[0]
         
         # Create new game
         game_data = {

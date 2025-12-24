@@ -4,7 +4,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const searchResults = document.getElementById('modal_search_results');
     const nameInput = document.getElementById('name');
     const bannerInput = document.getElementById('banner');
-    const saveFileLocationInput = document.getElementById('save_file_location');
     const bannerPreview = document.getElementById('banner_preview');
     const searchUrl = searchInput ? searchInput.dataset.searchUrl : '';
 
@@ -164,9 +163,141 @@ document.addEventListener('DOMContentLoaded', function () {
         bannerPreview.appendChild(img);
     }
 
+    /**
+     * Add a new save location input field
+     */
+    function addSaveLocation() {
+        const container = document.getElementById('save_locations_container');
+        if (!container) return;
+        
+        const newRow = document.createElement('div');
+        newRow.className = 'input-group mb-2 save-location-row';
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white save-location-input';
+        input.placeholder = 'Enter save file location';
+        input.required = true;
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn btn-outline-danger text-white remove-location-btn';
+        removeBtn.onclick = function() { removeSaveLocation(this); };
+        
+        const removeIcon = document.createElement('i');
+        removeIcon.className = 'fas fa-times';
+        removeBtn.appendChild(removeIcon);
+        
+        newRow.appendChild(input);
+        newRow.appendChild(removeBtn);
+        container.appendChild(newRow);
+        
+        // Show remove buttons if there are multiple rows
+        updateRemoveButtons();
+    }
+
+    /**
+     * Remove a save location input field
+     */
+    function removeSaveLocation(btn) {
+        const row = btn.closest('.save-location-row');
+        if (row) {
+            row.remove();
+            updateRemoveButtons();
+        }
+    }
+
+    /**
+     * Update visibility of remove buttons (hide if only one location)
+     */
+    function updateRemoveButtons() {
+        const container = document.getElementById('save_locations_container');
+        if (!container) return;
+        
+        const rows = container.querySelectorAll('.save-location-row');
+        const removeButtons = container.querySelectorAll('.remove-location-btn');
+        
+        // Show remove buttons only if there are 2+ locations
+        removeButtons.forEach(btn => {
+            btn.style.display = rows.length > 1 ? 'block' : 'none';
+        });
+    }
+
+    /**
+     * Create a default save location row
+     */
+    function createDefaultSaveLocationRow() {
+        const row = document.createElement('div');
+        row.className = 'input-group mb-2 save-location-row';
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white save-location-input';
+        input.placeholder = 'Enter save file location';
+        input.required = true;
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn btn-outline-danger text-white remove-location-btn';
+        removeBtn.onclick = function() { removeSaveLocation(this); };
+        removeBtn.style.display = 'none';
+        
+        const removeIcon = document.createElement('i');
+        removeIcon.className = 'fas fa-times';
+        removeBtn.appendChild(removeIcon);
+        
+        row.appendChild(input);
+        row.appendChild(removeBtn);
+        
+        return row;
+    }
+
+    /**
+     * Get all save locations from the form
+     */
+    function getAllSaveLocations() {
+        const inputs = document.querySelectorAll('.save-location-input');
+        const locations = [];
+        inputs.forEach(input => {
+            const value = input.value.trim();
+            if (value) {
+                locations.push(value);
+            }
+        });
+        return locations;
+    }
+
     function populateForm(id, name, saveFileLocation, bannerUrl) {
         if (nameInput) nameInput.value = name;
-        if (saveFileLocationInput) saveFileLocationInput.value = saveFileLocation;
+        
+        // Handle multiple save locations (split by newline) or single location
+        const container = document.getElementById('save_locations_container');
+        if (container) {
+            // Clear existing rows
+            while (container.firstChild) {
+                container.removeChild(container.firstChild);
+            }
+            
+            // Split by newline if multiple locations, otherwise use single location
+            const locations = saveFileLocation ? saveFileLocation.split('\n').filter(loc => loc.trim()) : [];
+            if (locations.length === 0) {
+                // No locations, add one empty row
+                const defaultRow = createDefaultSaveLocationRow();
+                container.appendChild(defaultRow);
+            } else {
+                // Add rows for each location
+                locations.forEach((location, index) => {
+                    const row = createDefaultSaveLocationRow();
+                    const input = row.querySelector('.save-location-input');
+                    if (input) {
+                        input.value = location.trim();
+                    }
+                    container.appendChild(row);
+                });
+            }
+            updateRemoveButtons();
+        }
+        
         if (bannerInput) bannerInput.value = bannerUrl;
 
         updateBannerPreview(bannerUrl);
@@ -382,7 +513,20 @@ document.addEventListener('DOMContentLoaded', function () {
     function clearForm() {
         if (nameInput) nameInput.value = '';
         if (bannerInput) bannerInput.value = '';
-        if (saveFileLocationInput) saveFileLocationInput.value = '';
+        
+        // Reset save locations to single input
+        const container = document.getElementById('save_locations_container');
+        if (container) {
+            // Clear all existing rows
+            while (container.firstChild) {
+                container.removeChild(container.firstChild);
+            }
+            
+            // Add default row
+            const defaultRow = createDefaultSaveLocationRow();
+            container.appendChild(defaultRow);
+        }
+        
         clearElement(bannerPreview);
         if (searchInput) {
             searchInput.value = '';
@@ -454,11 +598,11 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             
             const name = document.getElementById('name')?.value.trim();
-            const saveFileLocation = document.getElementById('save_file_location')?.value.trim();
+            const saveLocations = getAllSaveLocations();
             const banner = document.getElementById('banner')?.value.trim();
             
-            if (!name || !saveFileLocation) {
-                showToast('Game name and save file location are required.', 'error');
+            if (!name || saveLocations.length === 0) {
+                showToast('Game name and at least one save file location are required.', 'error');
                 return;
             }
             
@@ -483,7 +627,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     },
                     body: JSON.stringify({
                         name: name,
-                        save_file_location: saveFileLocation,
+                        save_file_locations: saveLocations,
                         banner: banner || ''
                     })
                 });
@@ -567,4 +711,6 @@ document.addEventListener('DOMContentLoaded', function () {
     window.toggleSearch = toggleSearch;
     window.triggerSearch = triggerSearch;
     window.triggerModalSearch = triggerModalSearch;
+    window.addSaveLocation = addSaveLocation;
+    window.removeSaveLocation = removeSaveLocation;
 });

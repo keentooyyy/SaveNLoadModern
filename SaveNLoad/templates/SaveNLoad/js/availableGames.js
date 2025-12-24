@@ -24,6 +24,52 @@ document.addEventListener('DOMContentLoaded', function () {
     let isLoading = false;
     
     /**
+     * Update browser URL with current filter state (without reloading)
+     * This allows the filter state to be preserved when the page reloads
+     */
+    function updateURLWithFilterState(searchQuery, sortBy) {
+        const url = new URL(window.location);
+        // Update or remove search query parameter
+        if (searchQuery && searchQuery.trim()) {
+            url.searchParams.set('q', searchQuery.trim());
+        } else {
+            url.searchParams.delete('q');
+        }
+        // Update or remove sort parameter (only if not default)
+        if (sortBy && sortBy !== 'name_asc') {
+            url.searchParams.set('sort', sortBy);
+        } else {
+            url.searchParams.delete('sort');
+        }
+        // Update URL without reloading page
+        window.history.replaceState({}, '', url);
+    }
+    
+    /**
+     * Restore filter state from URL parameters on page load
+     */
+    function restoreFilterStateFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const searchQuery = urlParams.get('q') || '';
+        const sortBy = urlParams.get('sort') || 'name_asc';
+        
+        // Restore search input
+        if (searchInput && searchQuery) {
+            searchInput.value = searchQuery;
+        }
+        
+        // Restore sort select
+        if (sortSelect && sortBy) {
+            sortSelect.value = sortBy;
+        }
+        
+        // If there's a filter state in URL, trigger search to apply it
+        if (searchQuery || (sortBy && sortBy !== 'name_asc')) {
+            performSearch();
+        }
+    }
+    
+    /**
      * Perform AJAX search and sort
      */
     function performSearch() {
@@ -32,7 +78,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const searchQuery = searchInput ? searchInput.value.trim() : '';
         const sortBy = sortSelect ? sortSelect.value : 'name_asc';
         
-        // Build URL with query parameters
+        // Update URL with current filter state (doesn't reload page)
+        updateURLWithFilterState(searchQuery, sortBy);
+        
+        // Build URL with query parameters for AJAX request
         const url = new URL(searchUrl, window.location.origin);
         if (searchQuery) {
             url.searchParams.set('q', searchQuery);
@@ -353,6 +402,9 @@ document.addEventListener('DOMContentLoaded', function () {
             availableGamesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
+    
+    // Restore filter state from URL on page load
+    restoreFilterStateFromURL();
     
     // Event listeners
     if (searchInput) {
