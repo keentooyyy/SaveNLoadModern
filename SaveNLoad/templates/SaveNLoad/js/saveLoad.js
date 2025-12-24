@@ -297,8 +297,53 @@ document.addEventListener('DOMContentLoaded', function () {
             btn.appendChild(document.createTextNode(' Saving...'));
 
             try {
+                // First, fetch game details to get save_file_locations
+                let gameSavePaths = [];
+                if (window.GAME_DETAIL_URL_PATTERN) {
+                    const gameDetailUrl = window.GAME_DETAIL_URL_PATTERN.replace('0', gameId);
+                    try {
+                        const gameResponse = await fetch(gameDetailUrl, {
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        });
+                        if (gameResponse.ok) {
+                            const gameData = await gameResponse.json();
+                            // Get save_file_locations from game data
+                            if (gameData.save_file_locations && Array.isArray(gameData.save_file_locations)) {
+                                gameSavePaths = gameData.save_file_locations.filter(path => path && path.trim());
+                            } else if (gameData.save_file_location) {
+                                // Fallback for old format
+                                gameSavePaths = [gameData.save_file_location.trim()].filter(p => p);
+                            }
+                        }
+                    } catch (err) {
+                        console.warn('Failed to fetch game details, will use empty array:', err);
+                    }
+                }
+                
+                // Fail if no paths found
+                if (gameSavePaths.length === 0) {
+                    showToast('Error: No save file locations configured for this game', 'error');
+                    // Restore button
+                    btn.disabled = false;
+                    while (btn.firstChild) {
+                        btn.removeChild(btn.firstChild);
+                    }
+                    if (originalIcon) {
+                        const iconClone = originalIcon.cloneNode(true);
+                        btn.appendChild(iconClone);
+                    }
+                    btn.appendChild(document.createTextNode(' Save'));
+                    return;
+                }
+                
                 const urlPattern = window.SAVE_GAME_URL_PATTERN;
                 const url = urlPattern.replace('/0/', `/${gameId}/`);
+                
+                // Explicitly send local_save_paths with game's save_file_locations
+                const payload = {
+                    local_save_paths: gameSavePaths  // Explicitly pass game's save paths
+                };
+                
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: {
@@ -306,7 +351,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         'X-Requested-With': 'XMLHttpRequest',
                         'X-CSRFToken': csrfToken
                     },
-                    body: JSON.stringify({}) // Empty body - uses game's save_file_location
+                    body: JSON.stringify(payload)
                 });
 
                 // Handle 404 - game was deleted

@@ -67,6 +67,13 @@ def save_game(request, game_id):
     # First check if explicit paths are provided in request
     if 'local_save_paths' in data:
         # Handle multiple save locations from request
+        save_paths = data.get('local_save_paths', [])
+        
+        # If empty array provided, fail immediately - no fallback
+        if isinstance(save_paths, list) and len(save_paths) == 0:
+            return json_response_error('local_save_paths cannot be empty. Please provide at least one save file path.', status=400)
+        
+        # Validate provided paths
         save_paths, error_response = get_all_save_paths_or_error(data, game, 'local_save_paths')
         if error_response:
             return error_response

@@ -210,17 +210,20 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        // Get all save locations using manager
-        const saveFileLocationValue = manageSaveLocationManager.getLocationsAsString();
-        if (!saveFileLocationValue.trim()) {
+        // Get all save locations as array (not string with \n)
+        const saveLocations = manageSaveLocationManager.getAllLocations();
+        const filteredLocations = saveLocations.filter(loc => loc && loc.trim());
+        
+        if (filteredLocations.length === 0) {
             showToast('At least one save file location is required', 'error');
             return;
         }
 
+        // Build payload with array of locations
         const payload = {
             name: nameInput.value.trim(),
             banner: bannerInput.value.trim(),
-            save_file_location: saveFileLocationValue
+            save_file_locations: filteredLocations  // Send as array, not string
         };
 
         try {

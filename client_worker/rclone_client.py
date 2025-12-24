@@ -220,6 +220,25 @@ class RcloneClient:
         """
         return path.replace('\\', '/').strip('/')
     
+    def _build_remote_path(self, path: str) -> str:
+        """
+        Build full rclone remote path by prepending remote name
+        
+        Args:
+            path: Path string (can be empty for root)
+            
+        Returns:
+            Full remote path in format 'remote_name:path'
+        """
+        # Normalize the path
+        normalized = self._normalize_path(path) if path else ''
+        
+        # Build full remote path: remote_name:path
+        if normalized:
+            return f"{self.remote_name}:{normalized}"
+        else:
+            return f"{self.remote_name}:"
+    
     def _build_remote_path_with_index(self, username: Optional[str] = None, 
                                       game_name: Optional[str] = None, 
                                       folder_number: Optional[int] = None,
