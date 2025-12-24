@@ -3,6 +3,7 @@ Utility functions for image downloading and caching
 Handles downloading images from URLs and caching them locally for offline use
 """
 import os
+import re
 import requests
 from urllib.parse import urlparse
 from django.core.files import File
@@ -10,7 +11,64 @@ from django.core.files.temp import NamedTemporaryFile
 from django.conf import settings
 
 
-def download_image_from_url(image_url, save_path=None, timeout=10):
+def is_local_url(image_url, request=None):
+    """
+    Check if image URL is from the same server (localhost, 127.0.0.1, or server IP).
+    Skips download for local URLs.
+    
+    Args:
+        image_url: URL to check
+        request: Optional Django request object to get server host
+        
+    Returns:
+        bool: True if URL is from same server, False otherwise
+    """
+    if not image_url:
+        return False
+    
+    try:
+        parsed = urlparse(image_url)
+        url_host = parsed.netloc.split(':')[0]  # Remove port if present
+        
+        # Check common localhost patterns
+        localhost_patterns = [
+            'localhost',
+            '127.0.0.1',
+            '0.0.0.0',
+            '::1',  # IPv6 localhost
+        ]
+        
+        # Check if URL host is localhost
+        if url_host.lower() in localhost_patterns:
+            return True
+        
+        # Check if URL matches server host (if request provided)
+        if request:
+            server_host = request.get_host().split(':')[0]  # Remove port
+            if url_host == server_host:
+                return True
+            
+            # Also check against HTTP_HOST header
+            http_host = request.META.get('HTTP_HOST', '').split(':')[0]
+            if url_host == http_host:
+                return True
+        
+        # Check if URL is a local IP (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+        # and matches server IP if available
+        local_ip_pattern = re.compile(r'^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)')
+        if local_ip_pattern.match(url_host):
+            if request:
+                # Try to get server IP from request
+                server_host = request.get_host().split(':')[0]
+                if url_host == server_host:
+                    return True
+        
+        return False
+    except Exception:
+        return False
+
+
+def download_image_from_url(image_url, save_path=None, timeout=3):
     """
     Downloads an image from a URL and saves it locally.
     

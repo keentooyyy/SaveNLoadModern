@@ -109,19 +109,30 @@ def create_game(request):
         
         # Try to download and cache banner image (non-blocking - if fails, URL is stored)
         if banner:
-            success, message, file_obj = download_image_from_url(banner)
-            if success and file_obj:
+            # Skip download if banner URL is from same server (localhost/local IP)
+            from SaveNLoad.utils.image_utils import is_local_url
+            if is_local_url(banner, request):
+                # Local URL - skip download, just store the URL
+                print(f"Banner URL is local ({banner}) - skipping download")
+            else:
+                # Try to download and cache (non-blocking - fast timeout for production)
                 try:
-                    # Determine file extension
-                    parsed = urlparse(banner)
-                    ext = os.path.splitext(parsed.path)[1] or '.jpg'
-                    game.banner.save(f"banner_{game.id}{ext}", File(file_obj), save=True)
-                    # Clean up temp file
-                    if hasattr(file_obj, 'name'):
-                        os.unlink(file_obj.name)
+                    success, message, file_obj = download_image_from_url(banner, timeout=3)
+                    if success and file_obj:
+                        try:
+                            # Determine file extension
+                            parsed = urlparse(banner)
+                            ext = os.path.splitext(parsed.path)[1] or '.jpg'
+                            game.banner.save(f"banner_{game.id}{ext}", File(file_obj), save=True)
+                            # Clean up temp file
+                            if hasattr(file_obj, 'name'):
+                                os.unlink(file_obj.name)
+                        except Exception as e:
+                            print(f"WARNING: Failed to save cached banner for game {game.id}: {e}")
+                            # Continue - banner_url is already stored as fallback
                 except Exception as e:
-                    print(f"WARNING: Failed to save cached banner for game {game.id}: {e}")
-                    # Continue - banner_url is already stored as fallback
+                    print(f"WARNING: Banner download skipped for game {game.id}: {e}")
+                    # Don't block the save operation - banner will load from URL
         
         return json_response_success(
             message=f'Game "{game.name}" created successfully!',
@@ -371,30 +382,40 @@ def game_detail(request, game_id):
     
     # Handle banner update
     if banner:
-        game.banner_url = banner  # Store original URL
-        # Try to download and cache
-        success, message, file_obj = download_image_from_url(banner)
-        if success and file_obj:
+        game.banner_url = banner  # Store original URL immediately
+        
+        # Skip download if banner URL is from same server (localhost/local IP)
+        from SaveNLoad.utils.image_utils import is_local_url
+        if is_local_url(banner, request):
+            # Local URL - skip download, just store the URL
+            print(f"Banner URL is local ({banner}) - skipping download")
+        else:
+            # Try to download and cache (non-blocking - fast timeout for production)
             try:
-                # Delete old banner if exists
-                if game.banner:
+                success, message, file_obj = download_image_from_url(banner, timeout=3)
+                if success and file_obj:
                     try:
-                        old_path = game.banner.path
-                        if os.path.exists(old_path):
-                            os.remove(old_path)
+                        # Delete old banner if exists
+                        if game.banner:
+                            try:
+                                old_path = game.banner.path
+                                if os.path.exists(old_path):
+                                    os.remove(old_path)
+                            except Exception as e:
+                                print(f"WARNING: Failed to delete old banner: {e}")
+                        
+                        # Determine file extension
+                        parsed = urlparse(banner)
+                        ext = os.path.splitext(parsed.path)[1] or '.jpg'
+                        game.banner.save(f"banner_{game.id}{ext}", File(file_obj), save=False)
+                        # Clean up temp file
+                        if hasattr(file_obj, 'name'):
+                            os.unlink(file_obj.name)
                     except Exception as e:
-                        print(f"WARNING: Failed to delete old banner: {e}")
-                
-                # Determine file extension
-                parsed = urlparse(banner)
-                ext = os.path.splitext(parsed.path)[1] or '.jpg'
-                game.banner.save(f"banner_{game.id}{ext}", File(file_obj), save=False)
-                # Clean up temp file
-                if hasattr(file_obj, 'name'):
-                    os.unlink(file_obj.name)
+                        print(f"WARNING: Failed to cache banner for game {game.id}: {e}")
             except Exception as e:
-                print(f"WARNING: Failed to cache banner for game {game.id}: {e}")
-                # Continue - banner_url is stored as fallback
+                print(f"WARNING: Banner download skipped for game {game.id}: {e}")
+                # Don't block the save operation - banner will load from URL
     else:
         # If banner is cleared, also clear cached file
         if game.banner:
