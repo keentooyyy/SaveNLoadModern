@@ -165,7 +165,7 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 WHITENOISE_AUTOREFRESH = True  # Auto-refresh for development/LAN
 
 # Media files (user uploads)
-MEDIA_URL = 'media/'
+MEDIA_URL = '/media/'  # Add leading slash to match URL patterns
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # Email Configuration (Gmail SMTP)
