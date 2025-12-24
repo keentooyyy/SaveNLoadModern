@@ -43,6 +43,7 @@
         window.OPEN_SAVE_LOCATION_URL_PATTERN = '{% url "admin:open_save_location" 0 %}';
     </script>
     <script>
+        {% include 'SaveNLoad/js/gameFormUtils.js' %}
         {% include 'SaveNLoad/js/workerCheck.js' %}
         {% include 'SaveNLoad/js/manageGames.js' %}
         {% include 'SaveNLoad/js/saveLoad.js' %}

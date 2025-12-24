@@ -321,7 +321,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Initialize save location manager for modal
+    // Initialize save location manager
     const saveLocationManager = new SaveLocationManager('save_locations_container');
     
     // Wrapper functions for backward compatibility with inline handlers
@@ -661,7 +661,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             
             const name = document.getElementById('name')?.value.trim();
-            const saveLocations = getAllSaveLocations();
+            const saveLocations = saveLocationManager.getAllLocations();
             const banner = document.getElementById('banner')?.value.trim();
             
             if (!name || saveLocations.length === 0) {
