@@ -637,8 +637,33 @@ document.addEventListener('DOMContentLoaded', function () {
 
             try {
                 // First, fetch game details to get save_file_locations
+                // Use user-accessible endpoint first (works for both users and admins)
                 let gameSavePaths = [];
-                if (window.GAME_DETAIL_URL_PATTERN) {
+                
+                // Try user-accessible endpoint first (GET_SAVE_LOCATION_URL_PATTERN)
+                if (window.GET_SAVE_LOCATION_URL_PATTERN) {
+                    const gameSaveLocationUrl = window.GET_SAVE_LOCATION_URL_PATTERN.replace('0', gameId);
+                    try {
+                        const gameResponse = await fetch(gameSaveLocationUrl, {
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        });
+                        if (gameResponse.ok) {
+                            const gameData = await gameResponse.json();
+                            // get_game_save_location returns data in { data: { save_file_locations: [...] } } format
+                            if (gameData.data && gameData.data.save_file_locations && Array.isArray(gameData.data.save_file_locations)) {
+                                gameSavePaths = gameData.data.save_file_locations.filter(path => path && path.trim());
+                            } else if (gameData.data && gameData.data.save_file_location) {
+                                // Fallback for old format
+                                gameSavePaths = [gameData.data.save_file_location.trim()].filter(p => p);
+                            }
+                        }
+                    } catch (err) {
+                        console.warn('Failed to fetch game save location, trying fallback:', err);
+                    }
+                }
+                
+                // Fallback to admin endpoint if user endpoint didn't work or wasn't available
+                if (gameSavePaths.length === 0 && window.GAME_DETAIL_URL_PATTERN) {
                     const gameDetailUrl = window.GAME_DETAIL_URL_PATTERN.replace('0', gameId);
                     try {
                         const gameResponse = await fetch(gameDetailUrl, {
@@ -646,7 +671,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         });
                         if (gameResponse.ok) {
                             const gameData = await gameResponse.json();
-                            // Get save_file_locations from game data
+                            // game_detail returns data in { save_file_locations: [...] } format
                             if (gameData.save_file_locations && Array.isArray(gameData.save_file_locations)) {
                                 gameSavePaths = gameData.save_file_locations.filter(path => path && path.trim());
                             } else if (gameData.save_file_location) {
