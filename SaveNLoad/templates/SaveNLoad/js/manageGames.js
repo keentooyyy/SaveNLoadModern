@@ -30,8 +30,12 @@ window.openGameEditModal = function(gameId, hideSavesTab = false) {
     if (formRef) {
         formRef.reset();
     }
-    if (bannerPreviewRef) {
-        clearElement(bannerPreviewRef);
+    // Clear save locations using manager
+    manageSaveLocationManager.populateLocations('');
+    // Clear banner preview
+    const bannerPreviewEl = document.getElementById('manage_banner_preview');
+    if (bannerPreviewEl) {
+        clearElement(bannerPreviewEl);
     }
     
     // Update modal title
@@ -89,10 +93,249 @@ window.openGameEditModal = function(gameId, hideSavesTab = false) {
     }
 };
 
+/**
+ * Shared utility functions for game form handling
+ * Used by both settings.js and manageGames.js
+ */
+
+/**
+ * Clear all children from an element
+ */
 function clearElement(element) {
     if (!element) return;
     while (element.firstChild) {
         element.removeChild(element.firstChild);
+    }
+}
+
+/**
+ * Validate if a URL is safe for image loading
+ */
+function isValidImageUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    
+    // Remove whitespace
+    url = url.trim();
+    if (!url) return false;
+    
+    // Block dangerous schemes
+    const lowerUrl = url.toLowerCase();
+    if (lowerUrl.startsWith('javascript:') || 
+        lowerUrl.startsWith('data:') || 
+        lowerUrl.startsWith('vbscript:') ||
+        lowerUrl.startsWith('file:')) {
+        return false;
+    }
+    
+    // Only allow http/https URLs
+    try {
+        const urlObj = new URL(url);
+        if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+            return false;
+        }
+    } catch (e) {
+        // Invalid URL format
+        return false;
+    }
+    
+    return true;
+}
+
+/**
+ * Update banner preview image
+ * @param {string|HTMLElement} bannerPreviewElementOrId - The preview container element or its ID
+ * @param {string} bannerUrl - The banner URL to display
+ */
+function updateBannerPreview(bannerPreviewElementOrId, bannerUrl) {
+    // Support both element ID (string) and element object
+    let bannerPreviewElement;
+    if (typeof bannerPreviewElementOrId === 'string') {
+        bannerPreviewElement = document.getElementById(bannerPreviewElementOrId);
+    } else {
+        bannerPreviewElement = bannerPreviewElementOrId;
+    }
+    
+    if (!bannerPreviewElement) {
+        console.warn('Banner preview element not found');
+        return;
+    }
+    
+    clearElement(bannerPreviewElement);
+    if (!bannerUrl) return;
+
+    // Validate URL before using it
+    if (!isValidImageUrl(bannerUrl)) {
+        const p = document.createElement('p');
+        p.className = 'text-white-50 small';
+        p.appendChild(document.createTextNode('Invalid or unsafe URL'));
+        bannerPreviewElement.appendChild(p);
+        return;
+    }
+
+    const img = document.createElement('img');
+    img.src = bannerUrl;
+    img.alt = 'Banner preview';
+    img.className = 'img-thumbnail w-100 h-100';
+    img.style.objectFit = 'contain';
+    // Security attributes
+    img.loading = 'lazy';
+    img.referrerPolicy = 'no-referrer';
+
+    img.onerror = function () {
+        clearElement(bannerPreviewElement);
+        const p = document.createElement('p');
+        p.className = 'text-white-50 small';
+        p.appendChild(document.createTextNode('Failed to load image'));
+        bannerPreviewElement.appendChild(p);
+    };
+
+    bannerPreviewElement.appendChild(img);
+}
+
+/**
+ * Save Location Manager - handles multiple save location inputs
+ * @param {string} containerId - ID of the container element
+ */
+class SaveLocationManager {
+    constructor(containerId) {
+        this.containerId = containerId;
+        this.container = document.getElementById(containerId);
+    }
+
+    /**
+     * Create a default save location row
+     */
+    createRow() {
+        const row = document.createElement('div');
+        row.className = 'input-group mb-2 save-location-row';
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white save-location-input';
+        input.placeholder = 'Enter save file location';
+        input.required = true;
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn btn-outline-danger text-white remove-location-btn';
+        removeBtn.onclick = () => this.removeLocation(removeBtn);
+        removeBtn.style.display = 'none';
+        
+        const removeIcon = document.createElement('i');
+        removeIcon.className = 'fas fa-times';
+        removeBtn.appendChild(removeIcon);
+        
+        row.appendChild(input);
+        row.appendChild(removeBtn);
+        
+        return row;
+    }
+
+    /**
+     * Add a new save location input field
+     */
+    addLocation() {
+        if (!this.container) {
+            // Refresh container reference
+            this.container = document.getElementById(this.containerId);
+        }
+        if (!this.container) return;
+        
+        const newRow = this.createRow();
+        this.container.appendChild(newRow);
+        this.updateRemoveButtons();
+    }
+
+    /**
+     * Remove a save location input field
+     */
+    removeLocation(btn) {
+        const row = btn.closest('.save-location-row');
+        if (row && this.container) {
+            row.remove();
+            this.updateRemoveButtons();
+        }
+    }
+
+    /**
+     * Update visibility of remove buttons (hide if only one location)
+     */
+    updateRemoveButtons() {
+        if (!this.container) {
+            this.container = document.getElementById(this.containerId);
+        }
+        if (!this.container) return;
+        
+        const rows = this.container.querySelectorAll('.save-location-row');
+        const removeButtons = this.container.querySelectorAll('.remove-location-btn');
+        
+        // Show remove buttons only if there are 2+ locations
+        removeButtons.forEach(btn => {
+            btn.style.display = rows.length > 1 ? 'block' : 'none';
+        });
+    }
+
+    /**
+     * Get all save locations from the form
+     */
+    getAllLocations() {
+        if (!this.container) {
+            this.container = document.getElementById(this.containerId);
+        }
+        if (!this.container) return [];
+        
+        const inputs = this.container.querySelectorAll('.save-location-input');
+        const locations = [];
+        inputs.forEach(input => {
+            const value = input.value.trim();
+            if (value) {
+                locations.push(value);
+            }
+        });
+        return locations;
+    }
+
+    /**
+     * Populate save locations in the form
+     * @param {string} saveFileLocation - Newline-separated locations
+     */
+    populateLocations(saveFileLocation) {
+        if (!this.container) {
+            this.container = document.getElementById(this.containerId);
+        }
+        if (!this.container) return;
+        
+        // Clear existing rows
+        while (this.container.firstChild) {
+            this.container.removeChild(this.container.firstChild);
+        }
+        
+        // Split by newline if multiple locations, otherwise use single location
+        const locations = saveFileLocation ? saveFileLocation.split('\n').filter(loc => loc.trim()) : [];
+        if (locations.length === 0) {
+            // No locations, add one empty row
+            const defaultRow = this.createRow();
+            this.container.appendChild(defaultRow);
+        } else {
+            // Add rows for each location
+            locations.forEach((location) => {
+                const row = this.createRow();
+                const input = row.querySelector('.save-location-input');
+                if (input) {
+                    input.value = location.trim();
+                }
+                this.container.appendChild(row);
+            });
+        }
+        this.updateRemoveButtons();
+    }
+
+    /**
+     * Get save locations as newline-separated string
+     */
+    getLocationsAsString() {
+        const locations = this.getAllLocations();
+        return locations.join('\n');
     }
 }
 
@@ -125,69 +368,19 @@ document.addEventListener('DOMContentLoaded', function () {
     currentDetailUrlRef = null;
     currentDeleteUrlRef = null;
 
-    function isValidImageUrl(url) {
-        if (!url || typeof url !== 'string') return false;
-        
-        // Remove whitespace
-        url = url.trim();
-        if (!url) return false;
-        
-        // Block dangerous schemes
-        const lowerUrl = url.toLowerCase();
-        if (lowerUrl.startsWith('javascript:') || 
-            lowerUrl.startsWith('data:') || 
-            lowerUrl.startsWith('vbscript:') ||
-            lowerUrl.startsWith('file:')) {
-            return false;
-        }
-        
-        // Only allow http/https URLs
-        try {
-            const urlObj = new URL(url);
-            if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
-                return false;
-            }
-        } catch (e) {
-            // Invalid URL format
-            return false;
-        }
-        
-        return true;
-    }
-
-    function updateBannerPreview(bannerUrl) {
-        clearElement(bannerPreview);
-        if (!bannerUrl) return;
-
-        // Validate URL before using it
-        if (!isValidImageUrl(bannerUrl)) {
-            const p = document.createElement('p');
-            p.className = 'text-muted small';
-            p.appendChild(document.createTextNode('Invalid or unsafe URL'));
-            bannerPreview.appendChild(p);
-            return;
-        }
-
-        const img = document.createElement('img');
-        img.src = bannerUrl;
-        img.alt = 'Banner preview';
-        img.className = 'img-thumbnail w-100 h-100';
-        img.style.objectFit = 'contain';
-        // Security attributes
-        img.loading = 'lazy';
-        img.referrerPolicy = 'no-referrer';
-
-        img.onerror = function () {
-            clearElement(bannerPreview);
-            const p = document.createElement('p');
-            p.className = 'text-muted small';
-            p.appendChild(document.createTextNode('Failed to load image'));
-            bannerPreview.appendChild(p);
-        };
-
-        bannerPreview.appendChild(img);
-    }
-
+    // Initialize save location manager for modal
+    const manageSaveLocationManager = new SaveLocationManager('manage_save_locations_container');
+    
+    // Wrapper functions for inline handlers in template
+    window.addManageSaveLocation = function() {
+        manageSaveLocationManager.addLocation();
+    };
+    
+    window.removeManageSaveLocation = function(btn) {
+        manageSaveLocationManager.removeLocation(btn);
+    };
+    
+    // Update loadGame function
     const loadGame = async function(detailUrl, hideSavesTab = false) {
         try {
             const response = await fetch(detailUrl, {
@@ -224,8 +417,10 @@ document.addEventListener('DOMContentLoaded', function () {
             idInput.value = data.id || '';
             nameInput.value = data.name || '';
             bannerInput.value = data.banner || '';
-            saveFileLocationInput.value = data.save_file_location || '';
-            updateBannerPreview(data.banner || '');
+            // Use manager to populate save locations
+            manageSaveLocationManager.populateLocations(data.save_file_location || '');
+            // Use shared updateBannerPreview function
+            updateBannerPreview('manage_banner_preview', data.banner || '');
             
             // Hide/show saves tab based on flag
             const savesTabContainer = document.getElementById('saves-tab-container');
@@ -253,10 +448,17 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        // Get all save locations using manager
+        const saveFileLocationValue = manageSaveLocationManager.getLocationsAsString();
+        if (!saveFileLocationValue.trim()) {
+            showToast('At least one save file location is required', 'error');
+            return;
+        }
+
         const payload = {
             name: nameInput.value.trim(),
             banner: bannerInput.value.trim(),
-            save_file_location: saveFileLocationInput.value.trim()
+            save_file_location: saveFileLocationValue
         };
 
         try {
@@ -995,7 +1197,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         modalBackdrop.remove();
                         if (onError) onError();
                     };
-                    modalFooter.appendChild(closeBtn);
                     modalContent.appendChild(modalFooter);
                 }
             }
@@ -1187,12 +1388,16 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        // Reset form state (only if form exists - users don't have edit form)
+        // Reset form state
         if (form) {
             form.reset();
         }
-        if (bannerPreview) {
-            clearElement(bannerPreview);
+        // Clear save locations
+        manageSaveLocationManager.populateLocations('');
+        // Clear banner preview
+        const bannerPreviewEl = document.getElementById('manage_banner_preview');
+        if (bannerPreviewEl) {
+            clearElement(bannerPreviewEl);
         }
 
         // Get game title from card for modal title
@@ -1264,7 +1469,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (bannerInput) {
         bannerInput.addEventListener('input', function () {
-            updateBannerPreview(bannerInput.value.trim());
+            updateBannerPreview('manage_banner_preview', bannerInput.value.trim());
         });
     }
 
