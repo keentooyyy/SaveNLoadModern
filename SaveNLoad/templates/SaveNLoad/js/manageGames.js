@@ -1031,7 +1031,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     modalData,
                     () => {
                         showToast('Save folder deleted successfully!', 'success');
-                        loadSaveFolders(gameId);
+                        // Reload page after a short delay
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
                     },
                     () => {
                         showToast('Failed to delete save folder', 'error');
@@ -1039,7 +1042,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 );
             } else if (data.success) {
                 showToast(data.message || 'Save folder deleted successfully!', 'success');
-                loadSaveFolders(gameId);
+                // Reload page after a short delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
             } else {
                 showToast(data.error || 'Failed to delete save folder', 'error');
             }
@@ -1829,7 +1835,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // Helper function to check if all delete operations are complete
     async function checkAllOperationsComplete(operationIds, gameId) {
         if (!operationIds || operationIds.length === 0) {
-            loadSaveFolders(gameId);
+            // Reload page to refresh everything
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
             return;
         }
         
@@ -1861,11 +1870,11 @@ document.addEventListener('DOMContentLoaded', function () {
             result.status === 'completed' || result.status === 'failed'
         );
         
-        // If all are complete, refresh the UI
+        // If all are complete, reload the page
         if (allComplete) {
             // Small delay to ensure backend has processed all deletions
             setTimeout(() => {
-                loadSaveFolders(gameId);
+                window.location.reload();
             }, 500);
         } else {
             // Not all complete yet, check again in a bit

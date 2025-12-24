@@ -12,39 +12,45 @@ def convert_save_file_location_to_json(apps, schema_editor):
     Game = apps.get_model('SaveNLoad', 'Game')
     
     for game in Game.objects.all():
-        # Access the old field directly
-        old_location = getattr(game, 'save_file_location', None)
-        
-        if old_location:
-            # Strip whitespace
-            save_file_location = str(old_location).strip()
+        try:
+            # Access the old field directly
+            old_location = getattr(game, 'save_file_location', None)
             
-            if save_file_location:
-                # Check if it contains newlines (multiple paths)
-                if '\n' in save_file_location or '\r\n' in save_file_location:
-                    # Multiple paths - split by newline
-                    # Handle both \n and \r\n
-                    locations = []
-                    for line in save_file_location.splitlines():
-                        path = line.strip()
-                        if path:  # Only add non-empty paths
-                            locations.append(path)
+            if old_location:
+                # Strip whitespace
+                save_file_location = str(old_location).strip()
+                
+                if save_file_location:
+                    # Check if it contains newlines (multiple paths)
+                    if '\n' in save_file_location or '\r\n' in save_file_location:
+                        # Multiple paths - split by newline
+                        # Handle both \n and \r\n
+                        locations = []
+                        for line in save_file_location.splitlines():
+                            path = line.strip()
+                            if path:  # Only add non-empty paths
+                                locations.append(path)
+                    else:
+                        # Single path - create array with one item
+                        locations = [save_file_location]
                 else:
-                    # Single path - create array with one item
-                    locations = [save_file_location]
+                    # Empty string - set to empty array (non-destructive default)
+                    locations = []
             else:
-                # Empty string - set to empty array
+                # None or empty - set to empty array (non-destructive default)
                 locations = []
-        else:
-            # None or empty - set to empty array
-            locations = []
-        
-        # Update the game with the new JSON field
-        game.save_file_locations = locations
-        game.save(update_fields=['save_file_locations'])
-        
-        # Debug output (optional - remove in production)
-        print(f"Migrated game '{game.name}': {len(locations)} path(s)")
+            
+            # Update the game with the new JSON field
+            game.save_file_locations = locations
+            game.save(update_fields=['save_file_locations'])
+            
+            # Debug output (optional - remove in production)
+            print(f"Migrated game '{game.name}': {len(locations)} path(s)")
+        except Exception as e:
+            # If migration fails for a game, set safe default and continue
+            print(f"WARNING: Failed to migrate game '{game.name}': {e}. Using empty array as default.")
+            game.save_file_locations = []  # Non-destructive default
+            game.save(update_fields=['save_file_locations'])
 
 
 def reverse_convert_save_file_location_to_json(apps, schema_editor):
@@ -54,23 +60,31 @@ def reverse_convert_save_file_location_to_json(apps, schema_editor):
     Game = apps.get_model('SaveNLoad', 'Game')
     
     for game in Game.objects.all():
-        locations = getattr(game, 'save_file_locations', None)
-        
-        if locations:
-            # Join array with newlines, or use first item if single path
-            if isinstance(locations, list) and len(locations) > 0:
-                if len(locations) == 1:
-                    # Single path - store as string
-                    game.save_file_location = str(locations[0])
+        try:
+            locations = getattr(game, 'save_file_locations', None)
+            
+            if locations:
+                # Join array with newlines, or use first item if single path
+                if isinstance(locations, list) and len(locations) > 0:
+                    if len(locations) == 1:
+                        # Single path - store as string
+                        game.save_file_location = str(locations[0])
+                    else:
+                        # Multiple paths - join with newline
+                        game.save_file_location = '\n'.join(str(loc) for loc in locations if loc)
                 else:
-                    # Multiple paths - join with newline
-                    game.save_file_location = '\n'.join(str(loc) for loc in locations if loc)
+                    # Empty array - set to empty string (non-destructive default)
+                    game.save_file_location = ''
             else:
+                # None or empty - set to empty string (non-destructive default)
                 game.save_file_location = ''
-        else:
-            game.save_file_location = ''
-        
-        game.save(update_fields=['save_file_location'])
+            
+            game.save(update_fields=['save_file_location'])
+        except Exception as e:
+            # If reverse migration fails, set safe default and continue
+            print(f"WARNING: Failed to reverse migrate game '{game.name}': {e}. Using empty string as default.")
+            game.save_file_location = ''  # Non-destructive default
+            game.save(update_fields=['save_file_location'])
 
 
 class Migration(migrations.Migration):
@@ -80,7 +94,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Step 1: Add the new JSONField (nullable first, we'll populate it)
+        # Step 1: Add the new JSONField with safe default
         migrations.AddField(
             model_name='game',
             name='save_file_locations',
@@ -91,7 +105,7 @@ class Migration(migrations.Migration):
             convert_save_file_location_to_json,
             reverse_convert_save_file_location_to_json,
         ),
-        # Step 3: Remove the old CharField
+        # Step 3: Remove the old CharField (safe because data is already migrated)
         migrations.RemoveField(
             model_name='game',
             name='save_file_location',

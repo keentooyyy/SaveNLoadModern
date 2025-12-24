@@ -114,17 +114,15 @@ class ClientWorkerServiceRclone:
     
     def _build_remote_path_base(self, username: str, game_name: str, 
                                 save_folder_number: Optional[int] = None,
-                                path_index: Optional[int] = None,
                                 remote_path: Optional[str] = None) -> str:
         """
-        Build base remote path with optional path_index subfolder
+        Build base remote path
         
         Args:
             username: Username for path
             game_name: Game name (will be sanitized)
             save_folder_number: Optional save folder number
-            path_index: Optional path index (1-based) for subfolder
-            remote_path: Optional custom remote path (takes precedence)
+            remote_path: Optional custom remote path (takes precedence - already includes path_index if needed)
             
         Returns:
             Remote path string
@@ -137,9 +135,6 @@ class ClientWorkerServiceRclone:
         
         if save_folder_number is not None:
             path_parts.append(f"save_{save_folder_number}")
-        
-        if path_index is not None:
-            path_parts.append(f"path_{path_index}")
         
         return '/'.join(path_parts)
     
@@ -217,13 +212,8 @@ class ClientWorkerServiceRclone:
     
     def save_game(self, game_id: int, local_save_path: str, 
                  username: str, game_name: str, save_folder_number: int, 
-                 remote_path: Optional[str] = None, operation_id: Optional[int] = None,
-                 path_index: Optional[int] = None) -> Dict[str, Any]:
-        """Save game - rclone handles everything with parallel transfers
-        
-        Args:
-            path_index: Optional path index (1-based) to create path_1, path_2 subfolders
-        """
+                 remote_path: Optional[str] = None, operation_id: Optional[int] = None) -> Dict[str, Any]:
+        """Save game - rclone handles everything with parallel transfers"""
         print(f"Backing up save files...")
         
         if not os.path.exists(local_save_path):
@@ -248,19 +238,19 @@ class ClientWorkerServiceRclone:
                 # Create progress callback using helper
                 progress_callback = self._create_progress_callback(operation_id)
                 
-                # Build remote path using helper
+                # Build remote path using helper (remote_path from backend already includes path_index if needed)
                 remote_path_custom = self._build_remote_path_base(
-                    username, game_name, save_folder_number, path_index, remote_path
+                    username, game_name, save_folder_number, remote_path
                 )
                 
-                # Pass path_index to upload_directory
+                # Use remote_path_custom directly - backend already includes path_index
                 success, message, uploaded_files, failed_files, bytes_transferred, files_transferred = self.rclone_client.upload_directory(
                     local_dir=local_save_path,
                     username=username,
                     game_name=game_name,
                     folder_number=save_folder_number,
                     remote_path_custom=remote_path_custom,
-                    path_index=path_index,  # Pass path_index
+                    path_index=None,  # Not needed - already in remote_path_custom
                     transfers=10,  # Parallel transfers
                     progress_callback=progress_callback
                 )
@@ -297,9 +287,9 @@ class ClientWorkerServiceRclone:
                 # Create progress callback using helper
                 progress_callback = self._create_progress_callback(operation_id)
                 
-                # Build remote path using helper
+                # Build remote path using helper (remote_path from backend already includes path_index if needed)
                 remote_path_custom = self._build_remote_path_base(
-                    username, game_name, save_folder_number, path_index, remote_path
+                    username, game_name, save_folder_number, remote_path
                 )
                 
                 success, message, bytes_transferred = self.rclone_client.upload_save(
@@ -309,6 +299,7 @@ class ClientWorkerServiceRclone:
                     folder_number=save_folder_number,
                     remote_filename=os.path.basename(local_save_path),
                     remote_path_custom=remote_path_custom,
+                    path_index=None,  # Not needed - already in remote_path_custom
                     progress_callback=progress_callback
                 )
                 
@@ -330,19 +321,14 @@ class ClientWorkerServiceRclone:
     
     def load_game(self, game_id: int, local_save_path: str,
                  username: str, game_name: str, save_folder_number: int, 
-                 remote_path: Optional[str] = None, operation_id: Optional[int] = None,
-                 path_index: Optional[int] = None) -> Dict[str, Any]:
-        """Load game - rclone handles everything with parallel transfers
-        
-        Args:
-            path_index: Optional path index (1-based) to create path_1, path_2 subfolders
-        """
+                 remote_path: Optional[str] = None, operation_id: Optional[int] = None) -> Dict[str, Any]:
+        """Load game - rclone handles everything with parallel transfers"""
         print(f"Preparing to download save files...")
         
         try:
-            # Build remote path using helper
+            # Build remote path using helper (remote_path from backend already includes path_index if needed)
             remote_path_base = self._build_remote_path_base(
-                username, game_name, save_folder_number, path_index, remote_path
+                username, game_name, save_folder_number, remote_path
             )
             
             # Ensure local directory exists
@@ -365,7 +351,7 @@ class ClientWorkerServiceRclone:
             # Create progress callback using helper
             progress_callback = self._create_progress_callback(operation_id)
             
-            # Pass path_index to download_directory
+            # Use remote_path_base directly - backend already includes path_index if needed
             success, message, downloaded_files, failed_files = self.rclone_client.download_directory(
                 remote_path_base=remote_path_base,
                 local_dir=local_save_path,
@@ -802,7 +788,7 @@ class ClientWorkerServiceRclone:
         game_name = operation.get('game_name')
         save_folder_number = operation.get('save_folder_number')
         remote_path = operation.get('remote_path')
-        path_index = operation.get('path_index')  # Get path_index from operation
+        # path_index removed - backend already includes it in remote_path
         
         op_type_display = op_type.capitalize()
         print(f"\nProcessing: {op_type_display} operation for {game_name}")
@@ -822,14 +808,12 @@ class ClientWorkerServiceRclone:
             return
         
         if op_type == 'save':
-            result = self.save_game(game_id, local_path, username, game_name, save_folder_number, remote_path, operation_id, path_index)
+            result = self.save_game(game_id, local_path, username, game_name, save_folder_number, remote_path, operation_id)
         elif op_type == 'load':
-            result = self.load_game(game_id, local_path, username, game_name, save_folder_number, remote_path, operation_id, path_index)
+            result = self.load_game(game_id, local_path, username, game_name, save_folder_number, remote_path, operation_id)
         elif op_type == 'list':
             result = self.list_saves(game_id, username, game_name, save_folder_number, remote_path)
         elif op_type == 'delete':
-            # For delete operations, remote_path is required and sufficient
-            # save_folder_number is optional (used for individual save folder deletes)
             result = self.delete_save_folder(game_id, username, game_name, save_folder_number, remote_path, operation_id)
         elif op_type == 'backup':
             result = self.backup_all_saves(game_id, username, game_name, operation_id)

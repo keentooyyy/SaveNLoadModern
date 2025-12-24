@@ -252,19 +252,17 @@ class RcloneClient:
             username: Username for path organization (required if remote_path_custom not provided)
             game_name: Game name for path organization (required if remote_path_custom not provided)
             folder_number: Save folder number (required if remote_path_custom not provided)
-            remote_path_custom: Optional custom remote path (if provided, uses this as base)
-            path_index: Optional path index (1-based) to create path_1, path_2 subfolders
+            remote_path_custom: Optional custom remote path (if provided, uses this as base - already includes path_index if needed)
+            path_index: Optional path index (1-based) - only used if remote_path_custom is NOT provided
             additional_path: Optional additional path to append (e.g., filename)
         
         Returns:
             Normalized remote path string
         """
         if remote_path_custom:
-            # Use custom path as base
+            # Use custom path as base - it already includes path_index from backend
             remote_path = self._normalize_path(remote_path_custom)
-            # Append path_index subfolder if provided
-            if path_index is not None:
-                remote_path = f"{remote_path}/path_{path_index}"
+            # Don't add path_index - it's already in remote_path_custom
         else:
             # Build path from components
             if not all([username, game_name, folder_number is not None]):
