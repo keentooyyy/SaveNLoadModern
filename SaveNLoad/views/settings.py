@@ -114,7 +114,7 @@ def create_game(request):
                 'game': {
                     'id': game.id,
                     'name': game.name,
-                    'banner': get_image_url_or_fallback(game),
+                    'banner': get_image_url_or_fallback(game, request),
                     'save_file_location': game.save_file_location,
                 }
             }
@@ -287,7 +287,7 @@ def game_detail(request, game_id):
         return JsonResponse({
             'id': game.id,
             'name': game.name,
-            'banner': get_image_url_or_fallback(game),
+            'banner': get_image_url_or_fallback(game, request),
             'save_file_location': game.save_file_location,
             'last_played': game.last_played.isoformat() if getattr(game, "last_played", None) else None,
             'pending_deletion': getattr(game, 'pending_deletion', False),
@@ -383,7 +383,7 @@ def game_detail(request, game_id):
             'game': {
                 'id': game.id,
                 'name': game.name,
-                'banner': get_image_url_or_fallback(game),
+                'banner': get_image_url_or_fallback(game, request),
                 'save_file_location': game.save_file_location,
             }
         }

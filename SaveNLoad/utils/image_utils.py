@@ -88,25 +88,31 @@ def download_image_from_url(image_url, save_path=None, timeout=10):
         return False, f"Unexpected error: {str(e)}", None
 
 
-def get_image_url_or_fallback(game):
+def get_image_url_or_fallback(game, request=None):
     """
     Returns the best available image URL for a game.
     Prioritizes local cached file, falls back to original URL.
+    Converts relative URLs to absolute URLs if request is provided.
     
     Args:
         game: Game model instance
+        request: Optional Django request object for building absolute URLs
     
     Returns:
-        str: URL to display (local file URL or original URL)
+        str: URL to display (absolute URL if request provided, otherwise relative or original URL)
     """
     # Check if local cached file exists
     if game.banner and game.banner.name:
         try:
             if os.path.exists(game.banner.path):
-                return game.banner.url
+                url = game.banner.url
+                # Convert relative URL to absolute if request is provided
+                if request and url.startswith('/'):
+                    return request.build_absolute_uri(url)
+                return url
         except (ValueError, AttributeError):
             pass
     
-    # Fallback to original URL
+    # Fallback to original URL (should already be absolute)
     return game.banner_url or ''
 

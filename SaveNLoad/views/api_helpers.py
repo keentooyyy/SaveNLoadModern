@@ -362,7 +362,7 @@ def build_game_data_dict(game, last_played=None, include_id=False, include_foote
     """
     data = {
         'title': game.name,
-        'image': get_image_url_or_fallback(game),
+        'image': get_image_url_or_fallback(game, request),
     }
     
     if include_id:
