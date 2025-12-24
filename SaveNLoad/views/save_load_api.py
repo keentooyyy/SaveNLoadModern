@@ -41,7 +41,9 @@ logger = logging.getLogger(__name__)
 def save_game(request, game_id):
     """
     Save game endpoint - queues operation for client worker
-    Expects: {'local_save_path': 'path/to/save/files', 'client_id': 'optional'}
+    Expects: {'local_save_path': 'path/to/save/files', 'local_save_paths': ['path1', 'path2'] (optional), 'client_id': 'optional'}
+    
+    If local_save_paths is provided, it will save all locations to separate subfolders (path_1, path_2, etc.)
     """
     from SaveNLoad.models.client_worker import ClientWorker
     from SaveNLoad.models.operation_queue import OperationQueue, OperationType
@@ -58,44 +60,78 @@ def save_game(request, game_id):
     if error_response:
         return error_response
     
-    # Get and validate local save path
-    local_save_path, error_response = get_local_save_path_or_error(data, game)
-    if error_response:
-        return error_response
-    
-    # Get client worker for this user (from session - automatic association)
+    # Get client worker for this user
     client_worker, error_response = get_client_worker_or_error(user, request)
     if error_response:
         return error_response
     
-    # Only create save folder after all validations pass
-    # Note: We can't validate local path exists on server (it's on client machine)
-    # Client worker will validate and report back if path doesn't exist
-    from SaveNLoad.models.save_folder import SaveFolder
-    save_folder = SaveFolder.get_or_create_next(user, game)
-    
-    # Validate save folder has required information
-    save_folder, error_response = validate_save_folder_or_error(save_folder)
-    if error_response:
-        return error_response
-    
-    # All validations passed - create operation in queue with save folder number and SMB path
-    operation = OperationQueue.create_operation(
-        operation_type=OperationType.SAVE,
-        user=user,
-        game=game,
-        local_save_path=local_save_path,
-        save_folder_number=save_folder.folder_number,
-        smb_path=save_folder.smb_path,
-        client_worker=client_worker
-    )
-    
-    return create_operation_response(
-        operation,
-        client_worker,
-        message='Save operation queued',
-        extra_data={'save_folder_number': save_folder.folder_number}
-    )
+    # Check if multiple paths are provided
+    if 'local_save_paths' in data:
+        # Handle multiple save locations
+        save_paths, error_response = get_all_save_paths_or_error(data, game, 'local_save_paths')
+        if error_response:
+            return error_response
+        
+        # Create save folder
+        from SaveNLoad.models.save_folder import SaveFolder
+        save_folder = SaveFolder.get_or_create_next(user, game)
+        save_folder, error_response = validate_save_folder_or_error(save_folder)
+        if error_response:
+            return error_response
+        
+        # Create operations for each path with path_index
+        operation_ids = []
+        for index, path in enumerate(save_paths, start=1):
+            operation = OperationQueue.create_operation(
+                operation_type=OperationType.SAVE,
+                user=user,
+                game=game,
+                local_save_path=path,
+                save_folder_number=save_folder.folder_number,
+                smb_path=save_folder.smb_path,
+                client_worker=client_worker,
+                path_index=index  # 1-based index for path_1, path_2, etc.
+            )
+            operation_ids.append(operation.id)
+        
+        return json_response_success(
+            message=f'Save operations queued for {len(save_paths)} location(s)',
+            data={
+                'operation_ids': operation_ids,
+                'save_folder_number': save_folder.folder_number,
+                'client_id': client_worker.client_id,
+                'paths_count': len(save_paths)
+            }
+        )
+    else:
+        # Single path (existing behavior) - no path_index
+        local_save_path, error_response = get_local_save_path_or_error(data, game)
+        if error_response:
+            return error_response
+        
+        from SaveNLoad.models.save_folder import SaveFolder
+        save_folder = SaveFolder.get_or_create_next(user, game)
+        save_folder, error_response = validate_save_folder_or_error(save_folder)
+        if error_response:
+            return error_response
+        
+        operation = OperationQueue.create_operation(
+            operation_type=OperationType.SAVE,
+            user=user,
+            game=game,
+            local_save_path=local_save_path,
+            save_folder_number=save_folder.folder_number,
+            smb_path=save_folder.smb_path,
+            client_worker=client_worker,
+            path_index=None  # No subfolder for single path
+        )
+        
+        return create_operation_response(
+            operation,
+            client_worker,
+            message='Save operation queued',
+            extra_data={'save_folder_number': save_folder.folder_number}
+        )
 
 
 @login_required
@@ -103,7 +139,9 @@ def save_game(request, game_id):
 def load_game(request, game_id):
     """
     Load game endpoint - queues operation for client worker
-    Expects: {'local_save_path': 'path/to/save/files', 'save_folder_number': 1 (optional), 'client_id': 'optional'}
+    Expects: {'local_save_path': 'path/to/save/files', 'local_save_paths': ['path1', 'path2'] (optional), 'save_folder_number': 1 (optional), 'client_id': 'optional'}
+    
+    If local_save_paths is provided, it will load from separate subfolders (path_1, path_2, etc.)
     """
     from SaveNLoad.models.client_worker import ClientWorker
     from SaveNLoad.models.operation_queue import OperationQueue, OperationType
@@ -120,48 +158,78 @@ def load_game(request, game_id):
     if error_response:
         return error_response
     
-    # Get and validate local save path
-    local_save_path, error_response = get_local_save_path_or_error(data, game)
+    # Get client worker for this user
+    client_worker, error_response = get_client_worker_or_error(user, request)
     if error_response:
         return error_response
     
-    save_folder_number = data.get('save_folder_number')  # Optional
+    save_folder_number = data.get('save_folder_number')
     
     # Get the save folder
     if save_folder_number is None:
-        # If no save_folder_number specified, use the latest one
         save_folder, error_response = get_latest_save_folder_or_error(user, game)
         if error_response:
             return error_response
         save_folder_number = save_folder.folder_number
     else:
-        # Get the specific save folder
         save_folder, error_response = get_save_folder_or_error(user, game, save_folder_number)
         if error_response:
             return error_response
     
-    # Get client worker for this user (from session - automatic association)
-    client_worker, error_response = get_client_worker_or_error(user, request)
-    if error_response:
-        return error_response
-    
-    # All validations passed - create operation in queue with SMB path
-    operation = OperationQueue.create_operation(
-        operation_type=OperationType.LOAD,
-        user=user,
-        game=game,
-        local_save_path=local_save_path,
-        save_folder_number=save_folder_number,
-        smb_path=save_folder.smb_path,
-        client_worker=client_worker
-    )
-    
-    return create_operation_response(
-        operation,
-        client_worker,
-        message='Load operation queued',
-        extra_data={'save_folder_number': save_folder_number}
-    )
+    # Check if multiple paths are provided
+    if 'local_save_paths' in data:
+        # Handle multiple save locations
+        load_paths, error_response = get_all_save_paths_or_error(data, game, 'local_save_paths')
+        if error_response:
+            return error_response
+        
+        # Create operations for each path with path_index
+        operation_ids = []
+        for index, path in enumerate(load_paths, start=1):
+            operation = OperationQueue.create_operation(
+                operation_type=OperationType.LOAD,
+                user=user,
+                game=game,
+                local_save_path=path,
+                save_folder_number=save_folder_number,
+                smb_path=save_folder.smb_path,
+                client_worker=client_worker,
+                path_index=index  # 1-based index for path_1, path_2, etc.
+            )
+            operation_ids.append(operation.id)
+        
+        return json_response_success(
+            message=f'Load operations queued for {len(load_paths)} location(s)',
+            data={
+                'operation_ids': operation_ids,
+                'save_folder_number': save_folder_number,
+                'client_id': client_worker.client_id,
+                'paths_count': len(load_paths)
+            }
+        )
+    else:
+        # Single path (existing behavior) - no path_index
+        local_save_path, error_response = get_local_save_path_or_error(data, game)
+        if error_response:
+            return error_response
+        
+        operation = OperationQueue.create_operation(
+            operation_type=OperationType.LOAD,
+            user=user,
+            game=game,
+            local_save_path=local_save_path,
+            save_folder_number=save_folder_number,
+            smb_path=save_folder.smb_path,
+            client_worker=client_worker,
+            path_index=None  # No subfolder for single path
+        )
+        
+        return create_operation_response(
+            operation,
+            client_worker,
+            message='Load operation queued',
+            extra_data={'save_folder_number': save_folder_number}
+        )
 
 
 @login_required

@@ -54,6 +54,7 @@ class OperationQueue(models.Model):
     local_save_path = models.CharField(max_length=500, help_text="Local save file path")
     save_folder_number = models.IntegerField(null=True, blank=True, help_text="Optional save folder number")
     smb_path = models.CharField(max_length=500, null=True, blank=True, help_text="Full SMB path for the save folder (Windows format with backslashes)")
+    path_index = models.IntegerField(null=True, blank=True, help_text="Index for multiple save locations (1-based, creates path_1, path_2 subfolders)")
     result_data = models.JSONField(null=True, blank=True, help_text="Operation result data")
     error_message = models.TextField(null=True, blank=True, help_text="Error message if operation failed")
     progress_current = models.IntegerField(default=0, help_text="Current progress count (e.g., files processed)")
@@ -104,7 +105,8 @@ class OperationQueue(models.Model):
     
     @classmethod
     def create_operation(cls, operation_type: str, user: SimpleUsers, game: Game, 
-                        local_save_path: str, save_folder_number=None, smb_path=None, client_worker=None):
+                        local_save_path: str, save_folder_number=None, smb_path=None, 
+                        client_worker=None, path_index=None):
         """
         Create a new operation in the queue
         
@@ -116,6 +118,7 @@ class OperationQueue(models.Model):
             save_folder_number: Optional save folder number
             smb_path: Remote FTP path
             client_worker: ClientWorker instance (REQUIRED - must be provided to avoid collisions)
+            path_index: Optional path index for multiple locations (1-based)
         
         Raises:
             ValueError: If client_worker is not provided
@@ -130,6 +133,7 @@ class OperationQueue(models.Model):
             local_save_path=local_save_path,
             save_folder_number=save_folder_number,
             smb_path=smb_path,
+            path_index=path_index,
             client_worker=client_worker,
             status=OperationStatus.PENDING
         )

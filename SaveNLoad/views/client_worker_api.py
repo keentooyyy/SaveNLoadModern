@@ -280,6 +280,7 @@ def get_pending_operations(request, client_id):
                 'remote_path': op.smb_path,  # Keep smb_path for backward compatibility, but use remote_path
                 'smb_path': op.smb_path,  # Backward compatibility
                 'username': op.user.username,
+                'path_index': op.path_index,  # Add path_index to response
             })
         
         return JsonResponse({'operations': operations_list})
