@@ -636,76 +636,18 @@ document.addEventListener('DOMContentLoaded', function () {
             btn.appendChild(document.createTextNode(' Saving...'));
 
             try {
-                // First, fetch game details to get save_file_locations
-                // Use user-accessible endpoint first (works for both users and admins)
+                // Get save paths from global object
                 let gameSavePaths = [];
-                
-                // Try user-accessible endpoint first (GET_SAVE_LOCATION_URL_PATTERN)
-                if (window.GET_SAVE_LOCATION_URL_PATTERN) {
-                    const gameSaveLocationUrl = window.GET_SAVE_LOCATION_URL_PATTERN.replace('0', gameId);
-                    try {
-                        const gameResponse = await fetch(gameSaveLocationUrl, {
-                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                        });
-                        if (gameResponse.ok) {
-                            const gameData = await gameResponse.json();
-                            // get_game_save_location returns data in { data: { save_file_locations: [...] } } format
-                            if (gameData.data && gameData.data.save_file_locations && Array.isArray(gameData.data.save_file_locations)) {
-                                gameSavePaths = gameData.data.save_file_locations.filter(path => path && path.trim());
-                            } else if (gameData.data && gameData.data.save_file_location) {
-                                // Fallback for old format
-                                gameSavePaths = [gameData.data.save_file_location.trim()].filter(p => p);
-                            }
-                        }
-                    } catch (err) {
-                        console.warn('Failed to fetch game save location, trying fallback:', err);
-                    }
-                }
-                
-                // Fallback to admin endpoint if user endpoint didn't work or wasn't available
-                if (gameSavePaths.length === 0 && window.GAME_DETAIL_URL_PATTERN) {
-                    const gameDetailUrl = window.GAME_DETAIL_URL_PATTERN.replace('0', gameId);
-                    try {
-                        const gameResponse = await fetch(gameDetailUrl, {
-                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                        });
-                        if (gameResponse.ok) {
-                            const gameData = await gameResponse.json();
-                            // game_detail returns data in { save_file_locations: [...] } format
-                            if (gameData.save_file_locations && Array.isArray(gameData.save_file_locations)) {
-                                gameSavePaths = gameData.save_file_locations.filter(path => path && path.trim());
-                            } else if (gameData.save_file_location) {
-                                // Fallback for old format
-                                gameSavePaths = [gameData.save_file_location.trim()].filter(p => p);
-                            }
-                        }
-                    } catch (err) {
-                        console.warn('Failed to fetch game details, will use empty array:', err);
-                    }
-                }
-                
-                // Fail if no paths found
-                if (gameSavePaths.length === 0) {
-                    showToast('Error: No save file locations configured for this game', 'error');
-                    // Restore button
-                    btn.disabled = false;
-                    while (btn.firstChild) {
-                        btn.removeChild(btn.firstChild);
-                    }
-                    if (originalIcon) {
-                        const iconClone = originalIcon.cloneNode(true);
-                        btn.appendChild(iconClone);
-                    }
-                    btn.appendChild(document.createTextNode(' Save'));
-                    return;
+                if (window.GAME_SAVE_PATHS && window.GAME_SAVE_PATHS[gameId]) {
+                    gameSavePaths = window.GAME_SAVE_PATHS[gameId].filter(path => path && path.trim());
                 }
                 
                 const urlPattern = window.SAVE_GAME_URL_PATTERN;
                 const url = urlPattern.replace('/0/', `/${gameId}/`);
                 
-                // Explicitly send local_save_paths with game's save_file_locations
+                // Always explicitly send local_save_paths in AJAX request
                 const payload = {
-                    local_save_paths: gameSavePaths  // Explicitly pass game's save paths
+                    local_save_paths: gameSavePaths
                 };
                 
                 const response = await fetch(url, {

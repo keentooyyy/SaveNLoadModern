@@ -144,6 +144,16 @@ document.addEventListener('DOMContentLoaded', function () {
             gamesContainer.removeChild(gamesContainer.firstChild);
         }
         
+        // Update global GAME_SAVE_PATHS object
+        if (!window.GAME_SAVE_PATHS) {
+            window.GAME_SAVE_PATHS = {};
+        }
+        games.forEach(game => {
+            if (game.save_file_locations) {
+                window.GAME_SAVE_PATHS[game.id] = game.save_file_locations;
+            }
+        });
+        
         // Render each game
         games.forEach(game => {
             const gameCol = document.createElement('div');

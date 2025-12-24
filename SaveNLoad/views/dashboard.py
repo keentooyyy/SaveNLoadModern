@@ -5,6 +5,7 @@ from django.db.models import Max
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from datetime import timedelta
+import json
 from SaveNLoad.views.custom_decorators import login_required, get_current_user, client_worker_required
 from SaveNLoad.views.api_helpers import check_admin_or_error, json_response_success
 from SaveNLoad.views.rawg_api import get_popular_games
@@ -101,11 +102,14 @@ def admin_dashboard(request):
     
     for game in db_games:
         last_played = game_last_played_all.get(game.id)
+        save_locations = game.save_file_locations if isinstance(game.save_file_locations, list) else []
         available_games.append({
             'id': game.id,
             'title': game.name,
             'image': get_image_url_or_fallback(game),
             'footer': format_last_played(last_played),
+            'save_file_locations': save_locations,
+            'save_file_locations_json': json.dumps(save_locations),  # JSON string for template
         })
     
     # Sort available games case-insensitively by title (fixes default sorting bug)
@@ -175,11 +179,14 @@ def user_dashboard(request):
     
     for game in db_games:
         last_played = game_last_played_all.get(game.id)
+        save_locations = game.save_file_locations if isinstance(game.save_file_locations, list) else []
         available_games.append({
             'id': game.id,
             'title': game.name,
             'image': get_image_url_or_fallback(game),
             'footer': format_last_played(last_played),
+            'save_file_locations': save_locations,
+            'save_file_locations_json': json.dumps(save_locations),  # JSON string for template
         })
     
     # Sort available games case-insensitively by title (fixes default sorting bug)
@@ -236,12 +243,15 @@ def search_available_games(request):
     games_list = []
     for game in db_games:
         last_played = game_last_played_all.get(game.id)
+        save_locations = game.save_file_locations if isinstance(game.save_file_locations, list) else []
         games_list.append({
             'id': game.id,
             'title': game.name,
             'image': get_image_url_or_fallback(game),
             'footer': format_last_played(last_played),
             'last_played_timestamp': last_played.isoformat() if last_played else None,
+            'save_file_locations': save_locations,
+            'save_file_locations_json': json.dumps(save_locations),  # JSON string for template
         })
     
     # Apply sorting
