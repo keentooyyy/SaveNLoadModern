@@ -25,7 +25,5 @@ urlpatterns = [
     path('api/client/', include('SaveNLoad.url_configs.client_worker.urls')),
 ]
 
-# Serve media files in development
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# WhiteNoise handles both static and media files via wsgi.py configuration
 

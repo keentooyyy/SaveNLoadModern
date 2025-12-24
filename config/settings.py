@@ -159,6 +159,11 @@ STATICFILES_DIRS = [
 # WhiteNoise configuration for production static file serving
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+# WhiteNoise configuration (LAN deployment)
+# WhiteNoise middleware serves static files automatically
+# Media files are served via static() helper in urls.py (appropriate for LAN)
+WHITENOISE_AUTOREFRESH = True  # Auto-refresh for development/LAN
+
 # Media files (user uploads)
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'

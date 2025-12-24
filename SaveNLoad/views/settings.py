@@ -12,8 +12,12 @@ from SaveNLoad.views.api_helpers import (
 )
 from SaveNLoad.views.rawg_api import search_games as rawg_search_games
 from SaveNLoad.models import Game
+from SaveNLoad.utils.image_utils import download_image_from_url, get_image_url_or_fallback
+from django.core.files import File
+from urllib.parse import urlparse
 import json
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -81,10 +85,28 @@ def create_game(request):
             'name': name,
             'save_file_location': save_file_location,
         }
+        
+        # Store original URL
         if banner:
-            game_data['banner'] = banner
+            game_data['banner_url'] = banner
         
         game = Game.objects.create(**game_data)
+        
+        # Try to download and cache banner image (non-blocking - if fails, URL is stored)
+        if banner:
+            success, message, file_obj = download_image_from_url(banner)
+            if success and file_obj:
+                try:
+                    # Determine file extension
+                    parsed = urlparse(banner)
+                    ext = os.path.splitext(parsed.path)[1] or '.jpg'
+                    game.banner.save(f"banner_{game.id}{ext}", File(file_obj), save=True)
+                    # Clean up temp file
+                    if hasattr(file_obj, 'name'):
+                        os.unlink(file_obj.name)
+                except Exception as e:
+                    logger.warning(f"Failed to save cached banner for game {game.id}: {e}")
+                    # Continue - banner_url is already stored as fallback
         
         return json_response_success(
             message=f'Game "{game.name}" created successfully!',
@@ -92,7 +114,7 @@ def create_game(request):
                 'game': {
                     'id': game.id,
                     'name': game.name,
-                    'banner': game.banner or '',
+                    'banner': get_image_url_or_fallback(game),
                     'save_file_location': game.save_file_location,
                 }
             }
@@ -265,7 +287,7 @@ def game_detail(request, game_id):
         return JsonResponse({
             'id': game.id,
             'name': game.name,
-            'banner': game.banner or '',
+            'banner': get_image_url_or_fallback(game),
             'save_file_location': game.save_file_location,
             'last_played': game.last_played.isoformat() if getattr(game, "last_played", None) else None,
             'pending_deletion': getattr(game, 'pending_deletion', False),
@@ -315,7 +337,45 @@ def game_detail(request, game_id):
 
     game.name = name
     game.save_file_location = save_file_location
-    game.banner = banner or None
+    
+    # Handle banner update
+    if banner:
+        game.banner_url = banner  # Store original URL
+        # Try to download and cache
+        success, message, file_obj = download_image_from_url(banner)
+        if success and file_obj:
+            try:
+                # Delete old banner if exists
+                if game.banner:
+                    try:
+                        old_path = game.banner.path
+                        if os.path.exists(old_path):
+                            os.remove(old_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to delete old banner: {e}")
+                
+                # Determine file extension
+                parsed = urlparse(banner)
+                ext = os.path.splitext(parsed.path)[1] or '.jpg'
+                game.banner.save(f"banner_{game.id}{ext}", File(file_obj), save=False)
+                # Clean up temp file
+                if hasattr(file_obj, 'name'):
+                    os.unlink(file_obj.name)
+            except Exception as e:
+                logger.warning(f"Failed to cache banner for game {game.id}: {e}")
+                # Continue - banner_url is stored as fallback
+    else:
+        # If banner is cleared, also clear cached file
+        if game.banner:
+            try:
+                old_path = game.banner.path
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+            except Exception as e:
+                logger.warning(f"Failed to delete banner: {e}")
+        game.banner = None
+        game.banner_url = None
+    
     game.save()
 
     return json_response_success(
@@ -323,7 +383,7 @@ def game_detail(request, game_id):
             'game': {
                 'id': game.id,
                 'name': game.name,
-                'banner': game.banner or '',
+                'banner': get_image_url_or_fallback(game),
                 'save_file_location': game.save_file_location,
             }
         }

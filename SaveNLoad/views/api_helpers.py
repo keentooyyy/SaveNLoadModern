@@ -8,6 +8,7 @@ from SaveNLoad.models import Game
 from SaveNLoad.models.client_worker import ClientWorker
 from SaveNLoad.models.operation_queue import OperationQueue, OperationType
 from SaveNLoad.views.custom_decorators import get_current_user
+from SaveNLoad.utils.image_utils import get_image_url_or_fallback
 from django.utils import timezone
 from datetime import timedelta
 import json
@@ -361,7 +362,7 @@ def build_game_data_dict(game, last_played=None, include_id=False, include_foote
     """
     data = {
         'title': game.name,
-        'image': game.banner if game.banner else '',
+        'image': get_image_url_or_fallback(game),
     }
     
     if include_id:

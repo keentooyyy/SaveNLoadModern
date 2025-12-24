@@ -11,6 +11,7 @@ from SaveNLoad.views.rawg_api import get_popular_games
 from SaveNLoad.models import SimpleUsers, Game
 from SaveNLoad.models.operation_queue import OperationQueue, OperationType, OperationStatus
 from SaveNLoad.models.save_folder import SaveFolder
+from SaveNLoad.utils.image_utils import get_image_url_or_fallback
 
 
 def format_last_played(last_played):
@@ -79,7 +80,7 @@ def admin_dashboard(request):
         last_played = game_last_played.get(game.id)
         recent_games.append({
             'title': game.name,
-            'image': game.banner if game.banner else '',
+            'image': get_image_url_or_fallback(game),
             'playtime': format_last_played(last_played),
         })
     
@@ -103,7 +104,7 @@ def admin_dashboard(request):
         available_games.append({
             'id': game.id,
             'title': game.name,
-            'image': game.banner if game.banner else '',
+            'image': get_image_url_or_fallback(game),
             'footer': format_last_played(last_played),
         })
     
@@ -152,7 +153,7 @@ def user_dashboard(request):
         last_played = game_last_played.get(game.id)
         recent_games.append({
             'title': game.name,
-            'image': game.banner if game.banner else '',
+            'image': get_image_url_or_fallback(game),
             'playtime': format_last_played(last_played),
         })
     
@@ -176,7 +177,7 @@ def user_dashboard(request):
         available_games.append({
             'id': game.id,
             'title': game.name,
-            'image': game.banner if game.banner else '',
+            'image': get_image_url_or_fallback(game),
             'footer': format_last_played(last_played),
         })
     
@@ -237,7 +238,7 @@ def search_available_games(request):
         games_list.append({
             'id': game.id,
             'title': game.name,
-            'image': game.banner if game.banner else '',
+            'image': get_image_url_or_fallback(game),
             'footer': format_last_played(last_played),
             'last_played_timestamp': last_played.isoformat() if last_played else None,
         })
