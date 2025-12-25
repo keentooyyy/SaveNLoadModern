@@ -79,45 +79,32 @@ def get_game_or_error(game_id):
 def get_client_worker_or_error(user, request=None):
     """
     Get client worker for a user or return error response
-    Uses client_id from session - if not available or worker is offline, fails immediately
+    Uses DB ownership - checks if user owns an active worker
     Returns: (client_worker_object, error_response_or_none)
-    
-    Note: App requires workers to function - if user's worker is not available, operation fails
     """
     if not user:
         return None, json_response_error('User is required', status=400)
     
-    # Get client_id from session (user's current machine)
-    client_id = None
-    if request and hasattr(request, 'session'):
-        client_id = request.session.get('client_id')
+    # Get active worker owned by this user
+    # Use filter().order_by('-last_heartbeat').first() to get the most recently active one
+    client_worker = ClientWorker.objects.filter(
+        user=user, 
+        is_active=True
+    ).order_by('-last_heartbeat').first()
     
-    if not client_id:
-        # No worker in session - app requires worker to function
+    if not client_worker:
         return None, JsonResponse({
-            'error': 'No client worker available. Please ensure the client worker is running on your machine.',
+            'error': 'No client worker paired. Please claim a worker in settings.',
             'requires_worker': True
         }, status=503)
     
-    # Try to get the worker from session
-    try:
-        client_worker = ClientWorker.objects.get(client_id=client_id, is_active=True)
-        if client_worker.is_online():
-            return client_worker, None
-        else:
-            # Worker in session is offline - fail immediately
-            return None, JsonResponse({
-                'error': f'Client worker ({client_id}) is offline. Please ensure the client worker is running.',
-                'requires_worker': True
-            }, status=503)
-    except ClientWorker.DoesNotExist:
-        # client_id in session doesn't exist anymore - clear it and fail
-        if request and hasattr(request, 'session'):
-            request.session.pop('client_id', None)
+    if not client_worker.is_online():
         return None, JsonResponse({
-            'error': 'Client worker not found. Please ensure the client worker is running on your machine.',
+            'error': f'Client worker ({client_worker.client_id}) is offline. Please ensure it is running.',
             'requires_worker': True
         }, status=503)
+        
+    return client_worker, None
 
 
 def check_admin_or_error(user):
@@ -337,29 +324,6 @@ def create_operation_response(operation, client_worker, message=None, extra_data
         data.update(extra_data)
     
     return json_response_success(message=message, data=data)
-
-
-def update_session_client_id(request, client_id, user):
-    """
-    Update or clear client_id in user's session based on login status
-    This centralizes the session management logic used in register_client, heartbeat, and check_connection
-    
-    Args:
-        request: Django request object
-        client_id: Client worker ID (can be None to clear)
-        user: Current user (None if logged out)
-    """
-    if not hasattr(request, 'session'):
-        return
-    
-    if user and client_id:
-        # User is logged in - associate worker with session
-        request.session['client_id'] = client_id
-        request.session.modified = True
-    elif not user and 'client_id' in request.session:
-        # User is logged out - clear client_id (revoke association)
-        request.session.pop('client_id', None)
-        request.session.modified = True
 
 
 def get_operation_or_error(operation_id, user=None):

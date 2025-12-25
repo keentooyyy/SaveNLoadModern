@@ -53,7 +53,7 @@ class OperationQueue(models.Model):
                                      help_text="Client worker assigned to this operation")
     local_save_path = models.CharField(max_length=500, help_text="Local save file path")
     save_folder_number = models.IntegerField(null=True, blank=True, help_text="Optional save folder number")
-    smb_path = models.CharField(max_length=500, null=True, blank=True, help_text="Full SMB path for the save folder (Windows format with backslashes)")
+    smb_path = models.CharField(max_length=500, null=True, blank=True, help_text="Full remote path for the save folder (FTP format with forward slashes) - legacy name 'smb_path' kept for compatibility")
     path_index = models.IntegerField(null=True, blank=True, help_text="Index for multiple save locations (1-based, creates path_1, path_2 subfolders)")
     result_data = models.JSONField(null=True, blank=True, help_text="Operation result data")
     error_message = models.TextField(null=True, blank=True, help_text="Error message if operation failed")

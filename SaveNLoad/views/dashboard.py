@@ -45,19 +45,23 @@ def format_last_played(last_played):
         return f"Last played {years} year{'s' if years != 1 else ''} ago"
 
 
-@login_required
-@client_worker_required
-def admin_dashboard(request):
-    """Admin dashboard"""
-    user = get_current_user(request)
-    error_response = check_admin_or_error(user)
-    if error_response:
-        # Redirect non-admin users to their dashboard
-        return redirect(reverse('user:dashboard'))
-    
+def _get_user_game_last_played_map(user):
+    """
+    Get user's last played timestamp for all games
+    Returns: dict {game_id: datetime}
+    """
+    return {
+        sf['game']: sf['last_played'] 
+        for sf in SaveFolder.objects.filter(user=user).values('game').annotate(last_played=Max('created_at'))
+    }
+
+
+def _get_dashboard_context_data(user):
+    """
+    Helper to get shared dashboard context data
+    Returns: (recent_games, available_games)
+    """
     # Get user's most recent game plays from SaveFolder records
-    # This is more reliable than OperationQueue since SaveFolder persists even when operations are cleared
-    # Get the most recent created_at per game for this user (created_at is updated when folder is reused)
     recent_save_folders = SaveFolder.objects.filter(
         user=user
     ).values('game').annotate(
@@ -90,15 +94,8 @@ def admin_dashboard(request):
     db_games = Game.objects.all().order_by('name', 'id')  # Add 'id' for stable sorting
     available_games = []
     
-    # Get last_played for all games for this user from SaveFolder records
-    # This persists even when operations are cleared
-    all_user_save_folders = SaveFolder.objects.filter(
-        user=user
-    ).values('game').annotate(
-        last_played=Max('created_at')
-    )
-    
-    game_last_played_all = {sf['game']: sf['last_played'] for sf in all_user_save_folders}
+    # Get last_played map for all games
+    game_last_played_all = _get_user_game_last_played_map(user)
     
     for game in db_games:
         last_played = game_last_played_all.get(game.id)
@@ -112,14 +109,29 @@ def admin_dashboard(request):
             'save_file_locations_json': json.dumps(save_locations),  # JSON string for template
         })
     
-    # Sort available games case-insensitively by title (fixes default sorting bug)
+    # Sort available games case-insensitively by title
     from SaveNLoad.utils.list_utils import sort_by_field
     available_games = sort_by_field(available_games, 'title', reverse=False, case_insensitive=True)
+
+    return recent_games, available_games
+
+
+@login_required
+@client_worker_required
+def admin_dashboard(request):
+    """Admin dashboard"""
+    user = get_current_user(request)
+    error_response = check_admin_or_error(user)
+    if error_response:
+        # Redirect non-admin users to their dashboard
+        return redirect(reverse('user:dashboard'))
+    
+    recent_games, available_games = _get_dashboard_context_data(user)
     
     context = {
         'recent_games': recent_games,
         'available_games': available_games,
-        'is_user': False,  # Add this line
+        'is_user': False,
         'user': user
     }
     
@@ -132,66 +144,7 @@ def user_dashboard(request):
     """User dashboard - same as admin but with restrictions"""
     user = get_current_user(request)
     
-    # Get user's most recent game plays from SaveFolder records
-    # This is more reliable than OperationQueue since SaveFolder persists even when operations are cleared
-    # Get the most recent created_at per game for this user (created_at is updated when folder is reused)
-    recent_save_folders = SaveFolder.objects.filter(
-        user=user
-    ).values('game').annotate(
-        last_played=Max('created_at')
-    ).order_by('-last_played')[:10]
-    
-    # Get game IDs and their last_played timestamps
-    game_last_played = {sf['game']: sf['last_played'] for sf in recent_save_folders}
-    
-    # Fetch games ordered by user's last_played
-    recent_db_games = Game.objects.filter(
-        id__in=game_last_played.keys()
-    )
-    
-    # Sort by last_played timestamp from save folders
-    from SaveNLoad.utils.list_utils import sort_by_dict_lookup
-    recent_db_games = sort_by_dict_lookup(recent_db_games, game_last_played, reverse=True)
-    
-    recent_games = []
-    for game in recent_db_games:
-        last_played = game_last_played.get(game.id)
-        recent_games.append({
-            'title': game.name,
-            'image': get_image_url_or_fallback(game),
-            'playtime': format_last_played(last_played),
-        })
-    
-    # Fetch all games from database for available games section (sorted alphabetically)
-    # Get per-user last_played for each game
-    db_games = Game.objects.all().order_by('name', 'id')  # Add 'id' for stable sorting
-    available_games = []
-    
-    # Get last_played for all games for this user from SaveFolder records
-    # This persists even when operations are cleared
-    all_user_save_folders = SaveFolder.objects.filter(
-        user=user
-    ).values('game').annotate(
-        last_played=Max('created_at')
-    )
-    
-    game_last_played_all = {sf['game']: sf['last_played'] for sf in all_user_save_folders}
-    
-    for game in db_games:
-        last_played = game_last_played_all.get(game.id)
-        save_locations = game.save_file_locations if isinstance(game.save_file_locations, list) else []
-        available_games.append({
-            'id': game.id,
-            'title': game.name,
-            'image': get_image_url_or_fallback(game),
-            'footer': format_last_played(last_played),
-            'save_file_locations': save_locations,
-            'save_file_locations_json': json.dumps(save_locations),  # JSON string for template
-        })
-    
-    # Sort available games case-insensitively by title (fixes default sorting bug)
-    from SaveNLoad.utils.list_utils import sort_by_field
-    available_games = sort_by_field(available_games, 'title', reverse=False, case_insensitive=True)
+    recent_games, available_games = _get_dashboard_context_data(user)
     
     context = {
         'recent_games': recent_games,
@@ -229,15 +182,8 @@ def search_available_games(request):
     if search_query:
         db_games = db_games.filter(name__icontains=search_query)
     
-    # Get last_played for all games for this user from SaveFolder records
-    # This persists even when operations are cleared
-    all_user_save_folders = SaveFolder.objects.filter(
-        user=user
-    ).values('game').annotate(
-        last_played=Max('created_at')
-    )
-    
-    game_last_played_all = {sf['game']: sf['last_played'] for sf in all_user_save_folders}
+    # Get last_played map for all games
+    game_last_played_all = _get_user_game_last_played_map(user)
     
     # Build games list with last_played data
     games_list = []

@@ -683,9 +683,9 @@ class ClientWorkerServiceRclone:
                 # Check for status change
                 if new_user != self.linked_user:
                     if new_user:
-                        self._safe_console_print(f"\n[green]✓ Device claimed by user: {new_user}[/green]")
+                        self._safe_console_print(f"\n[green][OK] Device claimed by user: {new_user}[/green]")
                     else:
-                        self._safe_console_print(f"\n[yellow]! Device unclaimed (waiting for owner)[/yellow]")
+                        self._safe_console_print(f"\n[yellow][!] Device unclaimed (waiting for owner)[/yellow]")
                     self.linked_user = new_user
                     
                 return True
@@ -809,7 +809,7 @@ class ClientWorkerServiceRclone:
         
         # Status output using rich Panel with ASCII-safe indicators
         # Status output using rich Panel with ASCII-safe indicators
-        owner_status = f"[green]Owned by: {self.linked_user}[/green]" if self.linked_user else "[yellow]Waiting for Claim[/yellow]"
+        owner_status = f"[green][OK][/green] Owned by: {self.linked_user}" if self.linked_user else "[yellow][!][/yellow] Waiting for Claim"
         
         status_content = f"""[green][OK][/green] Connected to server
 [green][OK][/green] Service running (polling every {self.poll_interval}s)

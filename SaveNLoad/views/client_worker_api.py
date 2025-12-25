@@ -23,6 +23,9 @@ import os
 def register_client(request):
     """Register a client worker - client_id must be unique per PC"""
     try:
+        # Clean up stale workers first
+        ClientWorker.cleanup_stale_workers(timeout_seconds=WORKER_TIMEOUT_SECONDS)
+        
         data, error_response = parse_json_body(request)
         if error_response:
             return error_response
@@ -66,6 +69,10 @@ def register_client(request):
 def heartbeat(request):
     """Receive heartbeat from client worker and update status"""
     try:
+        # Clean up stale workers on every heartbeat to keep DB status accurate
+        # This allows using is_active field reliably
+        ClientWorker.cleanup_stale_workers(timeout_seconds=WORKER_TIMEOUT_SECONDS)
+        
         data, error_response = parse_json_body(request)
         if error_response:
             return error_response
@@ -264,6 +271,59 @@ def update_operation_progress(request, operation_id):
         return json_response_error(str(e), status=500)
 
 
+
+def _check_and_handle_game_deletion_completion(operation):
+    """
+    Check if game deletion is pending and all operations are complete.
+    If so, either delete the game (if all succeeded) or cancel deletion (if any failed).
+    """
+    from SaveNLoad.models.operation_queue import OperationQueue, OperationStatus
+    from SaveNLoad.utils.operation_utils import (
+        is_game_deletion_operation,
+        get_pending_or_in_progress_operations,
+        check_all_operations_succeeded
+    )
+    
+    if not (operation.game.pending_deletion and is_game_deletion_operation(operation)):
+        return
+
+    # Check if all operations for this game are complete
+    remaining_operations = get_pending_or_in_progress_operations(
+        OperationQueue.objects.filter(game=operation.game)
+    ).exclude(id=operation.id)
+    
+    if remaining_operations.exists():
+        return
+
+    # All operations are complete - check if all succeeded
+    all_operations = OperationQueue.objects.filter(
+        game=operation.game,
+        operation_type='delete',
+        save_folder_number__isnull=True  # Game deletion operations
+    )
+    
+    # Check if any operation failed (including the current one if it failed)
+    # We query the DB, so the current operation's status must be saved before calling this
+    failed_ops_count = all_operations.filter(status=OperationStatus.FAILED).count()
+    all_succeeded = failed_ops_count == 0
+    
+    if all_succeeded:
+        # All operations succeeded - delete the game
+        game_name = operation.game.name
+        game_id = operation.game.id
+        
+        # Delete banner file before deleting game
+        delete_game_banner_file(operation.game)
+        
+        operation.game.delete()  # This will CASCADE delete all SaveFolders and OperationQueue records
+        print(f"Game {game_id} ({game_name}) deleted from database after all FTP cleanup operations completed successfully")
+    else:
+        # Some operations failed - keep the game, clear pending_deletion flag
+        operation.game.pending_deletion = False
+        operation.game.save()
+        print(f"WARNING: Game {operation.game.id} ({operation.game.name}) deletion cancelled - {failed_ops_count} FTP operation(s) failed")
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def complete_operation(request, operation_id):
@@ -299,43 +359,7 @@ def complete_operation(request, operation_id):
                     print(f"WARNING: Failed to delete save folder from database after operation: {e}")
             
             # Check if game is pending deletion and all operations are complete
-            from SaveNLoad.utils.operation_utils import (
-                is_game_deletion_operation,
-                get_pending_or_in_progress_operations,
-                check_all_operations_succeeded
-            )
-            if operation.game.pending_deletion and is_game_deletion_operation(operation):
-                # This is a game deletion operation - check if all operations for this game are complete
-                remaining_operations = get_pending_or_in_progress_operations(
-                    OperationQueue.objects.filter(game=operation.game)
-                ).exclude(id=operation.id)
-                
-                if not remaining_operations.exists():
-                    # All operations are complete - check if all succeeded
-                    all_operations = OperationQueue.objects.filter(
-                        game=operation.game,
-                        operation_type='delete',
-                        save_folder_number__isnull=True  # Game deletion operations
-                    )
-                    
-                    all_succeeded = check_all_operations_succeeded(all_operations)
-                    
-                    if all_succeeded:
-                        # All operations succeeded - delete the game
-                        game_name = operation.game.name
-                        game_id = operation.game.id
-                        
-                        # Delete banner file before deleting game
-                        delete_game_banner_file(operation.game)
-                        
-                        operation.game.delete()  # This will CASCADE delete all SaveFolders and OperationQueue records
-                        print(f"Game {game_id} ({game_name}) deleted from database after all FTP cleanup operations completed successfully")
-                    else:
-                        # Some operations failed - keep the game, clear pending_deletion flag
-                        operation.game.pending_deletion = False
-                        operation.game.save()
-                        failed_count = all_operations.filter(status=OperationStatus.FAILED).count()
-                        print(f"WARNING: Game {operation.game.id} ({operation.game.name}) deletion cancelled - {failed_count} FTP operation(s) failed")
+            _check_and_handle_game_deletion_completion(operation)
         else:
             error_message = data.get('error', data.get('message', 'Operation failed'))
             
@@ -346,42 +370,7 @@ def complete_operation(request, operation_id):
             operation.mark_failed(error_message)
             
             # Check if game is pending deletion and all operations are complete
-            # Only check after all operations complete (per documentation: "After All Operations Complete")
-            from SaveNLoad.utils.operation_utils import is_game_deletion_operation
-            if operation.game.pending_deletion and is_game_deletion_operation(operation):
-                # This is a game deletion operation - check if all operations for this game are complete
-                from SaveNLoad.models.operation_queue import OperationStatus
-                remaining_operations = OperationQueue.objects.filter(
-                    game=operation.game,
-                    status__in=[OperationStatus.PENDING, OperationStatus.IN_PROGRESS]
-                ).exclude(id=operation.id)
-                
-                if not remaining_operations.exists():
-                    # All operations are complete - check if all succeeded
-                    all_operations = OperationQueue.objects.filter(
-                        game=operation.game,
-                        operation_type='delete',
-                        save_folder_number__isnull=True  # Game deletion operations
-                    )
-                    
-                    all_succeeded = all_operations.exclude(status=OperationStatus.COMPLETED).count() == 0
-                    
-                    if all_succeeded:
-                        # All operations succeeded - delete the game
-                        game_name = operation.game.name
-                        game_id = operation.game.id
-                        
-                        # Delete banner file before deleting game
-                        delete_game_banner_file(operation.game)
-                        
-                        operation.game.delete()  # This will CASCADE delete all SaveFolders and OperationQueue records
-                        print(f"Game {game_id} ({game_name}) deleted from database after all FTP cleanup operations completed successfully")
-                    else:
-                        # Some operations failed - keep the game, clear pending_deletion flag
-                        operation.game.pending_deletion = False
-                        operation.game.save()
-                        failed_count = all_operations.filter(status=OperationStatus.FAILED).count()
-                        print(f"WARNING: Game {operation.game.id} ({operation.game.name}) deletion cancelled - {failed_count} FTP operation(s) failed")
+            _check_and_handle_game_deletion_completion(operation)
             
             # Cleanup: If SAVE operation failed due to missing local path or empty saves, delete the save folder
             # This prevents orphaned save folders when user provides invalid path or empty saves

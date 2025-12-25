@@ -516,15 +516,7 @@ body {
     color: var(--white-opacity-50) !important;
 }
 
-/* Alternative: Use primary color for header */
-/* #usersList .table thead {
-    background-color: var(--primary-opacity-30) !important;
-}
 
-#usersList .table thead th {
-    background-color: var(--primary-opacity-30) !important;
-    color: var(--white-opacity-50) !important;
-} */
 
 #usersList .table tbody tr {
     background-color: transparent !important;

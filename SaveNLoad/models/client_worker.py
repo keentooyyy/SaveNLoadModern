@@ -35,11 +35,13 @@ class ClientWorker(models.Model):
     
     def __str__(self):
         user_str = f" - {self.user.username}" if self.user else " (Unclaimed)"
-        return f"{self.client_id}{user_str} ({'Active' if self.is_active else 'Inactive'})"
+        status = "Online" if self.is_online() else "Offline"
+        return f"{self.client_id}{user_str} ({status})"
     
     def is_online(self, timeout_seconds: int = WORKER_TIMEOUT_SECONDS) -> bool:
         """Check if worker is online based on last heartbeat"""
-        if not self.is_active:
+        # Rely purely on heartbeat timestamp to avoid stale is_active boolean
+        if not self.last_heartbeat:
             return False
         time_since_heartbeat = timezone.now() - self.last_heartbeat
         return time_since_heartbeat.total_seconds() < timeout_seconds
@@ -48,10 +50,10 @@ class ClientWorker(models.Model):
     def get_active_workers(cls, timeout_seconds: int = WORKER_TIMEOUT_SECONDS):
         """Get all active workers that are currently online"""
         # Filter directly in database query for better performance and accuracy
+        # We rely solely on the heartbeat timestamp, ignoring the potentially stale is_active field
         from datetime import timedelta
         timeout_threshold = timezone.now() - timedelta(seconds=timeout_seconds)
         return list(cls.objects.filter(
-            is_active=True,
             last_heartbeat__gte=timeout_threshold
         ))
     
@@ -59,7 +61,8 @@ class ClientWorker(models.Model):
     def get_worker_by_id(cls, client_id: str, timeout_seconds: int = WORKER_TIMEOUT_SECONDS):
         """Get a specific worker by client_id if it's online"""
         try:
-            worker = cls.objects.get(client_id=client_id, is_active=True)
+            # Check for worker regardless of stored is_active status
+            worker = cls.objects.get(client_id=client_id)
             if worker.is_online(timeout_seconds):
                 return worker
         except cls.DoesNotExist:
@@ -79,23 +82,25 @@ class ClientWorker(models.Model):
         from datetime import timedelta
         timeout_threshold = timezone.now() - timedelta(seconds=timeout_seconds)
         return cls.objects.filter(
-            is_active=True,
             last_heartbeat__gte=timeout_threshold
         ).exists()
     
     @classmethod
     def cleanup_stale_workers(cls, timeout_seconds: int = WORKER_TIMEOUT_SECONDS):
-        """Unclaim workers that have timed out"""
+        """
+        Mark workers as inactive if they have timed out.
+        Also unclaims them if they were owned.
+        """
         from datetime import timedelta
         timeout_threshold = timezone.now() - timedelta(seconds=timeout_seconds)
         
-        # Find workers that are owned but haven't heartbeated recently
+        # Find workers that are active but haven't heartbeated recently
         stale_workers = cls.objects.filter(
-            user__isnull=False,
+            is_active=True,
             last_heartbeat__lt=timeout_threshold
         )
         
-        # Update them to be unclaimed
-        count = stale_workers.update(user=None, is_active=False)
+        # Mark as inactive and unclaim
+        count = stale_workers.update(is_active=False, user=None)
         return count
 

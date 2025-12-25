@@ -272,6 +272,32 @@ def _queue_game_deletion_operations(game: Game, admin_user, request=None):
         return (False, error_msg)
 
 
+def _handle_game_deletion(request, game, user):
+    """
+    Helper to handle game deletion logic
+    Returns: JsonResponse
+    """
+    # Queue operations to delete all FTP saves for this game
+    # Use admin's worker (the one making the delete request)
+    # Do NOT delete game if FTP cleanup fails to queue
+    success, error_message = _queue_game_deletion_operations(game, admin_user=user, request=request)
+    if not success:
+        return json_response_error(error_message or "Failed to queue FTP cleanup operations", status=503)
+    
+    # If no saves exist, delete immediately (nothing to clean up)
+    if error_message == "no_saves":
+        # Delete banner file before deleting game
+        delete_game_banner_file(game)
+        game.delete()
+        print(f"Game {game.id} ({game.name}) deleted immediately - no FTP saves to clean up")
+    else:
+        # Mark game for deletion - actual deletion happens after all FTP operations complete successfully
+        game.pending_deletion = True
+        game.save()
+        print(f"Game {game.id} ({game.name}) marked for deletion - will be deleted after all FTP cleanup operations complete")
+    return json_response_success()
+
+
 @login_required
 @require_http_methods(["GET", "POST", "DELETE"])
 def game_detail(request, game_id):
@@ -326,25 +352,7 @@ def game_detail(request, game_id):
         })
 
     if request.method == "DELETE":
-        # Queue operations to delete all FTP saves for this game
-        # Use admin's worker (the one making the delete request)
-        # Do NOT delete game if FTP cleanup fails to queue
-        success, error_message = _queue_game_deletion_operations(game, admin_user=user, request=request)
-        if not success:
-            return json_response_error(error_message or "Failed to queue FTP cleanup operations", status=503)
-        
-        # If no saves exist, delete immediately (nothing to clean up)
-        if error_message == "no_saves":
-            # Delete banner file before deleting game
-            delete_game_banner_file(game)
-            game.delete()
-            print(f"Game {game.id} ({game.name}) deleted immediately - no FTP saves to clean up")
-        else:
-            # Mark game for deletion - actual deletion happens after all FTP operations complete successfully
-            game.pending_deletion = True
-            game.save()
-            print(f"Game {game.id} ({game.name}) marked for deletion - will be deleted after all FTP cleanup operations complete")
-        return json_response_success()
+        return _handle_game_deletion(request, game, user)
 
     # POST - update
     data, error_response = parse_json_body(request)
@@ -457,25 +465,7 @@ def delete_game(request, game_id):
     if error_response:
         return error_response
 
-    # Queue operations to delete all FTP saves for this game
-    # Use admin's worker (the one making the delete request)
-    # Do NOT delete game if FTP cleanup fails to queue
-    success, error_message = _queue_game_deletion_operations(game, admin_user=user, request=request)
-    if not success:
-        return json_response_error(error_message or "Failed to queue FTP cleanup operations", status=503)
-    
-    # If no saves exist, delete immediately (nothing to clean up)
-    if error_message == "no_saves":
-        # Delete banner file before deleting game
-        delete_game_banner_file(game)
-        game.delete()
-        print(f"Game {game.id} ({game.name}) deleted immediately - no FTP saves to clean up")
-    else:
-        # Mark game for deletion - actual deletion happens after all FTP operations complete successfully
-        game.pending_deletion = True
-        game.save()
-        print(f"Game {game.id} ({game.name}) marked for deletion - will be deleted after all FTP cleanup operations complete")
-    return json_response_success()
+    return _handle_game_deletion(request, game, user)
 
 
 @login_required

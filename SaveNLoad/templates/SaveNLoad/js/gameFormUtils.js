@@ -3,7 +3,16 @@
  * Used by both settings.js and manageGames.js
  */
 
-// clearElement is now in utils.js
+/**
+ * Safely clear all children from an element
+ * @param {HTMLElement} element 
+ */
+function clearElement(element) {
+    if (!element) return;
+    while (element.firstChild) {
+        element.removeChild(element.firstChild);
+    }
+}
 
 /**
  * Validate if a URL is safe for image loading

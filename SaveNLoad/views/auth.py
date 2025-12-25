@@ -444,6 +444,17 @@ def reset_password(request):
 @login_required
 def logout(request):
     """Logout and clear session"""
+    # Unclaim any client workers associated with this user before logging out
+    try:
+        user = get_current_user(request)
+        if user:
+            from SaveNLoad.models.client_worker import ClientWorker
+            # Update all workers owned by this user to be unclaimed
+            ClientWorker.objects.filter(user=user).update(user=None)
+            print(f"Unclaimed workers for user {user.username} on logout")
+    except Exception as e:
+        print(f"Error unclaiming workers on logout: {e}")
+        
     request.session.flush()
     return redirect(reverse('SaveNLoad:login'))
 
