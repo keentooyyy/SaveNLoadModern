@@ -36,11 +36,17 @@ if getattr(sys, 'frozen', False):
 else:
     load_dotenv()
 
+# Add constants at the top after imports, before the class
+RCLONE_TRANSFERS = 10  # This might already exist, but add if not
+
+# Client worker configuration constants
+HEARTBEAT_INTERVAL = 5  # Heartbeat interval in seconds
+DEFAULT_POLL_INTERVAL = 1  # Default polling interval in seconds
 
 class ClientWorkerServiceRclone:
     """Service that runs on client PC - rclone handles all file operations"""
     
-    def __init__(self, server_url: str, poll_interval: int = 5, remote_name: str = 'ftp'):
+    def __init__(self, server_url: str, poll_interval: int = DEFAULT_POLL_INTERVAL, remote_name: str = 'ftp'):
         """
         Initialize client worker service with rclone
         
@@ -529,83 +535,117 @@ class ClientWorkerServiceRclone:
     
     def open_folder(self, local_path: str, operation_id: Optional[int] = None) -> Dict[str, Any]:
         """
-        Open folder location(s) in the file explorer
-        Supports single path (string) or multiple paths (JSON array string)
+        Open save file location folder(s) in file explorer
+        Creates folders if they don't exist before opening
+        local_path contains JSON with paths and create_folders flag
         """
         import json
-        
-        print(f"Opening folder(s): {local_path}")
+        import subprocess
+        import platform
+        import os
         
         try:
-            # Try to parse as JSON array (multiple paths)
+            # Parse JSON data
             try:
-                paths = json.loads(local_path)
-                if isinstance(paths, list):
-                    # Multiple paths - open all of them
-                    opened_count = 0
-                    errors = []
-                    
-                    for path in paths:
-                        if not path or not isinstance(path, str):
-                            continue
-                        
-                        result = self._open_single_folder(path)
-                        if result['success']:
-                            opened_count += 1
-                        else:
-                            errors.append(f"{path}: {result.get('error', 'Unknown error')}")
-                    
-                    if opened_count > 0:
-                        message = f'Opened {opened_count} folder{"s" if opened_count > 1 else ""}'
-                        if errors:
-                            message += f" ({len(errors)} failed)"
-                        print(f"Success: {message}")
-                        return self._create_success_response(message)
-                    else:
-                        error_msg = f'Failed to open all folders: {"; ".join(errors)}'
-                        return self._create_error_response(error_msg)
+                paths_data = json.loads(local_path)
+                save_paths = paths_data.get('paths', [])
+                create_folders = paths_data.get('create_folders', False)
+                save_folder_number = paths_data.get('save_folder_number')
             except (json.JSONDecodeError, TypeError):
-                # Not JSON, treat as single path
-                pass
+                # Fallback: treat as single path string (backward compatibility)
+                save_paths = [local_path] if local_path else []
+                create_folders = False
+                save_folder_number = None
             
-            # Single path - original behavior
-            return self._open_single_folder(local_path)
+            if not save_paths:
+                return self._create_error_response('No save paths provided')
             
-        except Exception as e:
-            return self._handle_operation_exception('Open folder', e)
-
-    def _open_single_folder(self, local_path: str) -> Dict[str, Any]:
-        """
-        Helper method to open a single folder
-        Returns success/error response dict
-        """
-        # Check if folder exists
-        if not os.path.exists(local_path):
-            return self._create_error_response('Folder or directory does not exist')
-        
-        # Check if it's actually a directory
-        if not os.path.isdir(local_path):
-            return self._create_error_response('Path is not a directory')
-        
-        # Open folder based on OS
-        system = platform.system()
-        try:
-            if system == 'Windows':
-                # Use explorer.exe on Windows
-                subprocess.Popen(['explorer', local_path], shell=False)
-            elif system == 'Darwin':  # macOS
-                subprocess.Popen(['open', local_path])
-            elif system == 'Linux':
-                subprocess.Popen(['xdg-open', local_path])
+            opened_count = 0
+            failed_paths = []
+            
+            for path in save_paths:
+                try:
+                    # Normalize path
+                    normalized_path = os.path.normpath(path)
+                    
+                    # Create folder if it doesn't exist and create_folders is True
+                    if create_folders and not os.path.exists(normalized_path):
+                        try:
+                            os.makedirs(normalized_path, exist_ok=True)
+                            print(f"Created folder: {normalized_path}")
+                        except OSError as e:
+                            print(f"Warning: Failed to create folder {normalized_path}: {str(e)}")
+                            # Continue anyway - try to open even if creation failed
+                    
+                    # Check if path exists (file or directory)
+                    if not os.path.exists(normalized_path):
+                        failed_paths.append(f"{normalized_path}: Path does not exist")
+                        continue
+                    
+                    # Determine if it's a file or directory
+                    if os.path.isfile(normalized_path):
+                        # For files, open the parent directory and select the file
+                        folder_path = os.path.dirname(normalized_path)
+                        file_name = os.path.basename(normalized_path)
+                    else:
+                        # For directories, open the directory itself
+                        folder_path = normalized_path
+                        file_name = None
+                    
+                    # Open folder in file explorer based on OS
+                    system = platform.system()
+                    
+                    if system == 'Windows':
+                        if file_name:
+                            # Open folder and select file
+                            subprocess.Popen(f'explorer /select,"{normalized_path}"', shell=True)
+                        else:
+                            # Open folder
+                            subprocess.Popen(f'explorer "{folder_path}"', shell=True)
+                    elif system == 'Darwin':  # macOS
+                        if file_name:
+                            subprocess.Popen(['open', '-R', normalized_path])
+                        else:
+                            subprocess.Popen(['open', folder_path])
+                    else:  # Linux
+                        # Try common file managers
+                        try:
+                            subprocess.Popen(['xdg-open', folder_path])
+                        except FileNotFoundError:
+                            # Fallback to nautilus, dolphin, or thunar
+                            for manager in ['nautilus', 'dolphin', 'thunar']:
+                                try:
+                                    subprocess.Popen([manager, folder_path])
+                                    break
+                                except FileNotFoundError:
+                                    continue
+                            else:
+                                failed_paths.append(f"{normalized_path}: No file manager found")
+                                continue
+                    
+                    opened_count += 1
+                    print(f"Opened folder: {folder_path}")
+                    
+                except Exception as e:
+                    failed_paths.append(f"{path}: {str(e)}")
+                    print(f"Error opening {path}: {str(e)}")
+            
+            if opened_count == len(save_paths):
+                return self._create_success_response(
+                    f'Successfully opened {opened_count} folder{"s" if opened_count > 1 else ""}'
+                )
+            elif opened_count > 0:
+                return self._create_success_response(
+                    f'Opened {opened_count}/{len(save_paths)} folder{"s" if opened_count > 1 else ""}. '
+                    f'Failed: {", ".join(failed_paths)}'
+                )
             else:
-                return self._create_error_response(f'Unsupported operating system: {system}')
-            
-            print(f"Folder opened successfully: {local_path}")
-            return self._create_success_response('Folder opened successfully')
-            
+                return self._create_error_response(
+                    f'Failed to open any folders: {", ".join(failed_paths)}'
+                )
+                
         except Exception as e:
-            print(f"Error: Failed to open folder - {str(e)}")
-            return self._create_error_response(f'Failed to open folder: {str(e)}')
+            return self._handle_operation_exception('Open Folder', e)
     
     def register_with_server(self, client_id: str) -> bool:
         """Register this client with the Django server"""
@@ -632,7 +672,7 @@ class ClientWorkerServiceRclone:
     
     def _heartbeat_loop(self, client_id: str):
         """Background thread that continuously sends heartbeats"""
-        heartbeat_interval = 5
+        heartbeat_interval = HEARTBEAT_INTERVAL
         while self.running:
             try:
                 self.send_heartbeat(client_id)
@@ -752,7 +792,7 @@ class ClientWorkerServiceRclone:
         
         self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, args=(client_id,), daemon=True)
         self._heartbeat_thread.start()
-        status_content += "\n[green][OK][/green] Heartbeat active (every 5s)"
+        status_content += f"\n[green][OK][/green] Heartbeat active (every {HEARTBEAT_INTERVAL}s)"
         
         status_panel = Panel(
             status_content,

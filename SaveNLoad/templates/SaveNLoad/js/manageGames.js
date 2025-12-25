@@ -611,17 +611,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            if (!data.save_folders || data.save_folders.length === 0) {
-                clearElement(container);
-                container.appendChild(createErrorMessage('No saves available'));
-                return;
-            }
-
-            // Add backup and delete buttons at the top
+            // Always create button container, even if no saves
             const buttonContainer = document.createElement('div');
             buttonContainer.className = 'mb-3 d-flex justify-content-between align-items-center gap-2';
             
-            // Open folder button on the left
+            // Open folder button on the left - always show
             const openFolderButton = document.createElement('button');
             openFolderButton.className = 'btn btn-info text-white';
             openFolderButton.type = 'button';
@@ -638,40 +632,49 @@ document.addEventListener('DOMContentLoaded', function () {
             const rightButtonContainer = document.createElement('div');
             rightButtonContainer.className = 'd-flex gap-2';
             
-            const backupButton = document.createElement('button');
-            backupButton.className = 'btn btn-secondary text-white';
-            backupButton.type = 'button';
-            const backupIcon = document.createElement('i');
-            backupIcon.className = 'fas fa-download me-2';
-            backupButton.appendChild(backupIcon);
-            backupButton.appendChild(document.createTextNode('Backup All Saves'));
-            backupButton.addEventListener('click', function() {
-                backupAllSaves(gameId);
-            });
-            buttonContainer.appendChild(backupButton);
+            // Only show backup/delete buttons if there are saves
+            if (data.save_folders && data.save_folders.length > 0) {
+                const backupButton = document.createElement('button');
+                backupButton.className = 'btn btn-secondary text-white';
+                backupButton.type = 'button';
+                const backupIcon = document.createElement('i');
+                backupIcon.className = 'fas fa-download me-2';
+                backupButton.appendChild(backupIcon);
+                backupButton.appendChild(document.createTextNode('Backup All Saves'));
+                backupButton.addEventListener('click', function() {
+                    backupAllSaves(gameId);
+                });
+                rightButtonContainer.appendChild(backupButton);
+                
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'btn btn-danger text-white';
+                deleteButton.type = 'button';
+                const deleteIcon = document.createElement('i');
+                deleteIcon.className = 'fas fa-trash me-2';
+                deleteButton.appendChild(deleteIcon);
+                deleteButton.appendChild(document.createTextNode('Delete All Saves'));
+                deleteButton.addEventListener('click', function() {
+                    deleteAllSaves(gameId);
+                });
+                rightButtonContainer.appendChild(deleteButton);
+            }
             
-            const deleteButton = document.createElement('button');
-            deleteButton.className = 'btn btn-danger text-white';
-            deleteButton.type = 'button';
-            const deleteIcon = document.createElement('i');
-            deleteIcon.className = 'fas fa-trash me-2';
-            deleteButton.appendChild(deleteIcon);
-            deleteButton.appendChild(document.createTextNode('Delete All Saves'));
-            deleteButton.addEventListener('click', function() {
-                deleteAllSaves(gameId);
-            });
-            rightButtonContainer.appendChild(backupButton);
-            rightButtonContainer.appendChild(deleteButton);
             buttonContainer.appendChild(rightButtonContainer);
+
+            if (!data.save_folders || data.save_folders.length === 0) {
+                clearElement(container);
+                container.appendChild(buttonContainer);
+                container.appendChild(createErrorMessage('No saves available'));
+                return;
+            }
 
             const listGroup = document.createElement('div');
             listGroup.className = 'list-group';
 
             data.save_folders.forEach(folder => {
-                const link = document.createElement('a');
-                link.href = '#';
-                link.className = 'list-group-item list-group-item-action bg-primary text-white border-secondary transition-bg list-group-item-hover';
-                link.dataset.folderNumber = folder.folder_number;
+                const item = document.createElement('div');
+                item.className = 'list-group-item bg-primary text-white border-secondary transition-bg list-group-item-hover';
+                item.dataset.folderNumber = folder.folder_number;
 
                 const row = document.createElement('div');
                 row.className = 'd-flex justify-content-between align-items-center';
@@ -718,8 +721,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 row.appendChild(leftDiv);
                 row.appendChild(buttonGroup);
-                link.appendChild(row);
-                listGroup.appendChild(link);
+                item.appendChild(row);
+                listGroup.appendChild(item);
             });
 
             clearElement(container);

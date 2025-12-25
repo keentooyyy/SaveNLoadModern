@@ -667,6 +667,7 @@ def get_game_save_location(request, game_id):
 def open_save_location(request, game_id):
     """
     Open the save file location for a game - queues operation for client worker
+    Creates local folders if they don't exist, then opens them
     Handles multiple save paths by opening all of them
     """
     from SaveNLoad.models.client_worker import ClientWorker
@@ -692,15 +693,19 @@ def open_save_location(request, game_id):
         return json_response_error('No save file location found for this game', status=400)
     
     # Store all paths as JSON string for multi-path support
-    # Client worker will parse this and open all folders
-    paths_json = json.dumps(save_paths)
+    # Include flag to create folders if they don't exist
+    paths_data = {
+        'paths': save_paths,
+        'create_folders': True  # Flag to create local folders if they don't exist
+    }
+    paths_json = json.dumps(paths_data)
     
     # Create open folder operation in queue
     operation = OperationQueue.create_operation(
         operation_type=OperationType.OPEN_FOLDER,
         user=user,
         game=game,
-        local_save_path=paths_json,  # Store JSON array of paths
+        local_save_path=paths_json,  # Store JSON with paths and flags
         save_folder_number=None,  # Not used for open folder
         smb_path=None,  # Not used for open folder
         client_worker=client_worker
