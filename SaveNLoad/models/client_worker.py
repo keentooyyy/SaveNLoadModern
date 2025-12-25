@@ -5,6 +5,10 @@ Each PC has a unique client_id for tracking
 from django.db import models
 from django.utils import timezone
 
+# Worker timeout: 6 seconds allows for 1 missed heartbeat (5s) + small network delay
+# Heartbeats are sent every 5 seconds, so 6s detects offline immediately after one missed heartbeat
+WORKER_TIMEOUT_SECONDS = 6
+
 
 class ClientWorker(models.Model):
     """Tracks connected client workers - supports multiple concurrent clients
@@ -25,7 +29,7 @@ class ClientWorker(models.Model):
     def __str__(self):
         return f"{self.client_id} ({'Active' if self.is_active else 'Inactive'})"
     
-    def is_online(self, timeout_seconds: int = 30) -> bool:
+    def is_online(self, timeout_seconds: int = WORKER_TIMEOUT_SECONDS) -> bool:
         """Check if worker is online based on last heartbeat"""
         if not self.is_active:
             return False
@@ -33,7 +37,7 @@ class ClientWorker(models.Model):
         return time_since_heartbeat.total_seconds() < timeout_seconds
     
     @classmethod
-    def get_active_workers(cls, timeout_seconds: int = 30):
+    def get_active_workers(cls, timeout_seconds: int = WORKER_TIMEOUT_SECONDS):
         """Get all active workers that are currently online"""
         # Filter directly in database query for better performance and accuracy
         from datetime import timedelta
@@ -44,7 +48,7 @@ class ClientWorker(models.Model):
         ))
     
     @classmethod
-    def get_worker_by_id(cls, client_id: str, timeout_seconds: int = 30):
+    def get_worker_by_id(cls, client_id: str, timeout_seconds: int = WORKER_TIMEOUT_SECONDS):
         """Get a specific worker by client_id if it's online"""
         try:
             worker = cls.objects.get(client_id=client_id, is_active=True)
@@ -55,13 +59,13 @@ class ClientWorker(models.Model):
         return None
     
     @classmethod
-    def get_any_active_worker(cls, timeout_seconds: int = 30):
+    def get_any_active_worker(cls, timeout_seconds: int = WORKER_TIMEOUT_SECONDS):
         """Get any active worker (for operations that don't need specific client)"""
         active_workers = cls.get_active_workers(timeout_seconds)
         return active_workers[0] if active_workers else None
     
     @classmethod
-    def is_worker_connected(cls, timeout_seconds: int = 30) -> bool:
+    def is_worker_connected(cls, timeout_seconds: int = WORKER_TIMEOUT_SECONDS) -> bool:
         """Check if any worker is connected and active"""
         # Direct database query for better performance
         from datetime import timedelta

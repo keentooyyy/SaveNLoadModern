@@ -5,7 +5,7 @@ from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.utils.html import escape
 
 from SaveNLoad.models import SimpleUsers, UserRole
-from SaveNLoad.views.custom_decorators import login_required, get_current_user, client_worker_required
+from SaveNLoad.views.custom_decorators import login_required, get_current_user, client_worker_required, worker_required_unauthenticated
 from SaveNLoad.views.api_helpers import (
     redirect_if_logged_in,
     json_response_with_redirect,
@@ -24,7 +24,7 @@ from SaveNLoad.views.input_sanitizer import (
 
 @ensure_csrf_cookie
 @csrf_protect
-@client_worker_required
+@worker_required_unauthenticated
 def login(request):
     """Login page and authentication - CSRF protected"""
     # Check if already logged in
@@ -147,13 +147,25 @@ def login(request):
 
 @ensure_csrf_cookie
 @csrf_protect
-@client_worker_required
+@worker_required_unauthenticated
 def register(request):
     """Registration page and user creation - CSRF protected"""
     # Check if already logged in
     redirect_response = redirect_if_logged_in(request)
     if redirect_response:
         return redirect_response
+    
+    # Store client_id from URL in session (even if not logged in yet)
+    # This preserves it through the registration flow so it can be used after login
+    client_id_from_url = request.GET.get('client_id', '').strip()
+    if client_id_from_url and hasattr(request, 'session'):
+        # Validate that the worker exists and is online
+        from SaveNLoad.models.client_worker import ClientWorker
+        worker = ClientWorker.get_worker_by_id(client_id_from_url)
+        if worker and worker.is_online():
+            # Store in session for association after login
+            request.session['pending_client_id'] = client_id_from_url
+            request.session.modified = True
     
     if request.method == 'POST':
         # Sanitize and validate inputs
@@ -206,7 +218,10 @@ def register(request):
                     user.save()
                     
                     # Server-side redirect for AJAX (via custom header)
+                    # Preserve client_id through registration → login flow
                     redirect_url = reverse('SaveNLoad:login')
+                    if client_id_from_url:
+                        redirect_url += f'?client_id={client_id_from_url}'
                     return json_response_with_redirect(
                         message='Account created successfully! Please login.',
                         redirect_url=redirect_url

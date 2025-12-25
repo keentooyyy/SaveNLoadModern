@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
-from SaveNLoad.models.client_worker import ClientWorker
+from SaveNLoad.models.client_worker import ClientWorker, WORKER_TIMEOUT_SECONDS
 from SaveNLoad.models import SimpleUsers, Game
 from SaveNLoad.views.api_helpers import (
     parse_json_body,
@@ -100,15 +100,16 @@ def heartbeat(request):
         user = get_current_user(request)
         if hasattr(request, 'session'):
             if user:
-                # User is logged in - only associate if session has no client_id or same client_id
-                # This prevents a different worker from overwriting the session's client_id
-                # (e.g., if user is on PC1 but PC2's worker sends heartbeat)
+                # User is logged in - associate worker with session
+                # Always update if no existing client_id (worker reconnected after being cleared)
+                # Or if it's the same client_id (normal heartbeat)
                 existing_client_id = request.session.get('client_id')
                 if not existing_client_id or existing_client_id == client_id:
                     # No existing association or same worker - update it
                     request.session['client_id'] = client_id
                     request.session.modified = True
                 # If existing_client_id is different, don't overwrite (user is on different PC)
+                # This prevents a different worker from overwriting the session's client_id
             else:
                 # User is logged out - clear client_id if it exists (revoke association)
                 if 'client_id' in request.session:
@@ -150,72 +151,73 @@ def unregister_client(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 def check_connection(request):
-    """Check if client worker is connected and update user's session if logged in"""
-    # Get client_id from query parameter if provided
-    client_id = request.GET.get('client_id', '').strip()
+    """
+    Check if client worker is connected using client_id from session.
+    Optionally accepts client_id from URL query parameter (for login/register pages).
+    Respects timing: heartbeat every 5s, check every 5s, timeout 6s.
+    Trusts heartbeat mechanism to update session - no bruteforcing.
+    """
+    from SaveNLoad.views.custom_decorators import get_current_user
     
+    # Primary: Get client_id from session (stored by heartbeat/register_client endpoints)
+    # Secondary: Accept client_id from URL query parameter (only for login/register pages)
+    client_id = None
+    if hasattr(request, 'session'):
+        client_id = request.session.get('client_id', '').strip() or None
+    
+    # If no client_id in session, check URL parameter (for login/register pages only)
+    if not client_id:
+        client_id = request.GET.get('client_id', '').strip() or None
+    
+    # Check the known worker (if we have a client_id)
     if client_id:
-        # Check specific client
-        worker = ClientWorker.get_worker_by_id(client_id)
-        is_connected = worker is not None and worker.is_online()
+        # Check specific worker using 6-second timeout (matches is_online default)
+        worker = ClientWorker.get_worker_by_id(client_id, timeout_seconds=WORKER_TIMEOUT_SECONDS)
+        is_connected = worker is not None
         
-        # If user is logged in and worker is connected, store client_id in session
-        # If user is logged out, clear client_id from session (if it exists)
-        # This associates the worker with the user's current session and revokes on logout
-        from SaveNLoad.views.custom_decorators import get_current_user
+        # Track where client_id came from (session vs URL)
+        client_id_from_session = hasattr(request, 'session') and request.session.get('client_id') == client_id
+        
+        # Update session if user is logged in and worker is connected
+        # If worker is offline, clear from session
         user = get_current_user(request)
         if hasattr(request, 'session'):
             if user and is_connected:
-                # User is logged in and worker is online - associate worker with session
-                request.session['client_id'] = client_id
-                request.session.modified = True
+                # User is logged in and worker is online - ensure session has client_id
+                # This handles the case where client_id came from URL parameter
+                if request.session.get('client_id') != client_id:
+                    request.session['client_id'] = client_id
+                    request.session.modified = True
             elif not user and 'client_id' in request.session:
                 # User is logged out - clear client_id (revoke association)
+                request.session.pop('client_id', None)
+                request.session.modified = True
+            elif user and not is_connected and client_id_from_session:
+                # Worker went offline - only clear if client_id came from session
+                # (Don't clear if client_id came from URL - that's a different worker)
                 request.session.pop('client_id', None)
                 request.session.modified = True
         
         return JsonResponse({
             'connected': is_connected,
-            'client_id': worker.client_id if worker and is_connected else None,
-            'last_heartbeat': worker.last_heartbeat.isoformat() if worker and is_connected else None,
+            'client_id': worker.client_id if worker else None,
+            'last_heartbeat': worker.last_heartbeat.isoformat() if worker else None,
         })
     else:
-        # No client_id provided - check if user's session has a worker and if it's online
-        # DO NOT assign a random worker - workers should be assigned via heartbeat/register_client
-        from SaveNLoad.views.custom_decorators import get_current_user
+        # No client_id known - return not connected
+        # Heartbeat will update session when worker connects/reconnects
+        # Frontend checks every 5s, so it will catch up within one heartbeat cycle (5s)
         user = get_current_user(request)
+        if user and hasattr(request, 'session') and 'client_id' in request.session:
+            # Clear stale client_id from session
+            request.session.pop('client_id', None)
+            request.session.modified = True
         
-        associated_worker = None
-        is_connected = False
-        
-        # Check if there's a client_id in session and if that worker is still online
-        if user and hasattr(request, 'session'):
-            existing_client_id = request.session.get('client_id')
-            if existing_client_id:
-                existing_worker = ClientWorker.get_worker_by_id(existing_client_id)
-                if existing_worker and existing_worker.is_online():
-                    # Existing worker in session is still online - use it
-                    associated_worker = existing_worker
-                    is_connected = True
-                else:
-                    # Existing worker is offline - clear it from session
-                    # DO NOT assign a new worker - let the client worker update via heartbeat
-                    request.session.pop('client_id', None)
-                    request.session.modified = True
-            # If no client_id in session, do NOT assign one - return connected: false
-            # The client worker will update the session via heartbeat/register_client
-        
-        # Build response
-        response_data = {
-            'connected': is_connected,
-        }
-        
-        # Include client_id if we have an associated worker (for logged-in users)
-        if associated_worker:
-            response_data['client_id'] = associated_worker.client_id
-            response_data['last_heartbeat'] = associated_worker.last_heartbeat.isoformat()
-        
-        return JsonResponse(response_data)
+        return JsonResponse({
+            'connected': False,
+            'client_id': None,
+            'last_heartbeat': None,
+        })
 
 
 @csrf_exempt

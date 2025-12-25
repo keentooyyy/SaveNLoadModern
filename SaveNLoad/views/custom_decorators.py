@@ -45,21 +45,94 @@ def login_required(view_func):
 
 
 def client_worker_required(view_func):
-    """Decorator to ensure client worker is connected before allowing access"""
+    """
+    Decorator to ensure client worker is connected before allowing access.
+    Checks session for client_id and validates worker is online (6s timeout).
+    """
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
-        # Check if any worker is connected
-        if not ClientWorker.is_worker_connected():
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                # AJAX request - return JSON error
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        
+        # Check authentication first
+        user = get_current_user(request)
+        if not user:
+            if is_ajax:
                 return JsonResponse({
-                    'error': 'Client worker not connected',
+                    'error': 'Not authenticated. Please log in.',
+                    'requires_login': True
+                }, status=401)
+            return redirect(reverse('SaveNLoad:login'))
+        
+        # Get client_id from URL (reconnection) or session
+        worker = None
+        if hasattr(request, 'session'):
+            # Check URL first (for reconnection scenarios)
+            client_id_from_url = request.GET.get('client_id', '').strip()
+            if client_id_from_url:
+                worker = ClientWorker.get_worker_by_id(client_id_from_url)
+                if worker and worker.is_online():
+                    # Associate URL worker with session
+                    request.session['client_id'] = client_id_from_url
+                    request.session.modified = True
+            
+            # If no URL worker, check session
+            if not worker:
+                client_id = request.session.get('client_id')
+                if client_id:
+                    worker = ClientWorker.get_worker_by_id(client_id)
+                    # Clear stale client_id if worker is offline
+                    if not worker or not worker.is_online():
+                        request.session.pop('client_id', None)
+                        request.session.modified = True
+                        worker = None
+        
+        # Require valid online worker
+        if not worker:
+            if is_ajax:
+                return JsonResponse({
+                    'error': 'Client worker not connected. Please ensure the client worker is running on your machine.',
                     'requires_worker': True
                 }, status=503)
-            else:
-                # Regular request - render worker required page directly
-                return render(request, 'SaveNLoad/worker_required.html')
+            return render(request, 'SaveNLoad/worker_required.html')
+        
         return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+def worker_required_unauthenticated(view_func):
+    """
+    Decorator for unauthenticated pages (login/register) that requires an active worker.
+    - If user is already authenticated: allow access (view will redirect them)
+    - If user is NOT authenticated: check for worker, show worker_required if none
+    """
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        # First check if user is already authenticated
+        user = get_current_user(request)
+        if user:
+            # User is authenticated - let them through
+            # The view's redirect_if_logged_in() will handle redirecting them
+            return view_func(request, *args, **kwargs)
+        
+        # User is NOT authenticated - check for worker
+        # Check if client_id is in URL
+        client_id_from_url = request.GET.get('client_id', '').strip()
+        
+        if client_id_from_url:
+            # Validate specific worker from URL
+            worker = ClientWorker.get_worker_by_id(client_id_from_url)
+            if worker and worker.is_online():
+                # Worker is online - allow access
+                return view_func(request, *args, **kwargs)
+        else:
+            # No client_id in URL - check if ANY worker is online
+            if ClientWorker.is_worker_connected():
+                # At least one worker is online - allow access
+                return view_func(request, *args, **kwargs)
+        
+        # No worker online - show worker required page
+        return render(request, 'SaveNLoad/worker_required.html')
+    
     return wrapper
 
 

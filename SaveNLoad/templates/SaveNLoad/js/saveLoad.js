@@ -115,6 +115,9 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
         
+        // Flag to prevent multiple completion handlers
+        let completionHandled = false;
+        
         const updateProgress = (progressData) => {
             const percentage = progressData.percentage || 0;
             const current = progressData.current || 0;
@@ -235,7 +238,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         progressDetails.textContent = `${overallPercent}% complete`;
                     }
                     
-                    if (allCompleted) {
+                    if (allCompleted && !completionHandled) {
+                        completionHandled = true;
                         progressBar.classList.remove('progress-bar-animated');
                         if (allSuccessful) {
                             progressBar.style.backgroundColor = getCSSVariable('--color-success');
@@ -281,15 +285,15 @@ document.addEventListener('DOMContentLoaded', function () {
                             }
                         }
                         
-                        // Close modal after a delay
+                        // Close modal after a delay, then refresh page
                         setTimeout(() => {
                             modal.hide();
-                            modalBackdrop.remove();
+                            setTimeout(() => {
+                                modalBackdrop.remove();
+                                // Refresh page to update recent games
+                                window.location.reload();
+                            }, 300);
                         }, 1500);
-                        // Refresh page after a short delay to update recent games
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 2000);
                         return true;
                     }
                     
@@ -313,7 +317,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         updateProgress(data.progress);
                     }
                     
-                    if (data.completed) {
+                    if (data.completed && !completionHandled) {
+                        completionHandled = true;
                         progressBar.classList.remove('progress-bar-animated');
                         progressBar.style.backgroundColor = getCSSVariable('--color-success');
                         progressBar.style.width = '100%';
@@ -325,15 +330,15 @@ document.addEventListener('DOMContentLoaded', function () {
                             isLoadOperation ? 'Game loaded successfully!' : 'Game saved successfully!',
                             'success'
                         );
-                        // Close modal after a delay
+                        // Close modal after a delay, then refresh page
                         setTimeout(() => {
                             modal.hide();
-                            modalBackdrop.remove();
+                            setTimeout(() => {
+                                modalBackdrop.remove();
+                                // Refresh page to update recent games
+                                window.location.reload();
+                            }, 300);
                         }, 1500);
-                        // Refresh page after a short delay to update recent games
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 2000);
                         return true;
                     } else if (data.failed) {
                         progressBar.classList.remove('progress-bar-animated');
