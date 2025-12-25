@@ -18,6 +18,7 @@ from django.core.files import File
 from urllib.parse import urlparse
 import json
 import os
+from django.db import models
 
 
 @login_required
@@ -766,3 +767,133 @@ def operation_queue_cleanup(request):
     
     else:
         return json_response_error('Invalid cleanup type. Must be: completed, failed, old, or all', status=400)
+
+
+@login_required
+@require_http_methods(["GET"])
+def list_users(request):
+    """List all users with pagination (Admin only)"""
+    user = get_current_user(request)
+    error_response = check_admin_or_error(user)
+    if error_response:
+        return error_response
+    
+    try:
+        from SaveNLoad.models import SimpleUsers
+        
+        # Get pagination parameters
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 25))  # Default 25 per page
+        
+        # Ensure valid page and page_size
+        if page < 1:
+            page = 1
+        if page_size < 1:
+            page_size = 25
+        if page_size > 100:  # Max 100 per page to prevent abuse
+            page_size = 100
+        
+        # Get search query if provided
+        search_query = request.GET.get('q', '').strip()
+        
+        # Get all users (or filtered by search) - exclude current user
+        users_query = SimpleUsers.objects.all().exclude(id=user.id).order_by('username')
+        
+        # Filter by search query if provided
+        if search_query:
+            users_query = users_query.filter(
+                models.Q(username__icontains=search_query) |
+                models.Q(email__icontains=search_query)
+            )
+        
+        # Calculate pagination
+        total_count = users_query.count()
+        total_pages = (total_count + page_size - 1) // page_size  # Ceiling division
+        
+        # Ensure page doesn't exceed total pages
+        if page > total_pages and total_pages > 0:
+            page = total_pages
+        
+        # Apply pagination
+        offset = (page - 1) * page_size
+        users = users_query[offset:offset + page_size]
+        
+        # Build user list
+        users_list = []
+        for u in users:
+            users_list.append({
+                'id': u.id,
+                'username': u.username,
+                'email': u.email,
+                'role': u.role,
+            })
+        
+        return json_response_success(
+            data={
+                'users': users_list,
+                'pagination': {
+                    'page': page,
+                    'page_size': page_size,
+                    'total_count': total_count,
+                    'total_pages': total_pages,
+                    'has_next': page < total_pages,
+                    'has_previous': page > 1,
+                }
+            }
+        )
+    except Exception as e:
+        print(f"ERROR: Error listing users: {str(e)}")
+        return json_response_error(f'Failed to list users: {str(e)}', status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def reset_user_password(request, user_id):
+    """Reset a user's password to default constant (Admin only)"""
+    user = get_current_user(request)
+    error_response = check_admin_or_error(user)
+    if error_response:
+        return error_response
+    
+    try:
+        from SaveNLoad.models import SimpleUsers
+        from SaveNLoad.views.input_sanitizer import validate_password_strength
+        import os
+        from django.conf import settings
+        
+        # Get target user
+        try:
+            target_user = SimpleUsers.objects.get(id=user_id)
+        except SimpleUsers.DoesNotExist:
+            return json_response_error('User not found.', status=404)
+        
+        # Prevent admin from resetting their own password
+        if target_user.id == user.id:
+            return json_response_error('You cannot reset your own password through this feature.', status=400)
+        
+        # Get default password from environment variable
+        DEFAULT_PASSWORD = os.getenv('RESET_PASSWORD_DEFAULT')
+        
+        # Validate default password strength (reuse existing validation)
+        is_valid, error_msg = validate_password_strength(DEFAULT_PASSWORD)
+        if not is_valid:
+            return json_response_error(f'Default password validation failed: {error_msg}', status=500)
+        
+        # Reset password using existing set_password method
+        target_user.set_password(DEFAULT_PASSWORD)
+        target_user.save()
+        
+        return json_response_success(
+            message=f'Password reset successfully for user "{target_user.username}". Default password has been set.',
+            data={
+                'user': {
+                    'id': target_user.id,
+                    'username': target_user.username,
+                    'email': target_user.email,
+                },
+                'password': DEFAULT_PASSWORD  # Include password in response
+            }
+        )
+    except Exception as e:
+        print(f"ERROR: Error resetting user password: {str(e)}")
+        return json_response_error(f'Failed to reset password: {str(e)}', status=500)

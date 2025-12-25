@@ -959,9 +959,10 @@ def main():
     server_url = os.getenv('SAVENLOAD_SERVER_URL', '').strip()
     
     parser = argparse.ArgumentParser(description='SaveNLoad Client Worker Service (Rclone)')
-    parser.add_argument('--server', default=server_url, 
+    parser.add_argument('--server', 
+                       default=os.getenv('SAVENLOAD_SERVER_URL'),
                        help='Django server URL (defaults to SAVENLOAD_SERVER_URL env var)')
-    parser.add_argument('--poll-interval', type=int, default=5, help='Poll interval in seconds')
+    parser.add_argument('--poll-interval', type=int, default=DEFAULT_POLL_INTERVAL, help='Poll interval in seconds')
     parser.add_argument('--remote', default='ftp', help='Rclone remote name (default: ftp)')
     
     args = parser.parse_args()

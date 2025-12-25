@@ -367,9 +367,22 @@ body {
 /* Accordion header transitions */
 .add-game-header,
 .account-settings-header,
-.operation-queue-header {
+.operation-queue-header,
+.manage-accounts-header {
     cursor: pointer;
     transition: all 0.3s ease;
+}
+
+/* Add transition for chevron rotation */
+.add-game-header i[class*="chevron"],
+.account-settings-header i[class*="chevron"],
+.operation-queue-header i[class*="chevron"],
+.manage-accounts-header i[class*="chevron"],
+#addGameChevron,
+#accountSettingsChevron,
+#operationQueueChevron,
+#manageAccountsChevron {
+    transition: transform 0.3s ease;
 }
 
 .add-game-header.active .add-game-icon,
@@ -377,10 +390,12 @@ body {
 .add-game-header.active .add-game-chevron,
 .account-settings-header.active .account-settings-icon,
 .account-settings-header.active .account-settings-title,
-.account-settings-header.active .account-settings-chevron,
 .operation-queue-header.active .operation-queue-icon,
 .operation-queue-header.active .operation-queue-title,
-.operation-queue-header.active .operation-queue-chevron {
+.operation-queue-header.active .operation-queue-chevron,
+.manage-accounts-header.active .manage-accounts-icon,
+.manage-accounts-header.active .manage-accounts-title,
+.manage-accounts-header.active .manage-accounts-chevron {
     color: var(--color-primary) !important;
 }
 
@@ -478,4 +493,59 @@ body {
 /* Hover effect for list items */
 .list-group-item-hover:hover {
     background-color: var(--primary-opacity-20) !important;
+}
+
+/* User management table - override Bootstrap defaults */
+#usersList .table,
+#usersList .table thead,
+#usersList .table tbody,
+#usersList .table tr,
+#usersList .table th,
+#usersList .table td {
+    background-color: transparent !important;
+    border-color: var(--white-opacity-10) !important;
+    color: var(--color-white) !important;
+}
+
+#usersList .table thead {
+    background-color: var(--sidebar-bg) !important;
+}
+
+#usersList .table thead th {
+    background-color: var(--sidebar-bg) !important;
+    color: var(--white-opacity-50) !important;
+}
+
+/* Alternative: Use primary color for header */
+/* #usersList .table thead {
+    background-color: var(--primary-opacity-30) !important;
+}
+
+#usersList .table thead th {
+    background-color: var(--primary-opacity-30) !important;
+    color: var(--white-opacity-50) !important;
+} */
+
+#usersList .table tbody tr {
+    background-color: transparent !important;
+}
+
+#usersList .table tbody tr:nth-child(even) {
+    background-color: var(--white-opacity-05) !important;
+}
+
+#usersList .table tbody tr:hover {
+    background-color: var(--primary-opacity-15) !important;
+}
+
+#usersList .table tbody td {
+    background-color: transparent !important;
+}
+
+#usersList .table tbody tr:nth-child(even) td {
+    background-color: var(--white-opacity-05) !important;
+}
+
+#usersList .table tbody tr:hover td {
+    background-color: var(--primary-opacity-15) !important;
 }

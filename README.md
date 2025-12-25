@@ -20,14 +20,17 @@ SaveNLoadModern is a modern, web-based game save file management system built wi
 ### Key Features
 
 - **Game Save Management**: Save and load game files with support for multiple save slots per game
+- **Multi-Path Save/Load**: Support for games with multiple save file locations - all paths are saved/loaded simultaneously with automatic subfolder organization
 - **Client Worker Application**: Standalone Python executable that runs on client PCs to handle save/load operations
 - **FTP Storage**: FTP storage integration using rclone for reliable file transfers with progress tracking and parallel transfers
 - **User Authentication**: Custom authentication system with role-based access (Admin/User)
 - **Admin Dashboard**: Comprehensive admin panel for managing games, users, and operations
+- **Admin Account Management**: Searchable user management interface for admins to view users and reset passwords
 - **RAWG API Integration**: Automatic game information retrieval using RAWG API for banners and metadata
 - **Operation Queue**: Asynchronous operation queue system for handling save/load requests
 - **Password Reset**: Secure OTP-based password reset functionality with email notifications
 - **Multi-Save Support**: Support for up to 10 save folders per user per game
+- **Open Save Location**: Quick access to open save file locations directly from the game management interface
 - **Modern UI**: Responsive Bootstrap 5 interface with custom styling
 
 ## Prerequisites
@@ -119,6 +122,9 @@ DEFAULT_ADMIN_USERNAME=admin
 DEFAULT_ADMIN_EMAIL=admin@example.com
 DEFAULT_ADMIN_PASSWORD=your-admin-password-here
 
+# Admin password reset (for manage accounts feature)
+RESET_PASSWORD_DEFAULT=ResetPassword123
+
 # Version
 VERSION_GITHUB_URL=https://raw.githubusercontent.com/keentooyyy/SaveNLoadModern/refs/heads/main/version.txt
 ```
@@ -127,6 +133,7 @@ VERSION_GITHUB_URL=https://raw.githubusercontent.com/keentooyyy/SaveNLoadModern/
 > - For Gmail, you need to generate an [App Password](https://support.google.com/accounts/answer/185833) instead of your regular password
 > - For production, set `DEBUG=False` and configure `ALLOWED_HOSTS` appropriately
 > - File storage is handled entirely by the client worker via rclone - no backend storage configuration needed
+> - `RESET_PASSWORD_DEFAULT` is used by admins to reset user passwords through the "Manage Accounts" feature. This password will be set when an admin resets a user's password.
 
 ### Step 2: Docker Deployment (Recommended)
 
@@ -510,34 +517,41 @@ Docker Compose automatically handles:
 ### Game Management
 
 - **Game Registration**: Add games manually or search via RAWG API
-- **Save File Locations**: Configure save file paths for each game
+- **Multiple Save File Locations**: Configure multiple save file paths for each game (supports games that save to multiple directories)
 - **Banner Images**: Automatic banner retrieval from RAWG API
 - **Game Metadata**: Store game information and last played timestamps
+- **Path Management**: Automatic path mapping and subfolder organization for multi-path games
 
 ### Save/Load System
 
 - **Multiple Save Slots**: Support for up to 10 save folders per game per user
+- **Multi-Path Support**: Games with multiple save locations are automatically handled - all paths are saved/loaded simultaneously
+- **Path Organization**: Multiple save paths are organized into subfolders (path_1, path_2, etc.) on the FTP server for proper organization
 - **FTP Storage**: Save files stored on FTP server using rclone for reliable transfers
-- **Operation Queue**: Asynchronous processing of save/load operations
-- **Progress Tracking**: Real-time progress tracking with file counts and transfer speeds
+- **Operation Queue**: Asynchronous processing of save/load operations with support for parallel multi-path operations
+- **Progress Tracking**: Real-time progress tracking with file counts and transfer speeds for all paths
 - **Empty Save Validation**: Automatic validation to prevent saving empty directories or files
 - **Backup Operations**: Download all saves, zip them, and save to local Downloads folder
+- **Open Save Location**: Quick access to open save file locations (opens all paths for multi-path games)
 
 ### Client Worker
 
 - **Standalone Application**: Python executable that runs on client PCs
 - **Rclone Integration**: Uses rclone for fast, reliable FTP file transfers with parallel workers
-- **Save Operations**: Upload local save files to FTP server with progress tracking
-- **Load Operations**: Download save files from FTP server to local machine with progress tracking
+- **Save Operations**: Upload local save files to FTP server with progress tracking (supports multiple paths simultaneously)
+- **Load Operations**: Download save files from FTP server to local machine with progress tracking (supports multiple paths simultaneously)
+- **Multi-Path Operations**: Automatically handles games with multiple save locations - processes all paths in parallel
 - **Backup Operations**: Download all saves for a game, zip them, and save to Downloads folder
+- **Open Folder Operations**: Create local folders if needed and open them in file explorer (supports multiple paths)
 - **API Integration**: Communicates with Django backend via REST API
 - **Session Management**: Maintains authentication with Django server
-- **Real-time Progress**: Sends real-time progress updates to web UI during transfers
+- **Real-time Progress**: Sends real-time progress updates to web UI during transfers for all operations
 
 ### Admin Dashboard
 
-- **User Management**: View and manage all users
-- **Game Management**: Add, edit, and remove games
+- **User Management**: View and manage all users with searchable interface
+- **Account Management**: Reset user passwords to default constant value (useful for password recovery)
+- **Game Management**: Add, edit, and remove games with support for multiple save file locations
 - **Operation Queue**: Monitor and manage save/load operations
 - **Settings**: Configure system-wide settings
 - **Statistics**: View usage statistics and analytics
@@ -563,10 +577,16 @@ Docker Compose automatically handles:
 
 ### Save/Load Operations
 
-- `POST /api/save/{game_id}/` - Save game file
-- `POST /api/load/{game_id}/` - Load game file
+- `POST /api/save/{game_id}/` - Save game file (supports multiple save paths)
+- `POST /api/load/{game_id}/` - Load game file (supports multiple save paths)
 - `GET /api/save-folders/{game_id}/` - Get save folders for game
+- `POST /api/open-save-location/{game_id}/` - Open save file location(s) in file explorer
 - `GET /api/operation-queue/` - Get operation queue status
+
+### Admin API (Admin Only)
+
+- `GET /admin/users/` - List all users (with optional search query parameter)
+- `POST /admin/users/{user_id}/reset-password/` - Reset user password to default constant value
 
 ### Client Worker API
 

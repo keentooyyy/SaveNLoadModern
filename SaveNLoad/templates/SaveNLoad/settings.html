@@ -16,6 +16,7 @@
 
             {% if not is_user %}
             {% include 'SaveNLoad/includes/add_game_form.html' %}
+            {% include 'SaveNLoad/includes/manage_accounts.html' %}
             {% include 'SaveNLoad/includes/operation_queue_management.html' %}
             {% include 'SaveNLoad/includes/game_search_modal.html' %}
             {% include 'SaveNLoad/includes/manage_game_modal.html' %}
@@ -51,6 +52,8 @@
         window.OPEN_SAVE_LOCATION_URL_PATTERN = '{% url "admin:open_save_location" 0 %}';
         window.OPERATION_QUEUE_STATS_URL = '{% url "admin:operation_queue_stats" %}';
         window.OPERATION_QUEUE_CLEANUP_URL = '{% url "admin:operation_queue_cleanup" %}';
+        window.LIST_USERS_URL = '{% url "admin:list_users" %}';
+        window.RESET_USER_PASSWORD_URL_PATTERN = '{% url "admin:reset_user_password" 0 %}';
         {% endif %}
     </script>
     <script>
@@ -62,6 +65,7 @@
         {% include 'SaveNLoad/js/manageGames.js' %}
         {% include 'SaveNLoad/js/saveLoad.js' %}
         {% include 'SaveNLoad/js/operationQueueManagement.js' %}
+        {% include 'SaveNLoad/js/manageAccounts.js' %}
         {% endif %}
     </script>
 {% endblock %}

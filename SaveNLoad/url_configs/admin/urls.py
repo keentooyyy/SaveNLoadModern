@@ -25,5 +25,7 @@ urlpatterns = [
     path('account/update/', settings.update_account_settings, name='update_account_settings'),
     path('operations/queue/stats/', settings.operation_queue_stats, name='operation_queue_stats'),
     path('operations/queue/cleanup/', settings.operation_queue_cleanup, name='operation_queue_cleanup'),
+    path('users/', settings.list_users, name='list_users'),
+    path('users/<int:user_id>/reset-password/', settings.reset_user_password, name='reset_user_password'),
 ]
 

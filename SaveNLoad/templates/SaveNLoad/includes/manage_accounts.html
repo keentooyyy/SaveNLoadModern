@@ -1,0 +1,52 @@
+<div class="container-fluid px-4 pt-3">
+    <div class="card shadow-lg bg-primary text-white border-0">
+        <!-- Collapsible Header -->
+        <button 
+            class="card-header bg-primary text-white border-0 p-3 w-100 text-start d-flex justify-content-between align-items-center manage-accounts-header"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#manageAccountsCollapse"
+            aria-expanded="false"
+            aria-controls="manageAccountsCollapse">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-users me-3 text-white manage-accounts-icon"></i>
+                <h5 class="mb-0 text-white manage-accounts-title">Manage Accounts</h5>
+            </div>
+            <i class="fas fa-chevron-right text-white manage-accounts-chevron" id="manageAccountsChevron"></i>
+        </button>
+
+        <!-- Collapsible Content -->
+        <div class="collapse" id="manageAccountsCollapse">
+            <div class="card-body">
+                <!-- Search Section -->
+                <div class="mb-4">
+                    <label for="userSearchInput" class="fs-6 opacity-50 mb-2">SEARCH BY USERNAME OR EMAIL</label>
+                    <div class="input-group">
+                        <input
+                            type="text"
+                            class="form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white"
+                            id="userSearchInput"
+                            placeholder="Type username or email to search...">
+                        <button type="button" class="btn btn-secondary text-white" id="userSearchBtn">
+                            <i class="fas fa-search me-1"></i>Search
+                        </button>
+                    </div>
+                </div>
+
+                <hr class="border-secondary mb-4">
+
+                <!-- Users List -->
+                <div class="mb-3">
+                    <h6 class="text-white mb-3 fw-bold">All Users</h6>
+                    <div id="usersList" class="text-white">
+                        <div class="text-center py-3">
+                            <div class="spinner-border text-light" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
