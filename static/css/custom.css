@@ -594,3 +594,26 @@ body {
     border: 1px solid var(--primary-opacity-30);
     color: var(--color-primary-bootstrap);
 }
+
+/* Dynamic Component Styles */
+.game-card-img-wrapper {
+    height: var(--card-height, 180px);
+}
+
+.game-card-title {
+    font-size: var(--card-title-size, 0.9rem);
+}
+
+.game-card-footer-text {
+    font-size: var(--card-footer-size, 0.75rem);
+}
+
+.game-card-body-wrapper {
+    min-height: var(--card-height, 180px);
+}
+
+.game-banner-preview-img {
+    height: var(--banner-height, 260px);
+    max-width: var(--banner-max-width, 180px);
+    object-fit: cover;
+}

@@ -1,30 +1,33 @@
 {% load static %}
 
-<div
-    class="card {{ card_class|default:'border-0 shadow' }} h-100 game-card"
-    {% if game_id %}data-game-id="{{ game_id }}"{% endif %}
-    {% if game_detail_url %} data-game-detail-url="{{ game_detail_url }}"{% endif %}
-    {% if game_delete_url %} data-game-delete-url="{{ game_delete_url }}"{% endif %}
->
+<div class="card {{ card_class|default:'border-0 shadow' }} h-100 game-card"{% if game_id %} data-game-id="{{ game_id }}"{% endif %}{% if game_detail_url %} data-game-detail-url="{{ game_detail_url }}"{% endif %}{% if game_delete_url %} data-game-delete-url="{{ game_delete_url }}"{% endif %}>
     {% if image %}
-    <div class="card-img-wrapper position-relative overflow-hidden bg-body" style="height: {{ card_height|default:'180px' }};">
-        <img src="{{ image }}" class="card-img-top w-100 h-100 game-card-img object-fit-cover" alt="{{ title|default:'' }}">
+    <div class="card-img-wrapper position-relative overflow-hidden bg-body game-card-img-wrapper"
+        style="--card-height: {{ card_height|default:'180px' }};">
+        <img src="{{ image }}" class="card-img-top w-100 h-100 game-card-img object-fit-cover"
+            alt="{{ title|default:'' }}">
         <div class="position-absolute bottom-0 start-0 end-0 p-{{ card_padding|default:'2' }} game-card-overlay">
             {% if title %}
-            <{{ card_title_tag|default:'h6' }} class="card-title text-white fw-bold mb-{{ card_title_mb|default:'0' }}" style="font-size: {{ card_title_size|default:'0.9rem' }};">{{ title }}</{{ card_title_tag|default:'h6' }}>
+            <{{ card_title_tag|default:'h6' }}
+                class="card-title text-white fw-bold mb-{{ card_title_mb|default:'0' }} game-card-title"
+                style="--card-title-size: {{ card_title_size|default:'0.9rem' }};">{{ title }}</{{
+                card_title_tag|default:'h6' }}>
             {% endif %}
             {% if footer %}
-            <small class="text-white-50 d-flex align-items-center mb-2" style="font-size: {{ card_footer_size|default:'0.75rem' }};">
+            <small class="text-white-50 d-flex align-items-center mb-2 game-card-footer-text"
+                style="--card-footer-size: {{ card_footer_size|default:'0.75rem' }};">
                 <i class="fas fa-{{ footer_icon|default:'clock' }} me-1"></i>
                 {{ footer }}
             </small>
             {% endif %}
             {% if game_id %}
             <div class="d-flex gap-2 mt-2">
-                <button class="btn btn-sm btn-success save-game-btn flex-fill" data-game-id="{{ game_id }}" title="Save Game to server">
+                <button class="btn btn-sm btn-success save-game-btn flex-fill" data-game-id="{{ game_id }}"
+                    title="Save Game to server">
                     <i class="fas fa-upload me-1"></i> Save
                 </button>
-                <button class="btn btn-sm btn-primary quick-load-btn flex-fill" data-game-id="{{ game_id }}" title="Quick Load - Load most recent save">
+                <button class="btn btn-sm btn-primary quick-load-btn flex-fill" data-game-id="{{ game_id }}"
+                    title="Quick Load - Load most recent save">
                     <i class="fas fa-download me-1"></i> Quick Load
                 </button>
             </div>
@@ -32,20 +35,24 @@
         </div>
     </div>
     {% else %}
-    <div class="card-body d-flex align-items-center justify-content-center bg-body" style="min-height: {{ card_height|default:'180px' }};">
+    <div class="card-body d-flex align-items-center justify-content-center bg-body game-card-body-wrapper"
+        style="--card-height: {{ card_height|default:'180px' }};">
         <div class="text-center w-100">
             {% if title %}
-            <{{ card_title_tag|default:'h6' }} class="card-title text-white mb-2">{{ title }}</{{ card_title_tag|default:'h6' }}>
+            <{{ card_title_tag|default:'h6' }} class="card-title text-white mb-2">{{ title }}</{{
+                card_title_tag|default:'h6' }}>
             {% endif %}
             {% if footer %}
             <p class="text-white-50 mb-3 small">{{ footer }}</p>
             {% endif %}
             {% if game_id %}
             <div class="d-flex gap-2 justify-content-center">
-                <button class="btn btn-sm btn-success save-game-btn" data-game-id="{{ game_id }}" title="Save Game to server">
+                <button class="btn btn-sm btn-success save-game-btn" data-game-id="{{ game_id }}"
+                    title="Save Game to server">
                     <i class="fas fa-upload me-1"></i> Save
                 </button>
-                <button class="btn btn-sm btn-primary quick-load-btn" data-game-id="{{ game_id }}" title="Quick Load - Load most recent save">
+                <button class="btn btn-sm btn-primary quick-load-btn" data-game-id="{{ game_id }}"
+                    title="Quick Load - Load most recent save">
                     <i class="fas fa-download me-1"></i> Quick Load
                 </button>
             </div>

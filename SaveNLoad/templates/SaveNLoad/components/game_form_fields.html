@@ -1,15 +1,11 @@
-{% comment %}
-Reusable game form fields component
-Usage: {% include 'SaveNLoad/components/game_form_fields.html' with banner_preview_id='banner_preview'
-banner_input_id='banner' name_input_id='name' container_id='save_locations_container'
-add_location_func='addSaveLocation' remove_location_func='removeSaveLocation(this)' %}
-{% endcomment %}
+{% load static %}
+{% static 'images/placeholder-banner.png' as placeholder_banner %}
 
 <!-- Banner Image Preview at the top -->
 <div class="mb-3">
     <img id="gameBannerPreview"
-        src="{% if game %}{{ game.banner.url }}{% else %}{% static 'images/placeholder-banner.png' %}{% endif %}"
-        alt="Game Banner Preview" class="img-fluid rounded border border-secondary game-banner-preview">
+        src="{% if game and game.banner %}{{ game.banner.url }}{% else %}{{ placeholder_banner }}{% endif %}"
+        alt="Game Banner Preview" class="img-fluid rounded border border-secondary game-banner-preview-img">
     <span class="text-white-50 small"></span>
 </div>
 
