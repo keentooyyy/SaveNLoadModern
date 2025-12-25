@@ -146,8 +146,11 @@ def download_image_from_url(image_url, save_path=None, timeout=3):
 def get_image_url_or_fallback(game, request=None):
     """
     Returns the best available image URL for a game.
-    Prioritizes local cached file, falls back to original URL.
+    Prioritizes local cached file (faster, works offline), falls back to original URL.
     Converts relative URLs to absolute URLs if request is provided.
+    
+    Performance optimized: Removed expensive os.path.exists() check.
+    Local cached files are checked first for better performance and offline support.
     
     Args:
         game: Game model instance
@@ -156,18 +159,55 @@ def get_image_url_or_fallback(game, request=None):
     Returns:
         str: URL to display (absolute URL if request provided, otherwise relative or original URL)
     """
-    # Check if local cached file exists
+    # Prioritize local cached file first (faster, works offline)
+    # Files exist in media/game_banners/ - use them when available
     if game.banner and game.banner.name:
         try:
-            if os.path.exists(game.banner.path):
-                url = game.banner.url
+            # Access the URL property - Django generates this from MEDIA_URL + file path
+            # This doesn't check if file exists, just generates the URL
+            url = game.banner.url
+            # Only use banner.url if it's a valid non-empty URL
+            if url and url.strip() and url != '/':
                 # Convert relative URL to absolute if request is provided
                 if request and url.startswith('/'):
                     return request.build_absolute_uri(url)
                 return url
-        except (ValueError, AttributeError):
+        except (ValueError, AttributeError, OSError) as e:
+            # File doesn't exist or other error - fall through to banner_url
+            # Log for debugging but don't fail
+            print(f"DEBUG: Failed to get banner.url for game {game.id}: {e}")
+            pass
+    else:
+        # Database field is empty - check if file exists in filesystem
+        print(f"DEBUG: game.banner is empty for game {game.id}, checking filesystem...")
+    
+    # Check if file exists in filesystem even if database field is empty
+    # This handles cases where file was saved but database wasn't updated
+    if game.id:
+        try:
+            from django.conf import settings
+            import glob
+            # Look for banner files matching the pattern banner_{game_id}.*
+            banner_pattern = os.path.join(settings.MEDIA_ROOT, 'game_banners', f'banner_{game.id}.*')
+            matching_files = glob.glob(banner_pattern)
+            if matching_files:
+                # Found a file - construct the URL
+                file_path = matching_files[0]
+                relative_path = os.path.relpath(file_path, settings.MEDIA_ROOT)
+                url = os.path.join(settings.MEDIA_URL, relative_path).replace('\\', '/')
+                # Convert relative URL to absolute if request is provided
+                if request and url.startswith('/'):
+                    return request.build_absolute_uri(url)
+                return url
+        except Exception as e:
+            print(f"DEBUG: Error checking filesystem for game {game.id} banner: {e}")
             pass
     
     # Fallback to original URL (should already be absolute)
-    return game.banner_url or ''
+    # This is used when local cached file doesn't exist or fails
+    if game.banner_url:
+        return game.banner_url
+    
+    # No banner available
+    return ''
 

@@ -82,4 +82,26 @@ class ClientWorker(models.Model):
         return cls.objects.filter(
             last_heartbeat__gte=timeout_threshold
         ).exists()
+    
+    @classmethod
+    def unclaim_offline_workers(cls, timeout_seconds: int = 25):
+        """
+        Automatically unclaim workers that have gone offline.
+        This allows users to claim other workers or allows workers to be claimed by others.
+        Uses 25 second timeout (5 heartbeats * 5 seconds) to give workers more time before unclaiming.
+        """
+        from datetime import timedelta
+        timeout_threshold = timezone.now() - timedelta(seconds=timeout_seconds)
+        
+        # Find workers that are claimed but haven't heartbeated recently
+        offline_workers = cls.objects.filter(
+            user__isnull=False,  # Only workers that are claimed
+            last_heartbeat__lt=timeout_threshold
+        )
+        
+        # Unclaim them
+        count = offline_workers.update(user=None)
+        if count > 0:
+            print(f"Auto-unclaimed {count} offline worker(s)")
+        return count
 

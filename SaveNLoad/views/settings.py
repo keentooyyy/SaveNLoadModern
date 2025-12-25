@@ -108,7 +108,7 @@ def create_game(request):
         # Generate path mappings if multiple paths
         game.generate_path_mappings()
         
-        # Try to download and cache banner image (non-blocking - if fails, URL is stored)
+        # Download and cache banner image (blocking - ensure it's cached)
         if banner:
             # Skip download if banner URL is from same server (localhost/local IP)
             from SaveNLoad.utils.image_utils import is_local_url
@@ -116,23 +116,34 @@ def create_game(request):
                 # Local URL - skip download, just store the URL
                 print(f"Banner URL is local ({banner}) - skipping download")
             else:
-                # Try to download and cache (non-blocking - fast timeout for production)
+                # Download and cache banner (increased timeout for external URLs)
                 try:
-                    success, message, file_obj = download_image_from_url(banner, timeout=3)
+                    success, message, file_obj = download_image_from_url(banner, timeout=10)
                     if success and file_obj:
                         try:
                             # Determine file extension
                             parsed = urlparse(banner)
                             ext = os.path.splitext(parsed.path)[1] or '.jpg'
                             game.banner.save(f"banner_{game.id}{ext}", File(file_obj), save=True)
+                            # Refresh game object to ensure banner field is updated
+                            game.refresh_from_db()
+                            # Update banner_url to local URL after successful download
+                            if game.banner:
+                                local_url = request.build_absolute_uri(game.banner.url) if request else game.banner.url
+                                game.banner_url = local_url
+                                game.save(update_fields=['banner_url'])
                             # Clean up temp file
                             if hasattr(file_obj, 'name'):
                                 os.unlink(file_obj.name)
+                            print(f"Successfully downloaded and cached banner for game {game.id}: {game.banner.name if game.banner else 'NOT SET'}")
                         except Exception as e:
-                            print(f"WARNING: Failed to save cached banner for game {game.id}: {e}")
+                            print(f"ERROR: Failed to save cached banner for game {game.id}: {e}")
                             # Continue - banner_url is already stored as fallback
+                    else:
+                        print(f"WARNING: Failed to download banner for game {game.id}: {message}")
+                        # Continue - banner_url is already stored as fallback
                 except Exception as e:
-                    print(f"WARNING: Banner download skipped for game {game.id}: {e}")
+                    print(f"ERROR: Banner download failed for game {game.id}: {e}")
                     # Don't block the save operation - banner will load from URL
         
         return json_response_success(
@@ -338,7 +349,8 @@ def game_detail(request, game_id):
         return JsonResponse({
             'id': game.id,
             'name': game.name,
-            'banner': get_image_url_or_fallback(game, request),
+            'banner': get_image_url_or_fallback(game, request),  # Display URL for preview
+            'banner_url': game.banner_url or '',  # Original URL for input field
             'save_file_locations': game.save_file_locations,
             'last_played': game.last_played.isoformat() if getattr(game, "last_played", None) else None,
             'pending_deletion': getattr(game, 'pending_deletion', False),
@@ -399,9 +411,9 @@ def game_detail(request, game_id):
             # Local URL - skip download, just store the URL
             print(f"Banner URL is local ({banner}) - skipping download")
         else:
-            # Try to download and cache (non-blocking - fast timeout for production)
+            # Download and cache banner (increased timeout for external URLs)
             try:
-                success, message, file_obj = download_image_from_url(banner, timeout=3)
+                success, message, file_obj = download_image_from_url(banner, timeout=10)
                 if success and file_obj:
                     try:
                         # Delete old banner if exists
@@ -417,13 +429,25 @@ def game_detail(request, game_id):
                         parsed = urlparse(banner)
                         ext = os.path.splitext(parsed.path)[1] or '.jpg'
                         game.banner.save(f"banner_{game.id}{ext}", File(file_obj), save=False)
+                        # Refresh game object to ensure banner field is updated
+                        game.refresh_from_db()
+                        # Update banner_url to local URL after successful download
+                        if game.banner:
+                            local_url = request.build_absolute_uri(game.banner.url) if request else game.banner.url
+                            game.banner_url = local_url
+                            game.save(update_fields=['banner_url'])
                         # Clean up temp file
                         if hasattr(file_obj, 'name'):
                             os.unlink(file_obj.name)
+                        print(f"Successfully downloaded and cached banner for game {game.id}: {game.banner.name if game.banner else 'NOT SET'}")
                     except Exception as e:
-                        print(f"WARNING: Failed to cache banner for game {game.id}: {e}")
+                        print(f"ERROR: Failed to save cached banner for game {game.id}: {e}")
+                        # Continue - banner_url is already stored as fallback
+                else:
+                    print(f"WARNING: Failed to download banner for game {game.id}: {message}")
+                    # Continue - banner_url is already stored as fallback
             except Exception as e:
-                print(f"WARNING: Banner download skipped for game {game.id}: {e}")
+                print(f"ERROR: Banner download failed for game {game.id}: {e}")
                 # Don't block the save operation - banner will load from URL
     else:
         # If banner is cleared, also clear cached file
@@ -444,7 +468,8 @@ def game_detail(request, game_id):
             'game': {
                 'id': game.id,
                 'name': game.name,
-                'banner': get_image_url_or_fallback(game, request),
+                'banner': get_image_url_or_fallback(game, request),  # Display URL for preview
+                'banner_url': game.banner_url or '',  # Original URL for input field
                 'save_file_locations': game.save_file_locations,
             }
         }

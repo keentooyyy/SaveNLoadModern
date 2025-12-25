@@ -168,7 +168,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
             idInput.value = data.id || '';
             nameInput.value = data.name || '';
-            bannerInput.value = data.banner || '';
+            // Use banner_url (original URL) for input field, banner (display URL) for preview
+            bannerInput.value = data.banner_url || data.banner || '';
             // Use manager to populate save locations
             // Handle both old format (string) and new format (array)
             let saveLocationStr = '';
@@ -179,8 +180,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 saveLocationStr = data.save_file_location;
             }
             manageSaveLocationManager.populateLocations(saveLocationStr);
-            // Use shared updateBannerPreview function
-            updateBannerPreview('manage_banner_preview', data.banner || '');
+            // Use shared updateBannerPreview function with display URL
+            updateBannerPreview('manage_banner_preview', data.banner || data.banner_url || '');
 
             // Hide/show saves tab based on flag
             const savesTabContainer = document.getElementById('saves-tab-container');

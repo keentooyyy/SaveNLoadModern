@@ -1,12 +1,8 @@
-{% load static %}
-{% static 'images/placeholder-banner.png' as placeholder_banner %}
-
 <!-- Banner Image Preview at the top -->
 <div class="mb-3">
-    <img id="gameBannerPreview"
-        src="{% if game and game.banner %}{{ game.banner.url }}{% else %}{{ placeholder_banner }}{% endif %}"
-        alt="Game Banner Preview" class="img-fluid rounded border border-secondary game-banner-preview-img">
-    <span class="text-white-50 small"></span>
+    <div id="{{ banner_preview_id|default:'gameBannerPreview' }}" class="game-banner-preview">
+        <!-- Banner preview will be populated by JavaScript -->
+    </div>
 </div>
 
 <!-- Banner URL input (drives the image above) -->

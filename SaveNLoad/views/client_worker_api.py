@@ -117,6 +117,9 @@ def check_connection(request):
     from SaveNLoad.views.custom_decorators import get_current_user
     from SaveNLoad.models.client_worker import ClientWorker
     
+    # Auto-unclaim offline workers before checking (uses 25 second timeout = 5 heartbeats)
+    ClientWorker.unclaim_offline_workers()
+    
     # Check for worker owned by this user - rely on relationship and is_online() check
     user = get_current_user(request)
     if not user:
@@ -451,6 +454,9 @@ def get_unpaired_workers(request):
     user = get_current_user(request)
     if not user:
         return json_response_error('Authentication required', status=401)
+    
+    # Auto-unclaim offline workers to keep list accurate
+    ClientWorker.unclaim_offline_workers(timeout_seconds=WORKER_TIMEOUT_SECONDS)
     
     # Get online workers that have no user assigned
     # Rely on is_online() check instead of cleanup
