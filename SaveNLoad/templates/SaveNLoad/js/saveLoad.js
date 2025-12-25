@@ -155,9 +155,17 @@ document.addEventListener('DOMContentLoaded', function () {
                             if (response.ok) {
                                 const data = await response.json();
                                 if (data.completed) {
-                                    operationStatuses[opId] = { completed: true, success: !data.failed };
+                                    operationStatuses[opId] = { 
+                                        completed: true, 
+                                        success: !data.failed,
+                                        message: data.message || null  // Store error message
+                                    };
                                 } else if (data.failed) {
-                                    operationStatuses[opId] = { completed: true, success: false };
+                                    operationStatuses[opId] = { 
+                                        completed: true, 
+                                        success: false,
+                                        message: data.message || null  // Store error message
+                                    };
                                 } else {
                                     // Store progress data for real-time updates
                                     if (data.progress) {
@@ -252,8 +260,25 @@ document.addEventListener('DOMContentLoaded', function () {
                         } else {
                             progressBar.style.backgroundColor = getCSSVariable('--color-danger');
                             progressText.textContent = 'All Operations Failed';
-                            progressDetails.textContent = 'Save operation failed for all locations';
-                            window.showToast('Save operation failed for all locations.', 'error');
+                            
+                            // Collect error messages from failed operations
+                            const errorMessages = Object.values(operationStatuses)
+                                .filter(status => status.completed && !status.success && status.message)
+                                .map(status => status.message);
+                            
+                            // Show specific error message(s) if available, otherwise generic message
+                            if (errorMessages.length > 0) {
+                                // If all errors are the same, show it once; otherwise show first error
+                                const uniqueErrors = [...new Set(errorMessages)];
+                                const displayMessage = uniqueErrors.length === 1 
+                                    ? uniqueErrors[0]
+                                    : uniqueErrors[0] + (uniqueErrors.length > 1 ? ` (and ${uniqueErrors.length - 1} more)` : '');
+                                progressDetails.textContent = displayMessage;
+                                window.showToast(displayMessage, 'error');
+                            } else {
+                                progressDetails.textContent = 'Save operation failed for all locations';
+                                window.showToast('Save operation failed for all locations.', 'error');
+                            }
                         }
                         
                         // Close modal after a delay
