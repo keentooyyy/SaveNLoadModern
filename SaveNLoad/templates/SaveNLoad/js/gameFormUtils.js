@@ -3,35 +3,27 @@
  * Used by both settings.js and manageGames.js
  */
 
-/**
- * Clear all children from an element
- */
-function clearElement(element) {
-    if (!element) return;
-    while (element.firstChild) {
-        element.removeChild(element.firstChild);
-    }
-}
+// clearElement is now in utils.js
 
 /**
  * Validate if a URL is safe for image loading
  */
 function isValidImageUrl(url) {
     if (!url || typeof url !== 'string') return false;
-    
+
     // Remove whitespace
     url = url.trim();
     if (!url) return false;
-    
+
     // Block dangerous schemes
     const lowerUrl = url.toLowerCase();
-    if (lowerUrl.startsWith('javascript:') || 
-        lowerUrl.startsWith('data:') || 
+    if (lowerUrl.startsWith('javascript:') ||
+        lowerUrl.startsWith('data:') ||
         lowerUrl.startsWith('vbscript:') ||
         lowerUrl.startsWith('file:')) {
         return false;
     }
-    
+
     // Only allow http/https URLs
     try {
         const urlObj = new URL(url);
@@ -42,7 +34,7 @@ function isValidImageUrl(url) {
         // Invalid URL format
         return false;
     }
-    
+
     return true;
 }
 
@@ -59,12 +51,12 @@ function updateBannerPreview(bannerPreviewElementOrId, bannerUrl) {
     } else {
         bannerPreviewElement = bannerPreviewElementOrId;
     }
-    
+
     if (!bannerPreviewElement) {
         console.warn('Banner preview element not found');
         return;
     }
-    
+
     clearElement(bannerPreviewElement);
     if (!bannerUrl) return;
 
@@ -113,26 +105,26 @@ class SaveLocationManager {
     createRow() {
         const row = document.createElement('div');
         row.className = 'input-group mb-2 save-location-row';
-        
+
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white save-location-input';
         input.placeholder = 'Enter save file location';
         input.required = true;
-        
+
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'btn btn-outline-danger text-white remove-location-btn';
         removeBtn.onclick = () => this.removeLocation(removeBtn);
         removeBtn.style.display = 'none';
-        
+
         const removeIcon = document.createElement('i');
         removeIcon.className = 'fas fa-times';
         removeBtn.appendChild(removeIcon);
-        
+
         row.appendChild(input);
         row.appendChild(removeBtn);
-        
+
         return row;
     }
 
@@ -145,7 +137,7 @@ class SaveLocationManager {
             this.container = document.getElementById(this.containerId);
         }
         if (!this.container) return;
-        
+
         const newRow = this.createRow();
         this.container.appendChild(newRow);
         this.updateRemoveButtons();
@@ -170,10 +162,10 @@ class SaveLocationManager {
             this.container = document.getElementById(this.containerId);
         }
         if (!this.container) return;
-        
+
         const rows = this.container.querySelectorAll('.save-location-row');
         const removeButtons = this.container.querySelectorAll('.remove-location-btn');
-        
+
         // Show remove buttons only if there are 2+ locations
         removeButtons.forEach(btn => {
             btn.style.display = rows.length > 1 ? 'block' : 'none';
@@ -188,7 +180,7 @@ class SaveLocationManager {
             this.container = document.getElementById(this.containerId);
         }
         if (!this.container) return [];
-        
+
         const inputs = this.container.querySelectorAll('.save-location-input');
         const locations = [];
         inputs.forEach(input => {
@@ -209,12 +201,12 @@ class SaveLocationManager {
             this.container = document.getElementById(this.containerId);
         }
         if (!this.container) return;
-        
+
         // Clear existing rows
         while (this.container.firstChild) {
             this.container.removeChild(this.container.firstChild);
         }
-        
+
         // Split by newline if multiple locations, otherwise use single location
         const locations = saveFileLocation ? saveFileLocation.split('\n').filter(loc => loc.trim()) : [];
         if (locations.length === 0) {

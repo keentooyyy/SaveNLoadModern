@@ -71,6 +71,7 @@ class ClientWorkerServiceRclone:
         self.running = False
         self._heartbeat_thread = None
         self._current_client_id = None
+        self.linked_user = None  # Track ownership status
         
         # Setup rich console for formatted output
         self.console = Console()
@@ -654,7 +655,14 @@ class ClientWorkerServiceRclone:
                 f"{self.server_url}/api/client/register/",
                 json={'client_id': client_id}
             )
-            return response.status_code == 200
+            if response.status_code == 200:
+                data = response.json()
+                # Parse linked_user from response data if available (nested in data usually, or top level?)
+                # API returns {data: {client_id, linked_user}}
+                response_data = data_obj = data.get('data', {}) if 'data' in data else data
+                self.linked_user = response_data.get('linked_user')
+                return True
+            return False
         except Exception:
             return False
     
@@ -666,7 +674,22 @@ class ClientWorkerServiceRclone:
                 json={'client_id': client_id},
                 timeout=5
             )
-            return response.status_code == 200
+            if response.status_code == 200:
+                data = response.json()
+                # API returns {data: {linked_user}}
+                response_data = data.get('data', {}) if 'data' in data else data
+                new_user = response_data.get('linked_user')
+                
+                # Check for status change
+                if new_user != self.linked_user:
+                    if new_user:
+                        self._safe_console_print(f"\n[green]✓ Device claimed by user: {new_user}[/green]")
+                    else:
+                        self._safe_console_print(f"\n[yellow]! Device unclaimed (waiting for owner)[/yellow]")
+                    self.linked_user = new_user
+                    
+                return True
+            return False
         except Exception:
             return False
     
@@ -785,10 +808,14 @@ class ClientWorkerServiceRclone:
         rclone_status = "[green][OK][/green]" if rclone_success else "[red][FAIL][/red]"
         
         # Status output using rich Panel with ASCII-safe indicators
+        # Status output using rich Panel with ASCII-safe indicators
+        owner_status = f"[green]Owned by: {self.linked_user}[/green]" if self.linked_user else "[yellow]Waiting for Claim[/yellow]"
+        
         status_content = f"""[green][OK][/green] Connected to server
 [green][OK][/green] Service running (polling every {self.poll_interval}s)
 [green][OK][/green] Client ID: {client_id}
-{rclone_status} {rclone_message}"""
+{rclone_status} {rclone_message}
+{owner_status}"""
         
         self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, args=(client_id,), daemon=True)
         self._heartbeat_thread.start()
@@ -803,13 +830,14 @@ class ClientWorkerServiceRclone:
         )
         self.console.print(status_panel)
         
-        try:
-            # Open login page (root URL) with client_id parameter
-            # This allows the browser to associate the worker with the user's session after login
-            url_with_client = f"{self.server_url}/?client_id={client_id}"
-            webbrowser.open(url_with_client)
-        except Exception:
-            pass
+        # Browser opening removed - using Dashboard Claim flow
+        # try:
+        #     # Open login page (root URL) with client_id parameter
+        #     # This allows the browser to associate the worker with the user's session after login
+        #     url_with_client = f"{self.server_url}/?client_id={client_id}"
+        #     webbrowser.open(url_with_client)
+        # except Exception:
+        #     pass
         
         # Important message panel
         info_panel = Panel(

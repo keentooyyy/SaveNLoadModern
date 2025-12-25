@@ -2,9 +2,9 @@
  * Verify OTP Form Handler
  * Uses shared utility functions from utils.js
  */
-(function() {
+(function () {
     'use strict';
-    
+
     // Clear input and focus - local helper function
     function clearAndFocusInput() {
         if (otpInput) {
@@ -12,12 +12,12 @@
             otpInput.focus();
         }
     }
-    
+
     // Show loading indicator in the input field
     function showLoadingState(isLoading) {
         const otpInput = document.getElementById('otp_code');
         if (!otpInput) return;
-        
+
         if (isLoading) {
             otpInput.disabled = true;
             otpInput.style.opacity = '0.6';
@@ -37,21 +37,21 @@
             }
         }
     }
-    
+
     const verifyOtpForm = document.getElementById('verifyOtpForm');
     const resendOtpBtn = document.getElementById('resendOtpBtn');
     const otpInput = document.getElementById('otp_code');
     let isSubmitting = false; // Prevent multiple submissions
-    
+
     // Auto-focus OTP input
     if (otpInput) {
         otpInput.focus();
     }
-    
+
     // Function to check OTP length and handle auto-submit
     function checkOtpLength() {
         const otpCode = otpInput?.value.trim() || '';
-        
+
         // Only auto-submit if we have 6 digits and not already submitting
         if (otpCode.length === 6 && !isSubmitting) {
             // Auto-submit the form after a short delay for better UX
@@ -62,48 +62,48 @@
             }, 300);
         }
     }
-    
+
     // Only allow numbers in OTP input
     if (otpInput) {
-        otpInput.addEventListener('input', function(e) {
+        otpInput.addEventListener('input', function (e) {
             e.target.value = e.target.value.replace(/[^0-9]/g, '');
             // Check if all 6 digits are entered
             checkOtpLength();
         });
-        
+
         // Also check on paste events
-        otpInput.addEventListener('paste', function(e) {
+        otpInput.addEventListener('paste', function (e) {
             setTimeout(() => {
                 e.target.value = e.target.value.replace(/[^0-9]/g, '');
                 checkOtpLength();
             }, 10);
         });
     }
-    
+
     if (verifyOtpForm) {
-        verifyOtpForm.addEventListener('submit', async function(e) {
+        verifyOtpForm.addEventListener('submit', async function (e) {
             e.preventDefault();
-            
+
             // Prevent multiple submissions
             if (isSubmitting) {
                 return;
             }
-            
+
             const csrfToken = window.getCsrfToken();
             if (!csrfToken) {
                 return;
             }
-            
+
             const otpCode = otpInput?.value.trim() || '';
             const otpError = document.getElementById('otp-error');
-            
+
             // Clear previous errors
             if (otpError) {
                 otpError.classList.add('d-none');
                 otpError.classList.remove('d-block');
                 otpError.textContent = '';
             }
-            
+
             // Basic validation
             if (!otpCode) {
                 if (otpError) {
@@ -113,7 +113,7 @@
                 }
                 return;
             }
-            
+
             if (otpCode.length !== 6) {
                 if (otpError) {
                     otpError.textContent = 'OTP code must be 6 digits.';
@@ -122,11 +122,11 @@
                 }
                 return;
             }
-            
+
             // Set submitting state and show loading
             isSubmitting = true;
             showLoadingState(true);
-            
+
             try {
                 const response = await fetch('{% url "SaveNLoad:verify_otp" %}', {
                     method: 'POST',
@@ -136,9 +136,9 @@
                         otp_code: otpCode
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     // Redirect to reset password page
                     if (data.redirect_url) {
@@ -169,26 +169,19 @@
             }
         });
     }
-    
+
     if (resendOtpBtn) {
-        resendOtpBtn.addEventListener('click', async function(e) {
+        resendOtpBtn.addEventListener('click', async function (e) {
             e.preventDefault();
-            
+
             const csrfToken = window.getCsrfToken();
             if (!csrfToken) {
                 return;
             }
-            
+
             // Disable button and show loading state
-            const originalContent = Array.from(resendOtpBtn.childNodes);
-            resendOtpBtn.disabled = true;
-            resendOtpBtn.textContent = '';
-            const spinnerIcon = document.createElement('i');
-            spinnerIcon.className = 'fas fa-spinner fa-spin me-1';
-            const loadingText = document.createTextNode('SENDING...');
-            resendOtpBtn.appendChild(spinnerIcon);
-            resendOtpBtn.appendChild(loadingText);
-            
+            window.setButtonLoadingState(resendOtpBtn, true, 'SENDING...');
+
             try {
                 const response = await fetch('{% url "SaveNLoad:verify_otp" %}', {
                     method: 'POST',
@@ -197,9 +190,9 @@
                         action: 'resend'
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     window.showToast(data.message || 'A new code has been sent to your email address.', 'success');
                     // Clear OTP input
@@ -212,11 +205,7 @@
                 console.error('Error resending OTP:', error);
                 window.showToast('Error: Failed to resend OTP. Please try again.', 'error');
             } finally {
-                resendOtpBtn.disabled = false;
-                resendOtpBtn.textContent = '';
-                originalContent.forEach(node => {
-                    resendOtpBtn.appendChild(node.cloneNode(true));
-                });
+                window.setButtonLoadingState(resendOtpBtn, false);
             }
         });
     }

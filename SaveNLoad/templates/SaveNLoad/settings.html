@@ -4,68 +4,69 @@
 {% block title %}Settings{% endblock %}
 
 {% block content %}
-    <!-- Desktop Sidebar (Fixed) -->
-    <div class="d-none d-lg-block">
-        {% include 'SaveNLoad/includes/sidebar.html' with is_user=is_user|default:False %}
-    </div>
-    
-    <!-- Main Content -->
-    <div class="main-content">
-        <div class="container-fluid px-0">
-            {% include 'SaveNLoad/components/page_header.html' with page_title="Settings" %}
+<!-- Desktop Sidebar (Fixed) -->
+<div class="d-none d-lg-block">
+    {% include 'SaveNLoad/includes/sidebar.html' with is_user=is_user|default:False %}
+</div>
 
-            {% if not is_user %}
-            {% include 'SaveNLoad/includes/add_game_form.html' %}
-            {% include 'SaveNLoad/includes/manage_accounts.html' %}
-            {% include 'SaveNLoad/includes/operation_queue_management.html' %}
-            {% include 'SaveNLoad/includes/game_search_modal.html' %}
-            {% include 'SaveNLoad/includes/manage_game_modal.html' %}
-            {% endif %}
-            
-            {% include 'SaveNLoad/includes/account_settings.html' %}
-        </div>
-    </div>
-    
-    <!-- Mobile Sidebar (Offcanvas) -->
-    <div class="d-lg-none">
-        {% include 'SaveNLoad/includes/sidebar.html' with sidebar_id="sidebarMobile" is_user=is_user|default:False %}
-    </div>
+<!-- Main Content -->
+<div class="main-content">
+    <div class="container-fluid px-0">
+        {% include 'SaveNLoad/components/page_header.html' with page_title="Settings" %}
 
-    <script>
-        // Inject Django URLs for worker check
-        window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
-        window.UPDATE_ACCOUNT_SETTINGS_URL = '{% if is_user %}{% url "user:update_account_settings" %}{% else %}{% url "admin:update_account_settings" %}{% endif %}';
-        
         {% if not is_user %}
-        // Admin-only URLs
-        window.CREATE_GAME_URL = '{% url "admin:create_game" %}';
-        window.LIST_SAVE_FOLDERS_URL_PATTERN = '{% url "admin:list_save_folders" 0 %}';
-        window.LOAD_GAME_URL_PATTERN = '{% url "admin:load_game" 0 %}';
-        window.SAVE_GAME_URL_PATTERN = '{% url "admin:save_game" 0 %}';
-        window.CHECK_OPERATION_STATUS_URL_PATTERN = '{% url "admin:check_operation_status" 0 %}';
-        window.DELETE_SAVE_FOLDER_URL_PATTERN = '{% url "admin:delete_save_folder" 0 0 %}';
-        window.GAME_DETAIL_URL_PATTERN = '{% url "admin:game_detail" 0 %}';
-        window.GAME_DELETE_URL_PATTERN = '{% url "admin:game_delete" 0 %}';
-        window.BACKUP_ALL_SAVES_URL_PATTERN = '{% url "admin:backup_all_saves" 0 %}';
-        window.DELETE_ALL_SAVES_URL_PATTERN = '{% url "admin:delete_all_saves" 0 %}';
-        window.GET_SAVE_LOCATION_URL_PATTERN = '{% url "admin:get_game_save_location" 0 %}';
-        window.OPEN_SAVE_LOCATION_URL_PATTERN = '{% url "admin:open_save_location" 0 %}';
-        window.OPERATION_QUEUE_STATS_URL = '{% url "admin:operation_queue_stats" %}';
-        window.OPERATION_QUEUE_CLEANUP_URL = '{% url "admin:operation_queue_cleanup" %}';
-        window.LIST_USERS_URL = '{% url "admin:list_users" %}';
-        window.RESET_USER_PASSWORD_URL_PATTERN = '{% url "admin:reset_user_password" 0 %}';
+        {% include 'SaveNLoad/includes/add_game_form.html' %}
+        {% include 'SaveNLoad/includes/manage_accounts.html' %}
+        {% include 'SaveNLoad/includes/operation_queue_management.html' %}
+        {% include 'SaveNLoad/includes/game_search_modal.html' %}
+        {% include 'SaveNLoad/includes/manage_game_modal.html' %}
         {% endif %}
-    </script>
-    <script>
-        {% include 'SaveNLoad/js/workerCheck.js' %}
-        {% include 'SaveNLoad/js/accountSettings.js' %}
-        {% if not is_user %}
-        {% include 'SaveNLoad/js/settings.js' %}
-        {% include 'SaveNLoad/js/addGameForm.js' %}
-        {% include 'SaveNLoad/js/manageGames.js' %}
-        {% include 'SaveNLoad/js/saveLoad.js' %}
-        {% include 'SaveNLoad/js/operationQueueManagement.js' %}
-        {% include 'SaveNLoad/js/manageAccounts.js' %}
-        {% endif %}
-    </script>
+
+        {% include 'SaveNLoad/includes/account_settings.html' %}
+    </div>
+</div>
+
+<!-- Mobile Sidebar (Offcanvas) -->
+<div class="d-lg-none">
+    {% include 'SaveNLoad/includes/sidebar.html' with sidebar_id="sidebarMobile" is_user=is_user|default:False %}
+</div>
+
+<script>
+    // Inject Django URLs for worker check
+    window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
+    window.UPDATE_ACCOUNT_SETTINGS_URL = '{% if is_user %}{% url "user:update_account_settings" %}{% else %}{% url "admin:update_account_settings" %}{% endif %}';
+
+    {% if not is_user %}
+    // Admin-only URLs
+    window.CREATE_GAME_URL = '{% url "admin:create_game" %}';
+    window.LIST_SAVE_FOLDERS_URL_PATTERN = '{% url "admin:list_save_folders" 0 %}';
+    window.LOAD_GAME_URL_PATTERN = '{% url "admin:load_game" 0 %}';
+    window.SAVE_GAME_URL_PATTERN = '{% url "admin:save_game" 0 %}';
+    window.CHECK_OPERATION_STATUS_URL_PATTERN = '{% url "admin:check_operation_status" 0 %}';
+    window.DELETE_SAVE_FOLDER_URL_PATTERN = '{% url "admin:delete_save_folder" 0 0 %}';
+    window.GAME_DETAIL_URL_PATTERN = '{% url "admin:game_detail" 0 %}';
+    window.GAME_DELETE_URL_PATTERN = '{% url "admin:game_delete" 0 %}';
+    window.BACKUP_ALL_SAVES_URL_PATTERN = '{% url "admin:backup_all_saves" 0 %}';
+    window.DELETE_ALL_SAVES_URL_PATTERN = '{% url "admin:delete_all_saves" 0 %}';
+    window.GET_SAVE_LOCATION_URL_PATTERN = '{% url "admin:get_game_save_location" 0 %}';
+    window.OPEN_SAVE_LOCATION_URL_PATTERN = '{% url "admin:open_save_location" 0 %}';
+    window.OPERATION_QUEUE_STATS_URL = '{% url "admin:operation_queue_stats" %}';
+    window.OPERATION_QUEUE_CLEANUP_URL = '{% url "admin:operation_queue_cleanup" %}';
+    window.LIST_USERS_URL = '{% url "admin:list_users" %}';
+    window.RESET_USER_PASSWORD_URL_PATTERN = '{% url "admin:reset_user_password" 0 %}';
+    {% endif %}
+</script>
+<script>
+    {% include 'SaveNLoad/js/workerCheck.js' %}
+    {% include 'SaveNLoad/js/accountSettings.js' %}
+    {% if not is_user %}
+    {% include 'SaveNLoad/js/gameFormUtils.js' %}
+    {% include 'SaveNLoad/js/settings.js' %}
+    {% include 'SaveNLoad/js/addGameForm.js' %}
+    {% include 'SaveNLoad/js/manageGames.js' %}
+    {% include 'SaveNLoad/js/saveLoad.js' %}
+    {% include 'SaveNLoad/js/operationQueueManagement.js' %}
+    {% include 'SaveNLoad/js/manageAccounts.js' %}
+    {% endif %}
+</script>
 {% endblock %}

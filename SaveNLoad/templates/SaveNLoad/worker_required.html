@@ -1,27 +1,64 @@
 {% extends 'base.html' %}
 
-{% block title %}Client Worker Required{% endblock %}
+{% block title %}Connect Device{% endblock %}
 
 {% block content %}
 <div class="container d-flex align-items-center justify-content-center min-vh-80">
-    <div class="text-center">
+    <div class="text-center w-100" style="max-width: 600px;">
         <div class="mb-4">
-            <i class="fas fa-exclamation-triangle text-warning fs-1"></i>
+            <i class="fas fa-desktop text-info fs-1"></i>
         </div>
-        <h2 class="text-white mb-3">Worker Required</h2>
+        <h2 class="text-white mb-3">Connect Your Device</h2>
         <p class="text-white-50 mb-4">
-            The worker service must be running before you can access application.
+            To use SaveNLoad, you need to connect a client device running the worker script.
         </p>
-        <div id="connectionStatus" class="mt-3"></div>
+
+        {% if unpaired_workers %}
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary">
+                <h5 class="mb-0 text-white">Available Devices</h5>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for worker in unpaired_workers %}
+                <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
+                    <div class="text-start">
+                        <strong class="text-white d-block">{{ worker.client_id }}</strong>
+                        <small class="text-white-50">Active now</small>
+                    </div>
+                    <button class="btn btn-primary btn-sm claim-btn" data-client-id="{{ worker.client_id }}">
+                        Connect
+                    </button>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-secondary text-start" role="alert">
+            <h5 class="alert-heading text-white"><i class="fas fa-spinner fa-spin me-2"></i>Searching for devices...
+            </h5>
+            <p class="text-white-50 text-small mb-0">
+                Make sure the client script is running on your PC:
+                <br>
+                <code>python client_service_rclone.py --server {{ request.scheme }}://{{ request.get_host }}</code>
+            </p>
+        </div>
+        <button class="btn btn-outline-light mt-3" onclick="location.reload()">
+            <i class="fas fa-sync-alt me-2"></i>Refresh List
+        </button>
+        {% endif %}
     </div>
 </div>
 
+{# Data for JS #}
+<div id="worker-config" data-claim-url="{% url 'client_worker:claim' %}" style="display:none;"></div>
+{{ unpaired_workers|length|json_script:"worker-count" }}
+
+{# CSRF Token for fetch requests #}
+<div style="display:none;">
+    {% csrf_token %}
+</div>
+
 <script>
-    // Inject Django URL for worker check
-    window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
-</script>
-<script>
-    {% include 'SaveNLoad/js/workerRequiredCheck.js' %}
+    {% include 'SaveNLoad/js/workerClaim.js' %}
 </script>
 {% endblock %}
-

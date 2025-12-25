@@ -22,11 +22,11 @@ function getCSSVariable(name) {
 function getNextModalZIndex() {
     // Bootstrap default: modal = 1050, backdrop = 1040
     let maxZIndex = 1050;
-    
+
     // Find all existing modals and backdrops
     const existingModals = document.querySelectorAll('.modal.show, .modal[style*="z-index"]');
     const existingBackdrops = document.querySelectorAll('.modal-backdrop');
-    
+
     // Check modal z-indexes
     existingModals.forEach(modal => {
         const zIndex = parseInt(window.getComputedStyle(modal).zIndex) || 0;
@@ -34,7 +34,7 @@ function getNextModalZIndex() {
             maxZIndex = zIndex;
         }
     });
-    
+
     // Check backdrop z-indexes
     existingBackdrops.forEach(backdrop => {
         const zIndex = parseInt(window.getComputedStyle(backdrop).zIndex) || 0;
@@ -42,7 +42,7 @@ function getNextModalZIndex() {
             maxZIndex = zIndex;
         }
     });
-    
+
     // Return next z-index (increment by 10 for proper stacking)
     return maxZIndex + 10;
 }
@@ -59,68 +59,68 @@ function createConfirmModal() {
     modal.setAttribute('tabindex', '-1');
     modal.setAttribute('aria-labelledby', 'customConfirmModalLabel');
     modal.setAttribute('aria-hidden', 'true');
-    
+
     const dialog = document.createElement('div');
     dialog.className = 'modal-dialog modal-dialog-centered';
-    
+
     const content = document.createElement('div');
     content.className = 'modal-content bg-primary border-secondary';
-    
+
     // Header
     const header = document.createElement('div');
     header.className = 'modal-header border-secondary';
-    
+
     const title = document.createElement('h5');
     title.className = 'modal-title text-white';
     title.id = 'customConfirmModalLabel';
     title.textContent = 'Confirm';
-    
+
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
     closeBtn.className = 'btn-close btn-close-white';
     closeBtn.setAttribute('data-bs-dismiss', 'modal');
     closeBtn.setAttribute('aria-label', 'Close');
-    
+
     header.appendChild(title);
     header.appendChild(closeBtn);
-    
+
     // Body
     const body = document.createElement('div');
     body.className = 'modal-body';
-    
+
     const message = document.createElement('p');
     message.className = 'text-white mb-0';
     message.id = 'customConfirmMessage';
-    
+
     body.appendChild(message);
-    
+
     // Footer
     const footer = document.createElement('div');
     footer.className = 'modal-footer border-secondary';
-    
+
     const cancelBtn = document.createElement('button');
     cancelBtn.type = 'button';
     cancelBtn.className = 'btn btn-secondary text-white';
     cancelBtn.id = 'customConfirmCancelBtn';
     cancelBtn.setAttribute('data-bs-dismiss', 'modal');
     cancelBtn.textContent = 'Cancel';
-    
+
     const okBtn = document.createElement('button');
     okBtn.type = 'button';
     okBtn.className = 'btn btn-danger text-white';
     okBtn.id = 'customConfirmOkBtn';
     okBtn.textContent = 'Confirm';
-    
+
     footer.appendChild(cancelBtn);
     footer.appendChild(okBtn);
-    
+
     // Assemble structure
     content.appendChild(header);
     content.appendChild(body);
     content.appendChild(footer);
     dialog.appendChild(content);
     modal.appendChild(dialog);
-    
+
     document.body.appendChild(modal);
     return modal;
 }
@@ -148,7 +148,7 @@ function customConfirm(message) {
     return new Promise((resolve) => {
         const modalElement = getConfirmModal();
         const modal = window.bootstrap ? window.bootstrap.Modal.getOrCreateInstance(modalElement) : null;
-        
+
         if (!modal) {
             // Fallback to native confirm if Bootstrap is not available
             const result = window.confirm(message);
@@ -165,7 +165,7 @@ function customConfirm(message) {
         // Remove previous event listeners by cloning buttons
         const okBtn = document.getElementById('customConfirmOkBtn');
         const cancelBtn = document.getElementById('customConfirmCancelBtn');
-        
+
         // Create new buttons to remove old listeners
         const newOkBtn = okBtn.cloneNode(true);
         const newCancelBtn = cancelBtn.cloneNode(true);
@@ -173,13 +173,13 @@ function customConfirm(message) {
         cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
 
         // Handle confirm
-        newOkBtn.addEventListener('click', function() {
+        newOkBtn.addEventListener('click', function () {
             modal.hide();
             resolve(true);
         });
 
         // Handle cancel
-        newCancelBtn.addEventListener('click', function() {
+        newCancelBtn.addEventListener('click', function () {
             modal.hide();
             resolve(false);
         });
@@ -195,7 +195,7 @@ function customConfirm(message) {
         modalElement.style.zIndex = nextZIndex;
 
         // Set backdrop z-index after modal is shown (Bootstrap creates backdrop dynamically)
-        modalElement.addEventListener('shown.bs.modal', function() {
+        modalElement.addEventListener('shown.bs.modal', function () {
             const backdrop = document.querySelector('.modal-backdrop:last-of-type');
             if (backdrop) {
                 backdrop.style.zIndex = (nextZIndex - 10).toString();
@@ -223,12 +223,12 @@ function showToast(message, type = 'info') {
     const toast = document.createElement('div');
     const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
     toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-    
+
     // Use textContent for message to prevent XSS
     const messageSpan = document.createElement('span');
     messageSpan.textContent = message;
     toast.appendChild(messageSpan);
-    
+
     // Create close button safely
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
@@ -236,7 +236,7 @@ function showToast(message, type = 'info') {
     closeBtn.setAttribute('data-bs-dismiss', 'alert');
     closeBtn.setAttribute('aria-label', 'Close');
     toast.appendChild(closeBtn);
-    
+
     document.body.appendChild(toast);
 
     // Auto remove after 5 seconds
@@ -258,7 +258,7 @@ function getCsrfToken(selector = '[name="csrfmiddlewaretoken"]') {
     if (csrfInput && csrfInput.value) {
         return csrfInput.value;
     }
-    
+
     // Fallback: try to get from cookie
     const cookies = document.cookie.split(';');
     for (let cookie of cookies) {
@@ -267,7 +267,7 @@ function getCsrfToken(selector = '[name="csrfmiddlewaretoken"]') {
             return value;
         }
     }
-    
+
     // If not found, show error and return null
     showToast('Error: CSRF token not found', 'error');
     return null;
@@ -294,7 +294,7 @@ function createFetchHeaders(csrfToken) {
  */
 function setButtonLoadingState(button, isLoading, loadingText = 'Loading...') {
     if (!button) return;
-    
+
     if (isLoading) {
         const originalContent = Array.from(button.childNodes);
         button.disabled = true;
@@ -326,7 +326,7 @@ function setButtonLoadingState(button, isLoading, loadingText = 'Loading...') {
  */
 function setButtonState(button, isLoading, loadingText) {
     if (!button) return;
-    
+
     if (isLoading) {
         if (!loadingText) {
             console.warn('setButtonState: loadingText is required when isLoading is true');
@@ -378,13 +378,13 @@ function setupPasswordToggle(toggleBtn, passwordInput) {
     // Support both element ID (string) and element object
     const toggle = typeof toggleBtn === 'string' ? document.getElementById(toggleBtn) : toggleBtn;
     const input = typeof passwordInput === 'string' ? document.getElementById(passwordInput) : passwordInput;
-    
+
     if (!toggle || !input) return;
-    
-    toggle.addEventListener('click', function() {
+
+    toggle.addEventListener('click', function () {
         const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
         input.setAttribute('type', type);
-        
+
         // Toggle icon classes
         if (type === 'password') {
             toggle.classList.remove('fa-eye');
@@ -396,6 +396,17 @@ function setupPasswordToggle(toggleBtn, passwordInput) {
     });
 }
 
+/**
+ * Clear all children from an element
+ * @param {HTMLElement} element - The element to clear
+ */
+function clearElement(element) {
+    if (!element) return;
+    while (element.firstChild) {
+        element.removeChild(element.firstChild);
+    }
+}
+
 // Expose all utility functions to global scope
 window.showToast = showToast;
 window.getCsrfToken = getCsrfToken;
@@ -405,4 +416,5 @@ window.setButtonState = setButtonState;
 window.showError = showError;
 window.clearError = clearError;
 window.setupPasswordToggle = setupPasswordToggle;
+window.clearElement = clearElement;
 

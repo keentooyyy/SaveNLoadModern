@@ -47,26 +47,13 @@ def register_client(request):
             worker.last_heartbeat = timezone.now()
             worker.save()
         
-        # If user is logged in, update their session with this client_id
-        # If user is logged out, clear client_id from session (if it exists)
-        # This associates the worker with the user's current session and revokes on logout
-        from SaveNLoad.views.custom_decorators import get_current_user
-        user = get_current_user(request)
-        if hasattr(request, 'session'):
-            if user:
-                # User is logged in - associate worker with session
-                request.session['client_id'] = client_id
-                request.session.modified = True
-            else:
-                # User is logged out - clear client_id if it exists (revoke association)
-                if 'client_id' in request.session:
-                    request.session.pop('client_id', None)
-                    request.session.modified = True
-        
         print(f"Client worker registered: {client_id}")
         return json_response_success(
             message='Client worker registered successfully',
-            data={'client_id': client_id}
+            data={
+                'client_id': client_id,
+                'linked_user': worker.user.username if worker.user else None
+            }
         )
         
     except Exception as e:
@@ -77,7 +64,7 @@ def register_client(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def heartbeat(request):
-    """Receive heartbeat from client worker and update user's session if logged in"""
+    """Receive heartbeat from client worker and update status"""
     try:
         data, error_response = parse_json_body(request)
         if error_response:
@@ -93,30 +80,9 @@ def heartbeat(request):
         worker.is_active = True
         worker.save()
         
-        # If user is logged in, update their session with this client_id
-        # If user is logged out, clear client_id from session (if it exists)
-        # This associates the worker with the user's current session and revokes on logout
-        from SaveNLoad.views.custom_decorators import get_current_user
-        user = get_current_user(request)
-        if hasattr(request, 'session'):
-            if user:
-                # User is logged in - associate worker with session
-                # Always update if no existing client_id (worker reconnected after being cleared)
-                # Or if it's the same client_id (normal heartbeat)
-                existing_client_id = request.session.get('client_id')
-                if not existing_client_id or existing_client_id == client_id:
-                    # No existing association or same worker - update it
-                    request.session['client_id'] = client_id
-                    request.session.modified = True
-                # If existing_client_id is different, don't overwrite (user is on different PC)
-                # This prevents a different worker from overwriting the session's client_id
-            else:
-                # User is logged out - clear client_id if it exists (revoke association)
-                if 'client_id' in request.session:
-                    request.session.pop('client_id', None)
-                    request.session.modified = True
-        
-        return json_response_success()
+        return json_response_success(data={
+            'linked_user': worker.user.username if worker.user else None
+        })
         
     except Exception as e:
         print(f"ERROR: Failed to process heartbeat: {e}")
@@ -151,73 +117,51 @@ def unregister_client(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 def check_connection(request):
-    """
-    Check if client worker is connected using client_id from session.
-    Optionally accepts client_id from URL query parameter (for login/register pages).
-    Respects timing: heartbeat every 5s, check every 5s, timeout 6s.
-    Trusts heartbeat mechanism to update session - no bruteforcing.
-    """
+    """Check if client worker is connected for current user"""
     from SaveNLoad.views.custom_decorators import get_current_user
     
-    # Primary: Get client_id from session (stored by heartbeat/register_client endpoints)
-    # Secondary: Accept client_id from URL query parameter (only for login/register pages)
-    client_id = None
-    if hasattr(request, 'session'):
-        client_id = request.session.get('client_id', '').strip() or None
+    # Clean up stale workers first
+    from SaveNLoad.models.client_worker import ClientWorker
+    ClientWorker.cleanup_stale_workers(timeout_seconds=WORKER_TIMEOUT_SECONDS)
     
-    # If no client_id in session, check URL parameter (for login/register pages only)
-    if not client_id:
-        client_id = request.GET.get('client_id', '').strip() or None
-    
-    # Check the known worker (if we have a client_id)
-    if client_id:
-        # Check specific worker using 6-second timeout (matches is_online default)
-        worker = ClientWorker.get_worker_by_id(client_id, timeout_seconds=WORKER_TIMEOUT_SECONDS)
-        is_connected = worker is not None
-        
-        # Track where client_id came from (session vs URL)
-        client_id_from_session = hasattr(request, 'session') and request.session.get('client_id') == client_id
-        
-        # Update session if user is logged in and worker is connected
-        # If worker is offline, clear from session
-        user = get_current_user(request)
-        if hasattr(request, 'session'):
-            if user and is_connected:
-                # User is logged in and worker is online - ensure session has client_id
-                # This handles the case where client_id came from URL parameter
-                if request.session.get('client_id') != client_id:
-                    request.session['client_id'] = client_id
-                    request.session.modified = True
-            elif not user and 'client_id' in request.session:
-                # User is logged out - clear client_id (revoke association)
-                request.session.pop('client_id', None)
-                request.session.modified = True
-            elif user and not is_connected and client_id_from_session:
-                # Worker went offline - only clear if client_id came from session
-                # (Don't clear if client_id came from URL - that's a different worker)
-                request.session.pop('client_id', None)
-                request.session.modified = True
-        
-        return JsonResponse({
-            'connected': is_connected,
-            'client_id': worker.client_id if worker else None,
-            'last_heartbeat': worker.last_heartbeat.isoformat() if worker else None,
-        })
-    else:
-        # No client_id known - return not connected
-        # Heartbeat will update session when worker connects/reconnects
-        # Frontend checks every 5s, so it will catch up within one heartbeat cycle (5s)
-        user = get_current_user(request)
-        if user and hasattr(request, 'session') and 'client_id' in request.session:
-            # Clear stale client_id from session
-            request.session.pop('client_id', None)
-            request.session.modified = True
-        
+    # Check for active worker owned by this user
+    # This replaces the session-based logic with persistent ownership + presence check
+    user = get_current_user(request)
+    if not user:
         return JsonResponse({
             'connected': False,
             'client_id': None,
             'last_heartbeat': None,
         })
+    
+    # Get all active workers owned by this user
+    active_workers = ClientWorker.objects.filter(
+        user=user,
+        is_active=True
+    ).order_by('-last_heartbeat')
+    
+    # Filter by timeout to be sure
+    valid_workers = [w for w in active_workers if w.is_online(WORKER_TIMEOUT_SECONDS)]
+    
+    if not valid_workers:
+        return JsonResponse({
+            'connected': False,
+            'client_id': None,
+            'last_heartbeat': None,
+            'message': 'No active devices found. Please ensure your client is running.'
+        })
+    
+    # Smart Select:
+    # If 1 active worker -> Use it automatically
+    # If >1 active workers -> TODO: Implement selection (for now, use most recent)
+    worker = valid_workers[0]
+    
+    return JsonResponse({
+        'connected': True,
+        'client_id': worker.client_id,
+        'last_heartbeat': worker.last_heartbeat.isoformat(),
+        'worker_count': len(valid_workers)
+    })
 
 
 @csrf_exempt
@@ -520,6 +464,118 @@ def complete_operation(request, operation_id):
         return json_response_error('Operation not found', status=404)
     except Exception as e:
         print(f"ERROR: Failed to complete operation: {e}")
+        return json_response_error(str(e), status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_unpaired_workers(request):
+    """Get list of active workers that are not paired with any user"""
+    from SaveNLoad.views.custom_decorators import get_current_user
+    from SaveNLoad.models.client_worker import ClientWorker
+    from SaveNLoad.settings import WORKER_TIMEOUT_SECONDS
+    
+    user = get_current_user(request)
+    if not user:
+        return json_response_error('Authentication required', status=401)
+    
+    # Clean up stale workers first
+    ClientWorker.cleanup_stale_workers(timeout_seconds=WORKER_TIMEOUT_SECONDS)
+    
+    # Get active workers that have no user assigned
+    active_workers = ClientWorker.get_active_workers(timeout_seconds=WORKER_TIMEOUT_SECONDS)
+    unpaired_workers = [w for w in active_workers if w.user is None]
+    
+    return JsonResponse({
+        'workers': [
+            {
+                'client_id': w.client_id,
+                'last_heartbeat': w.last_heartbeat.isoformat(),
+                # IP address was removed from plan, relying on hostname/client_id
+                'hostname': w.client_id  # Assuming client_id contains hostname for now
+            }
+            for w in unpaired_workers
+        ]
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def claim_worker(request):
+    """Claim a worker for the current user"""
+    from SaveNLoad.views.custom_decorators import get_current_user
+    
+    try:
+        user = get_current_user(request)
+        if not user:
+            return json_response_error('Authentication required', status=401)
+            
+        data, error_response = parse_json_body(request)
+        if error_response:
+            return error_response
+            
+        client_id = data.get('client_id', '').strip()
+        if not client_id:
+            return json_response_error('client_id is required', status=400)
+            
+        # Get the worker (must be active)
+        # We don't use get_client_worker_by_id_or_error because we want to check if it's already claimed
+        try:
+            worker = ClientWorker.objects.get(client_id=client_id)
+        except ClientWorker.DoesNotExist:
+            return json_response_error('Worker not found', status=404)
+            
+        if not worker.is_online(WORKER_TIMEOUT_SECONDS):
+            return json_response_error('Worker is offline', status=400)
+            
+        if worker.user and worker.user != user:
+            return json_response_error('Worker is already claimed by another user', status=409)
+            
+        # Claim it
+        worker.user = user
+        worker.save()
+        
+        print(f"Worker {client_id} claimed by {user.username}")
+        return json_response_success(message='Worker claimed successfully')
+        
+    except Exception as e:
+        print(f"ERROR: Failed to claim worker: {e}")
+        return json_response_error(str(e), status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def unclaim_worker(request):
+    """Unclaim a worker (release ownership)"""
+    from SaveNLoad.views.custom_decorators import get_current_user
+    
+    try:
+        user = get_current_user(request)
+        if not user:
+            return json_response_error('Authentication required', status=401)
+            
+        data, error_response = parse_json_body(request)
+        if error_response:
+            return error_response
+            
+        client_id = data.get('client_id', '').strip()
+        if not client_id:
+            return json_response_error('client_id is required', status=400)
+            
+        try:
+            worker = ClientWorker.objects.get(client_id=client_id, user=user)
+        except ClientWorker.DoesNotExist:
+            return json_response_error('Worker not found or not owned by you', status=404)
+            
+        # Release it
+        worker.user = None
+        worker.save()
+        
+        print(f"Worker {client_id} unclaimed by {user.username}")
+        return json_response_success(message='Worker unclaimed successfully')
+        
+    except Exception as e:
+        print(f"ERROR: Failed to unclaim worker: {e}")
         return json_response_error(str(e), status=500)
 
 

@@ -1,10 +1,9 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const csrfInput = document.querySelector('#gameCsrfForm input[name="csrfmiddlewaretoken"]');
-    const csrfToken = csrfInput ? csrfInput.value : null;
+    const csrfToken = window.getCsrfToken ? window.getCsrfToken() : null;
 
     if (!csrfToken) {
         console.error('CSRF token not found');
-        return;
+        return; // getCsrfToken already shows a toast
     }
 
     // Poll operation status until completion
@@ -13,11 +12,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const isMultiple = Array.isArray(operationId);
         const operationIds = isMultiple ? operationId : [operationId];
         const totalOperations = operationIds.length;
-        
+
         const maxAttempts = 300; // 300 attempts = 5 minutes max (1 second intervals)
         let attempts = 0;
         const pollInterval = 1000; // Poll every 1 second
-        
+
         // Create modal for progress
         const modalId = `progressModal_${isMultiple ? 'multi_' + operationIds.join('_') : operationId}`;
         const modalBackdrop = document.createElement('div');
@@ -28,35 +27,35 @@ document.addEventListener('DOMContentLoaded', function () {
         modalBackdrop.setAttribute('tabindex', '-1');
         modalBackdrop.setAttribute('aria-labelledby', `${modalId}Label`);
         modalBackdrop.setAttribute('aria-hidden', 'true');
-        
+
         const modalDialog = document.createElement('div');
         modalDialog.className = 'modal-dialog modal-dialog-centered';
-        
+
         const modalContent = document.createElement('div');
         modalContent.className = 'modal-content bg-primary text-white border-0';
-        
+
         const modalHeader = document.createElement('div');
         modalHeader.className = 'modal-header bg-primary border-secondary';
-        
+
         const modalTitle = document.createElement('h5');
         modalTitle.className = 'modal-title text-white';
         modalTitle.id = `${modalId}Label`;
         // Determine title based on operation type (save vs load)
         const isLoadOperation = originalText && originalText.includes('Load');
-        modalTitle.textContent = isMultiple 
+        modalTitle.textContent = isMultiple
             ? (isLoadOperation ? `Loading ${totalOperations} Location(s)...` : `Saving ${totalOperations} Location(s)...`)
             : (isLoadOperation ? 'Loading Game...' : 'Operation in Progress');
-        
+
         modalHeader.appendChild(modalTitle);
-        
+
         const modalBody = document.createElement('div');
         modalBody.className = 'modal-body bg-primary';
-        
+
         const progressBarWrapper = document.createElement('div');
         progressBarWrapper.className = 'progress mb-3';
         progressBarWrapper.style.height = '30px';
         progressBarWrapper.style.backgroundColor = getCSSVariable('--white-opacity-10');
-        
+
         const progressBar = document.createElement('div');
         progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated';
         progressBar.setAttribute('role', 'progressbar');
@@ -65,48 +64,48 @@ document.addEventListener('DOMContentLoaded', function () {
         progressBar.setAttribute('aria-valuenow', '0');
         progressBar.setAttribute('aria-valuemin', '0');
         progressBar.setAttribute('aria-valuemax', '100');
-        
+
         const progressText = document.createElement('div');
         progressText.className = 'text-center mt-3 text-white fs-6 fw-medium';
         progressText.textContent = 'Starting...';
-        
+
         const progressDetails = document.createElement('div');
         progressDetails.className = 'text-center text-white-50 mt-2 small';
         progressDetails.textContent = isMultiple ? `Processing ${totalOperations} save location(s). Please wait...` : 'Please wait while the operation completes...';
-        
+
         progressBarWrapper.appendChild(progressBar);
         modalBody.appendChild(progressBarWrapper);
         modalBody.appendChild(progressText);
         modalBody.appendChild(progressDetails);
-        
+
         modalContent.appendChild(modalHeader);
         modalContent.appendChild(modalBody);
         modalDialog.appendChild(modalContent);
         modalBackdrop.appendChild(modalDialog);
-        
+
         // Get next z-index for proper stacking
         const nextZIndex = getNextModalZIndex();
         modalBackdrop.style.zIndex = nextZIndex;
-        
+
         // Add modal to body
         document.body.appendChild(modalBackdrop);
-        
+
         // Show modal using Bootstrap
         const modal = new bootstrap.Modal(modalBackdrop, {
             backdrop: 'static',
             keyboard: false
         });
-        
+
         // Set backdrop z-index after modal is shown (Bootstrap creates backdrop dynamically)
-        modal._element.addEventListener('shown.bs.modal', function() {
+        modal._element.addEventListener('shown.bs.modal', function () {
             const backdrop = document.querySelector('.modal-backdrop:last-of-type');
             if (backdrop) {
                 backdrop.style.zIndex = (nextZIndex - 10).toString();
             }
         }, { once: true });
-        
+
         modal.show();
-        
+
         // Track completion status for multiple operations
         const operationStatuses = {};
         if (isMultiple) {
@@ -114,19 +113,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 operationStatuses[id] = { completed: false, success: false };
             });
         }
-        
+
         // Flag to prevent multiple completion handlers
         let completionHandled = false;
-        
+
         const updateProgress = (progressData) => {
             const percentage = progressData.percentage || 0;
             const current = progressData.current || 0;
             const total = progressData.total || 0;
             const message = progressData.message || '';
-            
+
             progressBar.style.width = `${percentage}%`;
             progressBar.setAttribute('aria-valuenow', percentage);
-            
+
             if (total > 0) {
                 progressText.textContent = `${current}/${total} ${message || 'Processing...'}`;
                 progressDetails.textContent = `${percentage}% complete`;
@@ -138,7 +137,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 progressDetails.textContent = 'Please wait...';
             }
         };
-        
+
         const checkStatus = async () => {
             try {
                 if (isMultiple) {
@@ -147,25 +146,25 @@ document.addEventListener('DOMContentLoaded', function () {
                         if (operationStatuses[opId].completed) {
                             return operationStatuses[opId];
                         }
-                        
+
                         try {
                             const urlPattern = window.CHECK_OPERATION_STATUS_URL_PATTERN;
                             const url = urlPattern.replace('/0/', `/${opId}/`);
                             const response = await fetch(url, {
-                                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                                headers: window.createFetchHeaders ? window.createFetchHeaders(window.getCsrfToken()) : { 'X-Requested-With': 'XMLHttpRequest' }
                             });
-                            
+
                             if (response.ok) {
                                 const data = await response.json();
                                 if (data.completed) {
-                                    operationStatuses[opId] = { 
-                                        completed: true, 
+                                    operationStatuses[opId] = {
+                                        completed: true,
                                         success: !data.failed,
                                         message: data.message || null  // Store error message
                                     };
                                 } else if (data.failed) {
-                                    operationStatuses[opId] = { 
-                                        completed: true, 
+                                    operationStatuses[opId] = {
+                                        completed: true,
                                         success: false,
                                         message: data.message || null  // Store error message
                                     };
@@ -179,23 +178,23 @@ document.addEventListener('DOMContentLoaded', function () {
                         } catch (error) {
                             console.error(`Error checking operation ${opId} status:`, error);
                         }
-                        
+
                         return operationStatuses[opId];
                     });
-                    
+
                     await Promise.all(statusPromises);
-                    
+
                     // Aggregate progress from all active operations
                     const activeOperations = Object.entries(operationStatuses)
                         .filter(([id, status]) => !status.completed && status.progress)
                         .map(([id, status]) => status.progress);
-                    
+
                     if (activeOperations.length > 0) {
                         // Calculate aggregated progress
                         let totalCurrent = 0;
                         let totalTotal = 0;
                         let latestMessage = '';
-                        
+
                         activeOperations.forEach(progress => {
                             if (progress.current !== undefined && progress.total !== undefined) {
                                 totalCurrent += progress.current || 0;
@@ -205,7 +204,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 latestMessage = progress.message;
                             }
                         });
-                        
+
                         // Update progress bar with aggregated data
                         if (totalTotal > 0) {
                             const percentage = Math.round((totalCurrent / totalTotal) * 100);
@@ -222,13 +221,13 @@ document.addEventListener('DOMContentLoaded', function () {
                             });
                         }
                     }
-                    
+
                     // Check if all operations are complete
                     const allCompleted = Object.values(operationStatuses).every(status => status.completed);
                     const allSuccessful = Object.values(operationStatuses).every(status => status.success);
                     const someSuccessful = Object.values(operationStatuses).some(status => status.success);
                     const completedCount = Object.values(operationStatuses).filter(s => s.completed).length;
-                    
+
                     // If no active progress data, show completion count
                     if (activeOperations.length === 0 && !allCompleted) {
                         const overallPercent = Math.round((completedCount / totalOperations) * 100);
@@ -237,7 +236,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         progressText.textContent = `Processing... (${completedCount}/${totalOperations} completed)`;
                         progressDetails.textContent = `${overallPercent}% complete`;
                     }
-                    
+
                     if (allCompleted && !completionHandled) {
                         completionHandled = true;
                         progressBar.classList.remove('progress-bar-animated');
@@ -247,11 +246,11 @@ document.addEventListener('DOMContentLoaded', function () {
                             progressBar.setAttribute('aria-valuenow', '100');
                             progressText.textContent = 'All Operations Complete!';
                             const isLoadOperation = originalText && originalText.includes('Load');
-                            progressDetails.textContent = isLoadOperation 
+                            progressDetails.textContent = isLoadOperation
                                 ? `Successfully loaded ${totalOperations} location(s)`
                                 : `Successfully saved ${totalOperations} location(s)`;
                             window.showToast(
-                                isLoadOperation 
+                                isLoadOperation
                                     ? `Successfully loaded ${totalOperations} location(s)!`
                                     : `Successfully saved ${totalOperations} location(s)!`,
                                 'success'
@@ -264,17 +263,17 @@ document.addEventListener('DOMContentLoaded', function () {
                         } else {
                             progressBar.style.backgroundColor = getCSSVariable('--color-danger');
                             progressText.textContent = 'All Operations Failed';
-                            
+
                             // Collect error messages from failed operations
                             const errorMessages = Object.values(operationStatuses)
                                 .filter(status => status.completed && !status.success && status.message)
                                 .map(status => status.message);
-                            
+
                             // Show specific error message(s) if available, otherwise generic message
                             if (errorMessages.length > 0) {
                                 // If all errors are the same, show it once; otherwise show first error
                                 const uniqueErrors = [...new Set(errorMessages)];
-                                const displayMessage = uniqueErrors.length === 1 
+                                const displayMessage = uniqueErrors.length === 1
                                     ? uniqueErrors[0]
                                     : uniqueErrors[0] + (uniqueErrors.length > 1 ? ` (and ${uniqueErrors.length - 1} more)` : '');
                                 progressDetails.textContent = displayMessage;
@@ -284,7 +283,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 window.showToast('Save operation failed for all locations.', 'error');
                             }
                         }
-                        
+
                         // Close modal after a delay, then refresh page
                         setTimeout(() => {
                             modal.hide();
@@ -296,27 +295,27 @@ document.addEventListener('DOMContentLoaded', function () {
                         }, 1500);
                         return true;
                     }
-                    
+
                     return false;
                 } else {
                     // Single operation - always use real-time progress
                     const urlPattern = window.CHECK_OPERATION_STATUS_URL_PATTERN;
                     const url = urlPattern.replace('/0/', `/${operationId}/`);
                     const response = await fetch(url, {
-                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        headers: window.createFetchHeaders ? window.createFetchHeaders(window.getCsrfToken()) : { 'X-Requested-With': 'XMLHttpRequest' }
                     });
-                    
+
                     if (!response.ok) {
                         throw new Error('Failed to check operation status');
                     }
-                    
+
                     const data = await response.json();
-                    
+
                     // Always update progress bar with real-time data when available
                     if (data.progress) {
                         updateProgress(data.progress);
                     }
-                    
+
                     if (data.completed && !completionHandled) {
                         completionHandled = true;
                         progressBar.classList.remove('progress-bar-animated');
@@ -371,7 +370,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         modalContent.appendChild(modalFooter);
                         return true;
                     }
-                    
+
                     return false;
                 }
             } catch (error) {
@@ -379,16 +378,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 return false;
             }
         };
-        
+
         // Initial check
         const completed = await checkStatus();
         if (completed) return;
-        
+
         // Poll until completion or max attempts
         const poll = setInterval(async () => {
             attempts++;
             const completed = await checkStatus();
-            
+
             if (completed || attempts >= maxAttempts) {
                 clearInterval(poll);
                 if (attempts >= maxAttempts && !completed) {
@@ -430,7 +429,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const maxAttempts = 300; // 300 attempts = 5 minutes max (1 second intervals)
         let attempts = 0;
         const pollInterval = 1000; // Poll every 1 second
-        
+
         // Create modal for progress
         const modalId = `progressModal_multi_${operationIds.join('_')}`;
         const modalBackdrop = document.createElement('div');
@@ -441,30 +440,30 @@ document.addEventListener('DOMContentLoaded', function () {
         modalBackdrop.setAttribute('tabindex', '-1');
         modalBackdrop.setAttribute('aria-labelledby', `${modalId}Label`);
         modalBackdrop.setAttribute('aria-hidden', 'true');
-        
+
         const modalDialog = document.createElement('div');
         modalDialog.className = 'modal-dialog modal-dialog-centered';
-        
+
         const modalContent = document.createElement('div');
         modalContent.className = 'modal-content bg-primary text-white border-0';
-        
+
         const modalHeader = document.createElement('div');
         modalHeader.className = 'modal-header bg-primary border-secondary';
-        
+
         const modalTitle = document.createElement('h5');
         modalTitle.className = 'modal-title text-white';
         modalTitle.id = `${modalId}Label`;
         modalTitle.textContent = `Saving ${totalPaths} Location(s)...`;
-        
+
         modalHeader.appendChild(modalTitle);
-        
+
         const modalBody = document.createElement('div');
         modalBody.className = 'modal-body bg-primary';
-        
+
         const progressBarWrapper = document.createElement('div');
         progressBarWrapper.className = 'progress mb-3';
         progressBarWrapper.style.height = '30px';
-        
+
         const progressBar = document.createElement('div');
         progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated';
         progressBar.setAttribute('role', 'progressbar');
@@ -473,42 +472,42 @@ document.addEventListener('DOMContentLoaded', function () {
         progressBar.setAttribute('aria-valuenow', '0');
         progressBar.setAttribute('aria-valuemin', '0');
         progressBar.setAttribute('aria-valuemax', '100');
-        
+
         const progressText = document.createElement('div');
         progressText.className = 'text-center mt-3 text-white fs-6 fw-medium';
         progressText.textContent = 'Starting...';
-        
+
         const progressDetails = document.createElement('div');
         progressDetails.className = 'text-center text-white-50 mt-2 small';
         progressDetails.textContent = `Processing ${totalPaths} save location(s). Please wait...`;
-        
+
         progressBarWrapper.appendChild(progressBar);
         modalBody.appendChild(progressBarWrapper);
         modalBody.appendChild(progressText);
         modalBody.appendChild(progressDetails);
-        
+
         modalContent.appendChild(modalHeader);
         modalContent.appendChild(modalBody);
         modalDialog.appendChild(modalContent);
         modalBackdrop.appendChild(modalDialog);
-        
+
         document.body.appendChild(modalBackdrop);
-        
+
         const modal = new bootstrap.Modal(modalBackdrop, {
             backdrop: 'static',
             keyboard: false
         });
         modal.show();
-        
+
         // Track completion status for each operation
         const operationStatuses = {};
         operationIds.forEach(id => {
             operationStatuses[id] = { completed: false, success: false };
         });
-        
+
         const pollStatus = async () => {
             attempts++;
-            
+
             if (attempts > maxAttempts) {
                 modal.hide();
                 setTimeout(() => modalBackdrop.remove(), 300);
@@ -525,19 +524,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 btn.appendChild(document.createTextNode(' Save'));
                 return;
             }
-            
+
             // Poll all operations
             const statusPromises = operationIds.map(async (opId) => {
                 if (operationStatuses[opId].completed) {
                     return operationStatuses[opId];
                 }
-                
+
                 try {
                     const statusUrl = window.CHECK_OPERATION_STATUS_URL_PATTERN.replace('/0/', `/${opId}/`);
                     const statusResponse = await fetch(statusUrl, {
-                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        headers: window.createFetchHeaders ? window.createFetchHeaders(window.getCsrfToken()) : { 'X-Requested-With': 'XMLHttpRequest' }
                     });
-                    
+
                     if (statusResponse.ok) {
                         const statusData = await statusResponse.json();
                         if (statusData.status === 'completed') {
@@ -560,21 +559,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 } catch (error) {
                     console.error(`Error checking operation ${opId} status:`, error);
                 }
-                
+
                 return operationStatuses[opId];
             });
-            
+
             await Promise.all(statusPromises);
-            
+
             // Check if all operations are complete
             const allCompleted = Object.values(operationStatuses).every(status => status.completed);
             const allSuccessful = Object.values(operationStatuses).every(status => status.success);
             const someSuccessful = Object.values(operationStatuses).some(status => status.success);
-            
+
             if (allCompleted) {
                 modal.hide();
                 setTimeout(() => modalBackdrop.remove(), 300);
-                
+
                 if (allSuccessful) {
                     window.showToast(`Successfully saved ${totalPaths} location(s)!`, 'success');
                 } else if (someSuccessful) {
@@ -582,7 +581,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     window.showToast('Save operation failed for all locations.', 'error');
                 }
-                
+
                 // Restore button
                 btn.disabled = false;
                 while (btn.firstChild) {
@@ -600,11 +599,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 progressBar.style.width = `${overallPercent}%`;
                 progressBar.setAttribute('aria-valuenow', overallPercent);
                 progressText.textContent = `Processing... (${completedCount}/${totalPaths} completed)`;
-                
+
                 setTimeout(pollStatus, pollInterval);
             }
         };
-        
+
         // Start polling
         setTimeout(pollStatus, pollInterval);
     }
@@ -616,10 +615,10 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.target.closest('.save-game-btn')) {
             e.preventDefault();
             e.stopPropagation();
-            
+
             const btn = e.target.closest('.save-game-btn');
             const gameId = btn.dataset.gameId;
-            
+
             if (!gameId) {
                 window.showToast('Error: Game ID not found', 'error');
                 return;
@@ -629,12 +628,12 @@ document.addEventListener('DOMContentLoaded', function () {
             const originalIcon = btn.querySelector('i');
             const originalText = btn.childNodes[1] ? btn.childNodes[1].textContent.trim() : 'Save';
             btn.disabled = true;
-            
+
             // Clear button content
             while (btn.firstChild) {
                 btn.removeChild(btn.firstChild);
             }
-            
+
             const spinner = document.createElement('i');
             spinner.className = 'fas fa-spinner fa-spin me-1';
             btn.appendChild(spinner);
@@ -646,18 +645,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (window.GAME_SAVE_PATHS && window.GAME_SAVE_PATHS[gameId]) {
                     gameSavePaths = window.GAME_SAVE_PATHS[gameId].filter(path => path && path.trim());
                 }
-                
+
                 const urlPattern = window.SAVE_GAME_URL_PATTERN;
                 const url = urlPattern.replace('/0/', `/${gameId}/`);
-                
+
                 // Always explicitly send local_save_paths in AJAX request
                 const payload = {
                     local_save_paths: gameSavePaths
                 };
-                
+
                 const response = await fetch(url, {
                     method: 'POST',
-                    headers: {
+                    headers: window.createFetchHeaders ? window.createFetchHeaders(csrfToken) : {
                         'Content-Type': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest',
                         'X-CSRFToken': csrfToken
@@ -752,10 +751,10 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.target.closest('.quick-load-btn')) {
             e.preventDefault();
             e.stopPropagation();
-            
+
             const btn = e.target.closest('.quick-load-btn');
             const gameId = btn.dataset.gameId;
-            
+
             if (!gameId) {
                 window.showToast('Error: Game ID not found', 'error');
                 return;
@@ -764,12 +763,12 @@ document.addEventListener('DOMContentLoaded', function () {
             // Disable button and show loading state
             const originalIcon = btn.querySelector('i');
             btn.disabled = true;
-            
+
             // Clear button content
             while (btn.firstChild) {
                 btn.removeChild(btn.firstChild);
             }
-            
+
             const spinner = document.createElement('i');
             spinner.className = 'fas fa-spinner fa-spin me-1';
             btn.appendChild(spinner);
@@ -782,9 +781,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     try {
                         const listFoldersUrl = listFoldersUrlPattern.replace('/0/', `/${gameId}/`);
                         const foldersResponse = await fetch(listFoldersUrl, {
-                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                            headers: window.createFetchHeaders ? window.createFetchHeaders(window.getCsrfToken()) : { 'X-Requested-With': 'XMLHttpRequest' }
                         });
-                        
+
                         // Handle 404 - game was deleted
                         if (foldersResponse.status === 404) {
                             window.showToast('Game not found (may have been deleted)', 'error');
@@ -804,7 +803,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             }, 1500);
                             return;
                         }
-                        
+
                         if (foldersResponse.ok) {
                             const foldersData = await foldersResponse.json();
                             if (!foldersData.success || !foldersData.save_folders || foldersData.save_folders.length === 0) {
@@ -827,7 +826,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         // If check fails, continue with load attempt - backend will handle it
                     }
                 }
-                
+
                 // Proceed with load if save folders exist
                 const urlPattern = window.LOAD_GAME_URL_PATTERN;
                 const url = urlPattern.replace('/0/', `/${gameId}/`);
@@ -933,7 +932,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const maxAttempts = 300; // 300 attempts = 5 minutes max (1 second intervals)
         let attempts = 0;
         const pollInterval = 1000; // Poll every 1 second
-        
+
         // Create modal for progress
         const modalId = `progressModal_${operationId}`;
         const modalBackdrop = document.createElement('div');
@@ -944,31 +943,31 @@ document.addEventListener('DOMContentLoaded', function () {
         modalBackdrop.setAttribute('tabindex', '-1');
         modalBackdrop.setAttribute('aria-labelledby', `${modalId}Label`);
         modalBackdrop.setAttribute('aria-hidden', 'true');
-        
+
         const modalDialog = document.createElement('div');
         modalDialog.className = 'modal-dialog modal-dialog-centered';
-        
+
         const modalContent = document.createElement('div');
         modalContent.className = 'modal-content bg-primary text-white border-0';
-        
+
         const modalHeader = document.createElement('div');
         modalHeader.className = 'modal-header bg-primary border-secondary';
-        
+
         const modalTitle = document.createElement('h5');
         modalTitle.className = 'modal-title text-white';
         modalTitle.id = `${modalId}Label`;
         modalTitle.textContent = 'Loading Game';
-        
+
         modalHeader.appendChild(modalTitle);
-        
+
         const modalBody = document.createElement('div');
         modalBody.className = 'modal-body bg-primary';
-        
+
         const progressBarWrapper = document.createElement('div');
         progressBarWrapper.className = 'progress mb-3';
         progressBarWrapper.style.height = '30px';
         progressBarWrapper.style.backgroundColor = getCSSVariable('--white-opacity-10');
-        
+
         const progressBar = document.createElement('div');
         progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated';
         progressBar.setAttribute('role', 'progressbar');
@@ -977,57 +976,57 @@ document.addEventListener('DOMContentLoaded', function () {
         progressBar.setAttribute('aria-valuenow', '0');
         progressBar.setAttribute('aria-valuemin', '0');
         progressBar.setAttribute('aria-valuemax', '100');
-        
+
         const progressText = document.createElement('div');
         progressText.className = 'text-center mt-3 text-white fs-6 fw-medium';
         progressText.textContent = 'Starting...';
-        
+
         const progressDetails = document.createElement('div');
         progressDetails.className = 'text-center text-white-50 mt-2 small';
         progressDetails.textContent = 'Please wait while the game loads...';
-        
+
         progressBarWrapper.appendChild(progressBar);
         modalBody.appendChild(progressBarWrapper);
         modalBody.appendChild(progressText);
         modalBody.appendChild(progressDetails);
-        
+
         modalContent.appendChild(modalHeader);
         modalContent.appendChild(modalBody);
         modalDialog.appendChild(modalContent);
         modalBackdrop.appendChild(modalDialog);
-        
+
         // Get next z-index for proper stacking
         const nextZIndex = getNextModalZIndex();
         modalBackdrop.style.zIndex = nextZIndex;
-        
+
         // Add modal to body
         document.body.appendChild(modalBackdrop);
-        
+
         // Show modal using Bootstrap
         const modal = new bootstrap.Modal(modalBackdrop, {
             backdrop: 'static',
             keyboard: false
         });
-        
+
         // Set backdrop z-index after modal is shown (Bootstrap creates backdrop dynamically)
-        modal._element.addEventListener('shown.bs.modal', function() {
+        modal._element.addEventListener('shown.bs.modal', function () {
             const backdrop = document.querySelector('.modal-backdrop:last-of-type');
             if (backdrop) {
                 backdrop.style.zIndex = (nextZIndex - 10).toString();
             }
         }, { once: true });
-        
+
         modal.show();
-        
+
         const updateProgress = (progressData) => {
             const percentage = progressData.percentage || 0;
             const current = progressData.current || 0;
             const total = progressData.total || 0;
             const message = progressData.message || '';
-            
+
             progressBar.style.width = `${percentage}%`;
             progressBar.setAttribute('aria-valuenow', percentage);
-            
+
             if (total > 0) {
                 progressText.textContent = `${current}/${total} ${message || 'Processing...'}`;
                 progressDetails.textContent = `${percentage}% complete`;
@@ -1039,7 +1038,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 progressDetails.textContent = 'Please wait...';
             }
         };
-        
+
         const checkStatus = async () => {
             try {
                 const urlPattern = window.CHECK_OPERATION_STATUS_URL_PATTERN;
@@ -1047,18 +1046,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 const response = await fetch(url, {
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
-                
+
                 if (!response.ok) {
                     throw new Error('Failed to check operation status');
                 }
-                
+
                 const data = await response.json();
-                
+
                 // Update progress bar
                 if (data.progress) {
                     updateProgress(data.progress);
                 }
-                
+
                 if (data.completed) {
                     progressBar.classList.remove('progress-bar-animated');
                     progressBar.style.backgroundColor = getCSSVariable('--color-success');
@@ -1114,23 +1113,23 @@ document.addEventListener('DOMContentLoaded', function () {
                     modalContent.appendChild(modalFooter);
                     return true;
                 }
-                
+
                 return false;
             } catch (error) {
                 console.error('Error checking operation status:', error);
                 return false;
             }
         };
-        
+
         // Initial check
         const completed = await checkStatus();
         if (completed) return;
-        
+
         // Poll until completion or max attempts
         const poll = setInterval(async () => {
             attempts++;
             const completed = await checkStatus();
-            
+
             if (completed || attempts >= maxAttempts) {
                 clearInterval(poll);
                 if (attempts >= maxAttempts && !completed) {

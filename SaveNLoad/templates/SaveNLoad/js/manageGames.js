@@ -9,12 +9,12 @@ let loadSaveFoldersRef = null;
 
 // Expose function to open modal programmatically
 // This function is available immediately, but will only work after DOMContentLoaded
-window.openGameEditModal = function(gameId, hideSavesTab = false) {
+window.openGameEditModal = function (gameId, hideSavesTab = false) {
     if (!modalInstance) {
         console.error('Modal not initialized yet. Please wait for page to load.');
         return;
     }
-    
+
     // Construct detail URL using Django URL pattern
     if (window.GAME_DETAIL_URL_PATTERN) {
         currentDetailUrlRef = window.GAME_DETAIL_URL_PATTERN.replace('0', gameId);
@@ -25,7 +25,7 @@ window.openGameEditModal = function(gameId, hideSavesTab = false) {
     if (window.GAME_DELETE_URL_PATTERN) {
         currentDeleteUrlRef = window.GAME_DELETE_URL_PATTERN.replace('0', gameId);
     }
-    
+
     // Reset form state
     if (formRef) {
         formRef.reset();
@@ -37,13 +37,13 @@ window.openGameEditModal = function(gameId, hideSavesTab = false) {
     if (bannerPreviewEl) {
         clearElement(bannerPreviewEl);
     }
-    
+
     // Update modal title
     const modalTitle = document.getElementById('gameManageModalLabel');
     if (modalTitle) {
         modalTitle.textContent = 'Edit Game';
     }
-    
+
     // Hide/show saves tab
     const savesTabContainer = document.getElementById('saves-tab-container');
     if (savesTabContainer) {
@@ -53,7 +53,7 @@ window.openGameEditModal = function(gameId, hideSavesTab = false) {
             savesTabContainer.classList.remove('d-none');
         }
     }
-    
+
     // Load game details (don't load save folders if hiding saves tab)
     if (hideSavesTab) {
         if (loadGameRef) {
@@ -77,7 +77,7 @@ window.openGameEditModal = function(gameId, hideSavesTab = false) {
                 const savesPane = document.getElementById('saves-pane');
                 const editTabButtons = document.getElementById('edit-tab-buttons');
                 const saveGameBtn = document.getElementById('saveGameBtn');
-                
+
                 if (editPane && savesPane && editTabButtons && saveGameBtn) {
                     if (editPane.classList.contains('active') && editPane.classList.contains('show')) {
                         editTabButtons.classList.remove('d-none');
@@ -113,9 +113,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const bannerPreview = document.getElementById('manage_banner_preview');
     bannerPreviewRef = bannerPreview; // Store reference
 
-    const csrfInput = document.querySelector('#gameManageForm input[name=\"csrfmiddlewaretoken\"]') ||
-        document.querySelector('#gameCsrfForm input[name=\"csrfmiddlewaretoken\"]');
-    const csrfToken = csrfInput ? csrfInput.value : null;
+    const csrfToken = window.getCsrfToken ? window.getCsrfToken() : null;
 
     let currentCard = null;
     // Use the refs directly so they stay in sync
@@ -124,23 +122,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Initialize save location manager for modal
     const manageSaveLocationManager = new SaveLocationManager('manage_save_locations_container');
-    
+
     // Wrapper functions for inline handlers in template
-    window.addManageSaveLocation = function() {
+    window.addManageSaveLocation = function () {
         manageSaveLocationManager.addLocation();
     };
-    
-    window.removeManageSaveLocation = function(btn) {
+
+    window.removeManageSaveLocation = function (btn) {
         manageSaveLocationManager.removeLocation(btn);
     };
-    
+
     // Update loadGame function
-    const loadGame = async function(detailUrl, hideSavesTab = false) {
+    const loadGame = async function (detailUrl, hideSavesTab = false) {
         try {
             const response = await fetch(detailUrl, {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                headers: window.createFetchHeaders ? window.createFetchHeaders(window.getCsrfToken()) : { 'X-Requested-With': 'XMLHttpRequest' }
             });
-            
+
             // Handle 404 - game was deleted
             if (response.status === 404) {
                 console.warn('Game not found (may have been deleted)');
@@ -152,7 +150,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 window.location.reload();
                 return;
             }
-            
+
             const data = await response.json();
             if (!response.ok) {
                 // Handle other errors
@@ -183,7 +181,7 @@ document.addEventListener('DOMContentLoaded', function () {
             manageSaveLocationManager.populateLocations(saveLocationStr);
             // Use shared updateBannerPreview function
             updateBannerPreview('manage_banner_preview', data.banner || '');
-            
+
             // Hide/show saves tab based on flag
             const savesTabContainer = document.getElementById('saves-tab-container');
             if (savesTabContainer) {
@@ -213,7 +211,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Get all save locations as array (not string with \n)
         const saveLocations = manageSaveLocationManager.getAllLocations();
         const filteredLocations = saveLocations.filter(loc => loc && loc.trim());
-        
+
         if (filteredLocations.length === 0) {
             window.showToast('At least one save file location is required', 'error');
             return;
@@ -229,14 +227,14 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const response = await fetch(currentDetailUrlRef, {
                 method: 'POST',
-                headers: {
+                headers: window.createFetchHeaders ? window.createFetchHeaders(csrfToken) : {
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRFToken': csrfToken
                 },
                 body: JSON.stringify(payload)
             });
-            
+
             // Handle 404 - game was deleted
             if (response.status === 404) {
                 window.showToast('Game not found (may have been deleted)', 'error');
@@ -248,7 +246,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }, 1500);
                 return;
             }
-            
+
             const data = await response.json();
             if (!response.ok || !data.success) {
                 // Check if it's a "not found" error
@@ -304,7 +302,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Show progress modal
         const modalData = createProgressModal(`delete_game_${gameId}`, 'Deleting Game', 'delete');
         const { modal, modalBackdrop, updateProgress, progressBar, progressText, progressDetails } = modalData;
-        
+
         // Update progress to show initial state
         updateProgress({
             percentage: 10,
@@ -317,14 +315,14 @@ document.addEventListener('DOMContentLoaded', function () {
             // Make delete request
             const response = await fetch(currentDeleteUrlRef, {
                 method: 'POST',
-                headers: {
+                headers: window.createFetchHeaders ? window.createFetchHeaders(csrfToken) : {
                     'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRFToken': csrfToken
                 }
             });
-            
+
             const data = await response.json();
-            
+
             if (!response.ok || !data.success) {
                 const errorMsg = data.error || data.message || 'Failed to delete game';
                 modal.hide();
@@ -345,28 +343,28 @@ document.addEventListener('DOMContentLoaded', function () {
             const maxAttempts = 300; // 5 minutes max (1 second intervals)
             let attempts = 0;
             const pollInterval = 1000; // 1 second
-            
+
             const checkGameDeletionStatus = async () => {
                 try {
                     const checkResponse = await fetch(currentDetailUrlRef, {
-                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        headers: window.createFetchHeaders ? window.createFetchHeaders(window.getCsrfToken()) : { 'X-Requested-With': 'XMLHttpRequest' }
                     });
-                    
+
                     // If 404, game is deleted (all operations completed)
                     if (checkResponse.status === 404) {
                         return { deleted: true, operations: null };
                     }
-                    
+
                     // If response is ok, check operation status
                     if (checkResponse.ok) {
                         const checkData = await checkResponse.json();
                         const ops = checkData.deletion_operations || {};
-                        
+
                         // If no operations exist and game is not pending deletion, something went wrong
                         if (!checkData.pending_deletion && (!ops.total || ops.total === 0)) {
                             return { deleted: false, operations: null, error: 'No deletion operations found' };
                         }
-                        
+
                         // Return operation status
                         return {
                             deleted: false,
@@ -380,7 +378,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             pending_deletion: checkData.pending_deletion || false
                         };
                     }
-                    
+
                     return { deleted: false, operations: null, error: 'Failed to check status' };
                 } catch (error) {
                     console.error('Error checking game deletion status:', error);
@@ -396,12 +394,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     total: 1,
                     message: 'Game deleted successfully!'
                 });
-                
+
                 progressBar.classList.remove('progress-bar-animated');
                 progressBar.style.backgroundColor = getCSSVariable('--color-success');
                 progressText.textContent = 'Game Deleted Successfully!';
                 progressDetails.textContent = 'The game has been removed from the system';
-                
+
                 setTimeout(() => {
                     modal.hide();
                     modalBackdrop.remove();
@@ -420,28 +418,28 @@ document.addEventListener('DOMContentLoaded', function () {
             const poll = setInterval(async () => {
                 attempts++;
                 const status = await checkGameDeletionStatus();
-                
+
                 if (status.deleted) {
                     // Game is deleted - all operations completed
                     clearInterval(poll);
                     handleDeletionComplete();
                 } else if (status.operations) {
                     const ops = status.operations;
-                    
+
                     // Update progress based on actual operation status
                     if (ops.total > 0) {
                         // Show progress based on completed operations
                         const baseProgress = 30; // Start at 30% after queuing
                         const operationProgress = Math.min(ops.progress_percentage, 100);
                         const overallProgress = baseProgress + Math.floor((operationProgress * 0.7)); // Use 70% of remaining progress
-                        
+
                         updateProgress({
                             percentage: overallProgress,
                             current: ops.completed,
                             total: ops.total,
                             message: ops.pending > 0 ? 'Deleting FTP files...' : 'Finalizing deletion...'
                         });
-                        
+
                         // Update progress text with actual counts
                         if (ops.pending > 0) {
                             progressText.textContent = `${ops.completed}/${ops.total} operations completed`;
@@ -483,7 +481,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     // Error checking status
                     console.error('Error checking deletion status:', status.error);
                 }
-                
+
                 // Timeout check
                 if (attempts >= maxAttempts) {
                     clearInterval(poll);
@@ -491,7 +489,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     progressBar.style.backgroundColor = getCSSVariable('--color-warning');
                     progressText.textContent = 'Deletion Taking Longer Than Expected';
                     progressDetails.textContent = 'The game deletion is still processing. The page will reload to show updated status.';
-                    
+
                     setTimeout(() => {
                         modal.hide();
                         modalBackdrop.remove();
@@ -525,7 +523,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function createLoadingState() {
         const wrapper = document.createElement('div');
         wrapper.className = 'text-center py-4';
-        
+
         const spinner = document.createElement('div');
         spinner.className = 'spinner-border text-secondary';
         spinner.setAttribute('role', 'status');
@@ -533,11 +531,11 @@ document.addEventListener('DOMContentLoaded', function () {
         spinnerSpan.className = 'visually-hidden';
         spinnerSpan.appendChild(document.createTextNode('Loading...'));
         spinner.appendChild(spinnerSpan);
-        
+
         const text = document.createElement('p');
         text.className = 'text-white-50 mt-2';
         text.appendChild(document.createTextNode('Loading saves...'));
-        
+
         wrapper.appendChild(spinner);
         wrapper.appendChild(text);
         return wrapper;
@@ -553,7 +551,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return wrapper;
     }
 
-    const loadSaveFolders = async function(gameId) {
+    const loadSaveFolders = async function (gameId) {
         const container = document.getElementById('savesListContainer');
         if (!container) return;
 
@@ -564,9 +562,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const urlPattern = window.LIST_SAVE_FOLDERS_URL_PATTERN;
             const url = urlPattern.replace('/0/', `/${gameId}/`);
             const response = await fetch(url, {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                headers: window.createFetchHeaders ? window.createFetchHeaders(window.getCsrfToken()) : { 'X-Requested-With': 'XMLHttpRequest' }
             });
-            
+
             // Handle 404 - game was deleted
             if (response.status === 404) {
                 console.warn('Game not found (may have been deleted)');
@@ -585,7 +583,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
                 return;
             }
-            
+
             const data = await response.json();
 
             if (!response.ok || !data.success) {
@@ -614,7 +612,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Always create button container, even if no saves
             const buttonContainer = document.createElement('div');
             buttonContainer.className = 'mb-3 d-flex justify-content-between align-items-center gap-2';
-            
+
             // Open folder button on the left - always show
             const openFolderButton = document.createElement('button');
             openFolderButton.className = 'btn btn-info text-white';
@@ -623,15 +621,15 @@ document.addEventListener('DOMContentLoaded', function () {
             folderIcon.className = 'fas fa-folder-open me-2';
             openFolderButton.appendChild(folderIcon);
             openFolderButton.appendChild(document.createTextNode('Open Save Location'));
-            openFolderButton.addEventListener('click', function() {
+            openFolderButton.addEventListener('click', function () {
                 openSaveLocation(gameId);
             });
             buttonContainer.appendChild(openFolderButton);
-            
+
             // Right side button container
             const rightButtonContainer = document.createElement('div');
             rightButtonContainer.className = 'd-flex gap-2';
-            
+
             // Only show backup/delete buttons if there are saves
             if (data.save_folders && data.save_folders.length > 0) {
                 const backupButton = document.createElement('button');
@@ -641,11 +639,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 backupIcon.className = 'fas fa-download me-2';
                 backupButton.appendChild(backupIcon);
                 backupButton.appendChild(document.createTextNode('Backup All Saves'));
-                backupButton.addEventListener('click', function() {
+                backupButton.addEventListener('click', function () {
                     backupAllSaves(gameId);
                 });
                 rightButtonContainer.appendChild(backupButton);
-                
+
                 const deleteButton = document.createElement('button');
                 deleteButton.className = 'btn btn-danger text-white';
                 deleteButton.type = 'button';
@@ -653,12 +651,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 deleteIcon.className = 'fas fa-trash me-2';
                 deleteButton.appendChild(deleteIcon);
                 deleteButton.appendChild(document.createTextNode('Delete All Saves'));
-                deleteButton.addEventListener('click', function() {
+                deleteButton.addEventListener('click', function () {
                     deleteAllSaves(gameId);
                 });
                 rightButtonContainer.appendChild(deleteButton);
             }
-            
+
             buttonContainer.appendChild(rightButtonContainer);
 
             if (!data.save_folders || data.save_folders.length === 0) {
@@ -691,31 +689,31 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 const buttonGroup = document.createElement('div');
                 buttonGroup.className = 'd-flex gap-2';
-                
+
                 const loadBtn = document.createElement('button');
                 loadBtn.className = 'btn btn-sm btn-secondary text-white';
                 const loadIcon = document.createElement('i');
                 loadIcon.className = 'fas fa-download me-1';
                 loadBtn.appendChild(loadIcon);
                 loadBtn.appendChild(document.createTextNode('Load'));
-                loadBtn.addEventListener('click', function(e) {
+                loadBtn.addEventListener('click', function (e) {
                     e.preventDefault();
                     e.stopPropagation();
                     loadSelectedSave(gameId, folder.folder_number);
                 });
-                
+
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'btn btn-sm btn-outline-danger text-white';
                 const deleteIcon = document.createElement('i');
                 deleteIcon.className = 'fas fa-trash me-1';
                 deleteBtn.appendChild(deleteIcon);
                 deleteBtn.appendChild(document.createTextNode('Delete'));
-                deleteBtn.addEventListener('click', function(e) {
+                deleteBtn.addEventListener('click', function (e) {
                     e.preventDefault();
                     e.stopPropagation();
                     deleteSaveFolder(gameId, folder.folder_number);
                 });
-                
+
                 buttonGroup.appendChild(loadBtn);
                 buttonGroup.appendChild(deleteBtn);
 
@@ -747,31 +745,31 @@ document.addEventListener('DOMContentLoaded', function () {
         modalBackdrop.setAttribute('tabindex', '-1');
         modalBackdrop.setAttribute('aria-labelledby', `${modalId}Label`);
         modalBackdrop.setAttribute('aria-hidden', 'true');
-        
+
         const modalDialog = document.createElement('div');
         modalDialog.className = 'modal-dialog modal-dialog-centered';
-        
+
         const modalContent = document.createElement('div');
         modalContent.className = 'modal-content bg-primary text-white border-0';
-        
+
         const modalHeader = document.createElement('div');
         modalHeader.className = 'modal-header bg-primary border-secondary';
-        
+
         const modalTitle = document.createElement('h5');
         modalTitle.className = 'modal-title text-white';
         modalTitle.id = `${modalId}Label`;
         modalTitle.textContent = title;
-        
+
         modalHeader.appendChild(modalTitle);
-        
+
         const modalBody = document.createElement('div');
         modalBody.className = 'modal-body bg-primary';
-        
+
         const progressBarWrapper = document.createElement('div');
         progressBarWrapper.className = 'progress mb-3';
         progressBarWrapper.style.height = '30px';
         progressBarWrapper.style.backgroundColor = getCSSVariable('--white-opacity-10');
-        
+
         const progressBar = document.createElement('div');
         progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated';
         progressBar.setAttribute('role', 'progressbar');
@@ -780,57 +778,57 @@ document.addEventListener('DOMContentLoaded', function () {
         progressBar.setAttribute('aria-valuenow', '0');
         progressBar.setAttribute('aria-valuemin', '0');
         progressBar.setAttribute('aria-valuemax', '100');
-        
+
         const progressText = document.createElement('div');
         progressText.className = 'text-center mt-3 text-white fs-6 fw-medium';
         progressText.textContent = 'Starting...';
-        
+
         const progressDetails = document.createElement('div');
         progressDetails.className = 'text-center text-white-50 mt-2 small';
         progressDetails.textContent = 'Please wait while the operation completes...';
-        
+
         progressBarWrapper.appendChild(progressBar);
         modalBody.appendChild(progressBarWrapper);
         modalBody.appendChild(progressText);
         modalBody.appendChild(progressDetails);
-        
+
         modalContent.appendChild(modalHeader);
         modalContent.appendChild(modalBody);
         modalDialog.appendChild(modalContent);
         modalBackdrop.appendChild(modalDialog);
-        
+
         // Get next z-index for proper stacking
         const nextZIndex = getNextModalZIndex();
         modalBackdrop.style.zIndex = nextZIndex;
-        
+
         // Add modal to body
         document.body.appendChild(modalBackdrop);
-        
+
         // Show modal using Bootstrap
         const modal = new bootstrap.Modal(modalBackdrop, {
             backdrop: 'static',
             keyboard: false
         });
-        
+
         // Set backdrop z-index after modal is shown (Bootstrap creates backdrop dynamically)
-        modal._element.addEventListener('shown.bs.modal', function() {
+        modal._element.addEventListener('shown.bs.modal', function () {
             const backdrop = document.querySelector('.modal-backdrop:last-of-type');
             if (backdrop) {
                 backdrop.style.zIndex = (nextZIndex - 10).toString();
             }
         }, { once: true });
-        
+
         modal.show();
-        
+
         const updateProgress = (progressData) => {
             const percentage = progressData.percentage || 0;
             const current = progressData.current || 0;
             const total = progressData.total || 0;
             const message = progressData.message || '';
-            
+
             progressBar.style.width = `${percentage}%`;
             progressBar.setAttribute('aria-valuenow', percentage);
-            
+
             if (total > 0) {
                 progressText.textContent = `${current}/${total} ${message || 'Processing...'}`;
                 progressDetails.textContent = `${percentage}% complete`;
@@ -842,7 +840,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 progressDetails.textContent = 'Please wait...';
             }
         };
-        
+
         return { modal, modalBackdrop, modalContent, updateProgress, progressBar, progressText, progressDetails };
     }
 
@@ -851,9 +849,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const maxAttempts = 300; // 5 minutes max
         let attempts = 0;
         const pollInterval = 1000; // 1 second
-        
+
         const { modal, modalBackdrop, modalContent, updateProgress, progressBar, progressText, progressDetails } = modalData;
-        
+
         const checkStatus = async () => {
             try {
                 const urlPattern = window.CHECK_OPERATION_STATUS_URL_PATTERN;
@@ -861,18 +859,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 const response = await fetch(url, {
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
-                
+
                 if (!response.ok) {
                     throw new Error('Failed to check operation status');
                 }
-                
+
                 const data = await response.json();
-                
+
                 // Update progress bar
                 if (data.progress) {
                     updateProgress(data.progress);
                 }
-                
+
                 if (data.completed) {
                     progressBar.classList.remove('progress-bar-animated');
                     progressBar.style.backgroundColor = getCSSVariable('--color-success');
@@ -907,23 +905,23 @@ document.addEventListener('DOMContentLoaded', function () {
                     modalContent.appendChild(modalFooter);
                     return true;
                 }
-                
+
                 return false;
             } catch (error) {
                 console.error('Error checking operation status:', error);
                 return false;
             }
         };
-        
+
         // Initial check
         const completed = await checkStatus();
         if (completed) return;
-        
+
         // Poll until completion or max attempts
         const poll = setInterval(async () => {
             attempts++;
             const completed = await checkStatus();
-            
+
             if (completed || attempts >= maxAttempts) {
                 clearInterval(poll);
                 if (attempts >= maxAttempts && !completed) {
@@ -967,18 +965,18 @@ document.addEventListener('DOMContentLoaded', function () {
         function showToast(message, type = 'info') {
             const toast = document.createElement('div');
             const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-            
+            toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
+
             const messageText = document.createTextNode(message);
             toast.appendChild(messageText);
-            
+
             const closeBtn = document.createElement('button');
             closeBtn.type = 'button';
             closeBtn.className = 'btn-close';
             closeBtn.setAttribute('data-bs-dismiss', 'alert');
             closeBtn.setAttribute('aria-label', 'Close');
             toast.appendChild(closeBtn);
-            
+
             document.body.appendChild(toast);
 
             setTimeout(() => {
@@ -1048,18 +1046,18 @@ document.addEventListener('DOMContentLoaded', function () {
         function showToast(message, type = 'info') {
             const toast = document.createElement('div');
             const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-            
+            toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
+
             const messageText = document.createTextNode(message);
             toast.appendChild(messageText);
-            
+
             const closeBtn = document.createElement('button');
             closeBtn.type = 'button';
             closeBtn.className = 'btn-close';
             closeBtn.setAttribute('data-bs-dismiss', 'alert');
             closeBtn.setAttribute('aria-label', 'Close');
             toast.appendChild(closeBtn);
-            
+
             document.body.appendChild(toast);
 
             setTimeout(() => {
@@ -1131,7 +1129,7 @@ document.addEventListener('DOMContentLoaded', function () {
         currentDeleteUrlRef = card.dataset.gameDeleteUrl || '';
 
         const isUserView = window.IS_USER_VIEW || false;
-        
+
         // For users, we don't need detail URL - they can only view saves
         // For admins, detail URL is required
         if (!isUserView && !currentDetailUrlRef) {
@@ -1186,7 +1184,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const savesPane = document.getElementById('saves-pane');
                 const editTabButtons = document.getElementById('edit-tab-buttons');
                 const saveGameBtn = document.getElementById('saveGameBtn');
-                
+
                 if (editPane && savesPane && editTabButtons && saveGameBtn) {
                     if (editPane.classList.contains('active') && editPane.classList.contains('show')) {
                         editTabButtons.classList.remove('d-none');
@@ -1229,7 +1227,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const savesTab = document.getElementById('saves-tab');
     const editTabButtons = document.getElementById('edit-tab-buttons');
     const saveGameBtn = document.getElementById('saveGameBtn');
-    
+
     // Function to show/hide edit buttons based on active tab
     function toggleEditButtons(show) {
         if (editTabButtons) {
@@ -1247,7 +1245,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
     }
-    
+
     if (editTab && savesTab) {
         // Initial state - show buttons if edit tab is active by default
         const editPane = document.getElementById('edit-pane');
@@ -1267,7 +1265,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
         }
-        
+
         editTab.addEventListener('shown.bs.tab', function () {
             editTab.classList.add('active', 'text-white');
             editTab.classList.remove('text-white-50');
@@ -1275,7 +1273,7 @@ document.addEventListener('DOMContentLoaded', function () {
             savesTab.classList.add('text-white-50');
             toggleEditButtons(true);
         });
-        
+
         savesTab.addEventListener('shown.bs.tab', function () {
             savesTab.classList.add('active', 'text-white');
             savesTab.classList.remove('text-white-50');
@@ -1293,44 +1291,44 @@ document.addEventListener('DOMContentLoaded', function () {
             console.error('OPEN_SAVE_LOCATION_URL_PATTERN not defined');
             return;
         }
-        
+
         // Get CSRF token
         const csrfInput = document.querySelector('#gameCsrfForm input[name="csrfmiddlewaretoken"]') ||
             document.querySelector('#gameManageForm input[name="csrfmiddlewaretoken"]');
         const csrfToken = csrfInput ? csrfInput.value : null;
-        
+
         if (!csrfToken) {
             console.error('CSRF token not found');
             return;
         }
-        
+
         // Show toast notification helper
         function showToast(message, type = 'info') {
             const toast = document.createElement('div');
             const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-            
+            toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
+
             const messageText = document.createTextNode(message);
             toast.appendChild(messageText);
-            
+
             const closeBtn = document.createElement('button');
             closeBtn.type = 'button';
             closeBtn.className = 'btn-close';
             closeBtn.setAttribute('data-bs-dismiss', 'alert');
             closeBtn.setAttribute('aria-label', 'Close');
             toast.appendChild(closeBtn);
-            
+
             document.body.appendChild(toast);
-            
+
             setTimeout(() => {
                 if (toast.parentNode) {
                     toast.remove();
                 }
             }, 5000);
         }
-        
+
         const url = window.OPEN_SAVE_LOCATION_URL_PATTERN.replace('0', gameId);
-        
+
         try {
             const response = await fetch(url, {
                 method: 'POST',
@@ -1340,25 +1338,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 credentials: 'same-origin'
             });
-            
+
             const data = await response.json();
-            
+
             if (!response.ok || !data.success) {
                 window.showToast(data.error || 'Failed to open save location', 'error');
                 return;
             }
-            
+
             // If operation ID is returned, poll for status
             if (data.operation_id) {
                 const operationId = data.operation_id;
-                
+
                 // Poll for operation status
                 const pollInterval = 300; // Poll every 300ms (faster for quick operations)
                 const maxAttempts = 100; // Max 30 seconds (100 * 300ms)
                 let attempts = 0;
                 let pollStatus = null;
                 let isPolling = true; // Flag to prevent multiple intervals
-                
+
                 const stopPolling = () => {
                     if (pollStatus) {
                         clearInterval(pollStatus);
@@ -1366,21 +1364,21 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                     isPolling = false;
                 };
-                
+
                 // Function to check status
                 const checkStatus = async () => {
                     if (!isPolling) {
                         return false; // Stop checking if polling was stopped
                     }
-                    
+
                     attempts++;
-                    
+
                     if (attempts > maxAttempts) {
                         stopPolling();
                         window.showToast('Operation timed out. Please check if the folder exists.', 'error');
                         return false;
                     }
-                    
+
                     try {
                         const statusUrl = window.CHECK_OPERATION_STATUS_URL_PATTERN.replace('0', operationId);
                         const statusResponse = await fetch(statusUrl, {
@@ -1390,22 +1388,22 @@ document.addEventListener('DOMContentLoaded', function () {
                             },
                             credentials: 'same-origin'
                         });
-                        
+
                         if (!statusResponse.ok) {
                             stopPolling();
                             window.showToast('Error checking operation status', 'error');
                             return false;
                         }
-                        
+
                         const statusData = await statusResponse.json();
-                        
+
                         // Check if we have a valid response
                         if (!statusData.success) {
                             stopPolling();
                             window.showToast(statusData.error || 'Operation failed', 'error');
                             return false;
                         }
-                        
+
                         // Response structure: fields are at top level (not nested under 'data')
                         // { success: true, status: 'pending', completed: false, failed: false, ... }
                         if (statusData.completed === true) {
@@ -1423,7 +1421,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             }
                             return false; // Stop polling
                         }
-                        
+
                         // If still in progress (pending or in_progress), continue polling
                         return true; // Continue polling
                     } catch (error) {
@@ -1433,14 +1431,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         return false;
                     }
                 };
-                
+
                 // Check immediately first (operation might complete very quickly)
                 const immediateCheck = await checkStatus();
                 if (!immediateCheck) {
                     // Operation already completed or failed, no need to poll
                     return;
                 }
-                
+
                 // If still in progress, start polling interval
                 pollStatus = setInterval(async () => {
                     const shouldContinue = await checkStatus();
@@ -1452,7 +1450,7 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 window.showToast('Open folder operation queued', 'info');
             }
-            
+
         } catch (error) {
             console.error('Error opening save location:', error);
             window.showToast('Error: Failed to open save location. Please try again.', 'error');
@@ -1467,19 +1465,19 @@ document.addEventListener('DOMContentLoaded', function () {
             console.error('BACKUP_ALL_SAVES_URL_PATTERN not defined');
             return;
         }
-        
+
         // Get CSRF token
         const csrfInput = document.querySelector('#gameCsrfForm input[name="csrfmiddlewaretoken"]') ||
             document.querySelector('#gameManageForm input[name="csrfmiddlewaretoken"]');
         const csrfToken = csrfInput ? csrfInput.value : null;
-        
+
         if (!csrfToken) {
             console.error('CSRF token not found');
             return;
         }
-        
+
         const url = window.BACKUP_ALL_SAVES_URL_PATTERN.replace('0', gameId);
-        
+
         try {
             const response = await fetch(url, {
                 method: 'GET',
@@ -1489,25 +1487,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 credentials: 'same-origin'
             });
-            
+
             const data = await response.json();
-            
+
             if (!response.ok || !data.success) {
                 function showToast(message, type = 'info') {
                     const toast = document.createElement('div');
                     const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-                    
+                    toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
+
                     const messageText = document.createTextNode(message);
                     toast.appendChild(messageText);
-                    
+
                     const closeBtn = document.createElement('button');
                     closeBtn.type = 'button';
                     closeBtn.className = 'btn-close';
                     closeBtn.setAttribute('data-bs-dismiss', 'alert');
                     closeBtn.setAttribute('aria-label', 'Close');
                     toast.appendChild(closeBtn);
-                    
+
                     document.body.appendChild(toast);
 
                     setTimeout(() => {
@@ -1519,11 +1517,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 window.showToast(data.error || 'Failed to create backup', 'error');
                 return;
             }
-            
+
             // If operation ID is returned, show progress modal and poll
             if (data.operation_id) {
                 const operationId = data.operation_id;
-                
+
                 // Show progress modal and poll for status
                 const modalData = createProgressModal(operationId, 'Backing Up All Saves', 'backup');
                 pollOperationStatus(
@@ -1537,18 +1535,18 @@ document.addEventListener('DOMContentLoaded', function () {
                         function showToast(message, type = 'info') {
                             const toast = document.createElement('div');
                             const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-                            
+                            toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
+
                             const messageText = document.createTextNode(message);
                             toast.appendChild(messageText);
-                            
+
                             const closeBtn = document.createElement('button');
                             closeBtn.type = 'button';
                             closeBtn.className = 'btn-close';
                             closeBtn.setAttribute('data-bs-dismiss', 'alert');
                             closeBtn.setAttribute('aria-label', 'Close');
                             toast.appendChild(closeBtn);
-                            
+
                             document.body.appendChild(toast);
 
                             setTimeout(() => {
@@ -1565,18 +1563,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 function showToast(message, type = 'info') {
                     const toast = document.createElement('div');
                     const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-                    
+                    toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
+
                     const messageText = document.createTextNode(message);
                     toast.appendChild(messageText);
-                    
+
                     const closeBtn = document.createElement('button');
                     closeBtn.type = 'button';
                     closeBtn.className = 'btn-close';
                     closeBtn.setAttribute('data-bs-dismiss', 'alert');
                     closeBtn.setAttribute('aria-label', 'Close');
                     toast.appendChild(closeBtn);
-                    
+
                     document.body.appendChild(toast);
 
                     setTimeout(() => {
@@ -1587,24 +1585,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
                 window.showToast(data.message || 'Backup operation queued', 'info');
             }
-            
+
         } catch (error) {
             console.error('Error creating backup:', error);
             function showToast(message, type = 'info') {
                 const toast = document.createElement('div');
                 const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-                
+                toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
+
                 const messageText = document.createTextNode(message);
                 toast.appendChild(messageText);
-                
+
                 const closeBtn = document.createElement('button');
                 closeBtn.type = 'button';
                 closeBtn.className = 'btn-close';
                 closeBtn.setAttribute('data-bs-dismiss', 'alert');
                 closeBtn.setAttribute('aria-label', 'Close');
                 toast.appendChild(closeBtn);
-                
+
                 document.body.appendChild(toast);
 
                 setTimeout(() => {
@@ -1616,7 +1614,7 @@ document.addEventListener('DOMContentLoaded', function () {
             window.showToast('Error: Failed to create backup. Please try again.', 'error');
         }
     }
-    
+
     // Helper function to check backup result and show download info
     async function checkBackupResult(operationId) {
         try {
@@ -1625,25 +1623,25 @@ document.addEventListener('DOMContentLoaded', function () {
             const response = await fetch(url, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
-            
+
             if (response.ok) {
                 const data = await response.json();
                 if (data.result_data && data.result_data.zip_path) {
                     function showToast(message, type = 'info') {
                         const toast = document.createElement('div');
                         const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-                        
+                        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
+
                         const messageText = document.createTextNode(message);
                         toast.appendChild(messageText);
-                        
+
                         const closeBtn = document.createElement('button');
                         closeBtn.type = 'button';
                         closeBtn.className = 'btn-close';
                         closeBtn.setAttribute('data-bs-dismiss', 'alert');
                         closeBtn.setAttribute('aria-label', 'Close');
                         toast.appendChild(closeBtn);
-                        
+
                         document.body.appendChild(toast);
 
                         setTimeout(() => {
@@ -1668,30 +1666,30 @@ document.addEventListener('DOMContentLoaded', function () {
             console.error('DELETE_ALL_SAVES_URL_PATTERN not defined');
             return;
         }
-        
+
         // Get CSRF token (same way as deleteSaveFolder)
         const csrfInput = document.querySelector('#gameCsrfForm input[name="csrfmiddlewaretoken"]') ||
             document.querySelector('#gameManageForm input[name="csrfmiddlewaretoken"]');
         const csrfToken = csrfInput ? csrfInput.value : null;
-        
+
         if (!csrfToken) {
             console.error('CSRF token not found');
             return;
         }
-        
+
         // Show confirmation dialog
         const confirmed = await customConfirm(
             'Are you sure you want to delete ALL save files for this game? This action cannot be undone!',
             'Delete All Saves',
             'danger'
         );
-        
+
         if (!confirmed) {
             return;
         }
-        
+
         const url = window.DELETE_ALL_SAVES_URL_PATTERN.replace('0', gameId);
-        
+
         try {
             const response = await fetch(url, {
                 method: 'DELETE',
@@ -1701,26 +1699,26 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 credentials: 'same-origin'
             });
-            
+
             const data = await response.json();
-            
+
             if (!response.ok || !data.success) {
                 // Show toast notification
                 function showToast(message, type = 'info') {
                     const toast = document.createElement('div');
                     const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-                    
+                    toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
+
                     const messageText = document.createTextNode(message);
                     toast.appendChild(messageText);
-                    
+
                     const closeBtn = document.createElement('button');
                     closeBtn.type = 'button';
                     closeBtn.className = 'btn-close';
                     closeBtn.setAttribute('data-bs-dismiss', 'alert');
                     closeBtn.setAttribute('aria-label', 'Close');
                     toast.appendChild(closeBtn);
-                    
+
                     document.body.appendChild(toast);
 
                     setTimeout(() => {
@@ -1732,14 +1730,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 window.showToast(data.error || 'Failed to delete all saves', 'error');
                 return;
             }
-            
+
             // If operation IDs are returned, show progress modal and poll
             if (data.operation_ids && data.operation_ids.length > 0) {
                 // Use the first operation ID for progress tracking
                 // All operations will be processed in parallel by the client worker
                 const firstOperationId = data.operation_ids[0];
                 const totalCount = data.total_count || data.operation_ids.length;
-                
+
                 // Show progress modal and poll for status
                 const modalData = createProgressModal(firstOperationId, `Deleting All Saves (${totalCount} folder${totalCount > 1 ? 's' : ''})`, 'delete');
                 pollOperationStatus(
@@ -1759,18 +1757,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 function showToast(message, type = 'info') {
                     const toast = document.createElement('div');
                     const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-                    
+                    toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
+
                     const messageText = document.createTextNode(message);
                     toast.appendChild(messageText);
-                    
+
                     const closeBtn = document.createElement('button');
                     closeBtn.type = 'button';
                     closeBtn.className = 'btn-close';
                     closeBtn.setAttribute('data-bs-dismiss', 'alert');
                     closeBtn.setAttribute('aria-label', 'Close');
                     toast.appendChild(closeBtn);
-                    
+
                     document.body.appendChild(toast);
 
                     setTimeout(() => {
@@ -1782,24 +1780,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 window.showToast(data.message || 'All saves deleted successfully!', 'success');
                 loadSaveFolders(gameId);
             }
-            
+
         } catch (error) {
             console.error('Error deleting all saves:', error);
             function showToast(message, type = 'info') {
                 const toast = document.createElement('div');
                 const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-                
+                toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
+
                 const messageText = document.createTextNode(message);
                 toast.appendChild(messageText);
-                
+
                 const closeBtn = document.createElement('button');
                 closeBtn.type = 'button';
                 closeBtn.className = 'btn-close';
                 closeBtn.setAttribute('data-bs-dismiss', 'alert');
                 closeBtn.setAttribute('aria-label', 'Close');
                 toast.appendChild(closeBtn);
-                
+
                 document.body.appendChild(toast);
 
                 setTimeout(() => {
@@ -1811,7 +1809,7 @@ document.addEventListener('DOMContentLoaded', function () {
             window.showToast('Error: Failed to delete all saves. Please try again.', 'error');
         }
     }
-    
+
     // Helper function to check if all delete operations are complete
     async function checkAllOperationsComplete(operationIds, gameId) {
         if (!operationIds || operationIds.length === 0) {
@@ -1821,7 +1819,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }, 500);
             return;
         }
-        
+
         // Check status of all operations
         const urlPattern = window.CHECK_OPERATION_STATUS_URL_PATTERN;
         const statusChecks = operationIds.map(async (opId) => {
@@ -1830,11 +1828,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 const response = await fetch(url, {
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
-                
+
                 if (!response.ok) {
                     return { id: opId, status: 'unknown' };
                 }
-                
+
                 const data = await response.json();
                 return { id: opId, status: data.status || 'unknown' };
             } catch (error) {
@@ -1842,14 +1840,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 return { id: opId, status: 'unknown' };
             }
         });
-        
+
         const results = await Promise.all(statusChecks);
-        
+
         // Check if all operations are complete (completed or failed)
-        const allComplete = results.every(result => 
+        const allComplete = results.every(result =>
             result.status === 'completed' || result.status === 'failed'
         );
-        
+
         // If all are complete, reload the page
         if (allComplete) {
             // Small delay to ensure backend has processed all deletions

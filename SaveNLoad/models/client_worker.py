@@ -20,6 +20,13 @@ class ClientWorker(models.Model):
     is_active = models.BooleanField(default=True, help_text="Whether worker is currently active")
     created_at = models.DateTimeField(auto_now_add=True)
     
+    # Constants
+    WORKER_TIMEOUT_SECONDS = WORKER_TIMEOUT_SECONDS
+    
+    # Association field
+    user = models.ForeignKey('SimpleUsers', on_delete=models.SET_NULL, null=True, blank=True, 
+                            related_name='client_workers', help_text="User who owns this worker")
+    
     class Meta:
         db_table = 'client_workers'
         verbose_name = 'Client Worker'
@@ -27,7 +34,8 @@ class ClientWorker(models.Model):
         ordering = ['-last_heartbeat']
     
     def __str__(self):
-        return f"{self.client_id} ({'Active' if self.is_active else 'Inactive'})"
+        user_str = f" - {self.user.username}" if self.user else " (Unclaimed)"
+        return f"{self.client_id}{user_str} ({'Active' if self.is_active else 'Inactive'})"
     
     def is_online(self, timeout_seconds: int = WORKER_TIMEOUT_SECONDS) -> bool:
         """Check if worker is online based on last heartbeat"""
@@ -74,4 +82,20 @@ class ClientWorker(models.Model):
             is_active=True,
             last_heartbeat__gte=timeout_threshold
         ).exists()
+    
+    @classmethod
+    def cleanup_stale_workers(cls, timeout_seconds: int = WORKER_TIMEOUT_SECONDS):
+        """Unclaim workers that have timed out"""
+        from datetime import timedelta
+        timeout_threshold = timezone.now() - timedelta(seconds=timeout_seconds)
+        
+        # Find workers that are owned but haven't heartbeated recently
+        stale_workers = cls.objects.filter(
+            user__isnull=False,
+            last_heartbeat__lt=timeout_threshold
+        )
+        
+        # Update them to be unclaimed
+        count = stale_workers.update(user=None, is_active=False)
+        return count
 
