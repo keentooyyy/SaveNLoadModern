@@ -89,7 +89,8 @@ class ClientWorker(models.Model):
     def cleanup_stale_workers(cls, timeout_seconds: int = WORKER_TIMEOUT_SECONDS):
         """
         Mark workers as inactive if they have timed out.
-        Also unclaims them if they were owned.
+        Only unclaims workers that are actually offline (not just marked inactive).
+        This prevents active workers from being unclaimed when cleanup runs.
         """
         from datetime import timedelta
         timeout_threshold = timezone.now() - timedelta(seconds=timeout_seconds)
@@ -100,7 +101,17 @@ class ClientWorker(models.Model):
             last_heartbeat__lt=timeout_threshold
         )
         
-        # Mark as inactive and unclaim
-        count = stale_workers.update(is_active=False, user=None)
-        return count
+        # Only unclaim workers that are truly offline (double-check with is_online)
+        # This prevents race conditions where cleanup runs between heartbeats
+        unclaimed_count = 0
+        for worker in stale_workers:
+            # Double-check if worker is actually offline before unclaiming
+            if not worker.is_online(timeout_seconds):
+                worker.is_active = False
+                worker.user = None  # Only unclaim if truly offline
+                worker.save()
+                unclaimed_count += 1
+            # If worker is still online, leave it alone (don't modify it)
+        
+        return unclaimed_count
 
