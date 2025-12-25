@@ -23,9 +23,6 @@ import os
 def register_client(request):
     """Register a client worker - client_id must be unique per PC"""
     try:
-        # Clean up stale workers first
-        ClientWorker.cleanup_stale_workers(timeout_seconds=WORKER_TIMEOUT_SECONDS)
-        
         data, error_response = parse_json_body(request)
         if error_response:
             return error_response
@@ -39,14 +36,12 @@ def register_client(request):
         worker, created = ClientWorker.objects.get_or_create(
             client_id=client_id,
             defaults={
-                'is_active': True, 
                 'last_heartbeat': timezone.now()
             }
         )
         
         if not created:
             # Update existing worker
-            worker.is_active = True
             worker.last_heartbeat = timezone.now()
             worker.save()
         
@@ -69,10 +64,6 @@ def register_client(request):
 def heartbeat(request):
     """Receive heartbeat from client worker and update status"""
     try:
-        # Clean up stale workers on every heartbeat to keep DB status accurate
-        # This allows using is_active field reliably
-        ClientWorker.cleanup_stale_workers(timeout_seconds=WORKER_TIMEOUT_SECONDS)
-        
         data, error_response = parse_json_body(request)
         if error_response:
             return error_response
@@ -84,7 +75,6 @@ def heartbeat(request):
             return error_response
         
         worker.last_heartbeat = timezone.now()
-        worker.is_active = True
         worker.save()
         
         return json_response_success(data={
@@ -111,8 +101,7 @@ def unregister_client(request):
         if error_response:
             return error_response
         
-        worker.is_active = False
-        worker.save()
+        # Worker is unregistered - no need to set is_active, is_online() will handle it
         print(f"Client worker unregistered: {client_id}")
         return json_response_success(message='Client worker unregistered')
         
@@ -126,13 +115,9 @@ def unregister_client(request):
 def check_connection(request):
     """Check if client worker is connected for current user"""
     from SaveNLoad.views.custom_decorators import get_current_user
-    
-    # Clean up stale workers first
     from SaveNLoad.models.client_worker import ClientWorker
-    ClientWorker.cleanup_stale_workers(timeout_seconds=WORKER_TIMEOUT_SECONDS)
     
-    # Check for active worker owned by this user
-    # This replaces the session-based logic with persistent ownership + presence check
+    # Check for worker owned by this user - rely on relationship and is_online() check
     user = get_current_user(request)
     if not user:
         return JsonResponse({
@@ -141,14 +126,10 @@ def check_connection(request):
             'last_heartbeat': None,
         })
     
-    # Get all active workers owned by this user
-    active_workers = ClientWorker.objects.filter(
-        user=user,
-        is_active=True
-    ).order_by('-last_heartbeat')
-    
-    # Filter by timeout to be sure
-    valid_workers = [w for w in active_workers if w.is_online(WORKER_TIMEOUT_SECONDS)]
+    # Get all workers owned by this user and filter by online status
+    # No need for is_active check - is_online() is the source of truth
+    user_workers = ClientWorker.objects.filter(user=user).order_by('-last_heartbeat')
+    valid_workers = [w for w in user_workers if w.is_online(WORKER_TIMEOUT_SECONDS)]
     
     if not valid_workers:
         return JsonResponse({
@@ -471,10 +452,8 @@ def get_unpaired_workers(request):
     if not user:
         return json_response_error('Authentication required', status=401)
     
-    # Clean up stale workers first
-    ClientWorker.cleanup_stale_workers(timeout_seconds=WORKER_TIMEOUT_SECONDS)
-    
-    # Get active workers that have no user assigned
+    # Get online workers that have no user assigned
+    # Rely on is_online() check instead of cleanup
     active_workers = ClientWorker.get_active_workers(timeout_seconds=WORKER_TIMEOUT_SECONDS)
     unpaired_workers = [w for w in active_workers if w.user is None]
     

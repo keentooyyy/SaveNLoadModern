@@ -85,11 +85,10 @@ def get_client_worker_or_error(user, request=None):
     if not user:
         return None, json_response_error('User is required', status=400)
     
-    # Get active worker owned by this user
-    # Use filter().order_by('-last_heartbeat').first() to get the most recently active one
+    # Get worker owned by this user - rely on relationship and is_online() check
+    # No need for is_active check - is_online() is the source of truth
     client_worker = ClientWorker.objects.filter(
-        user=user, 
-        is_active=True
+        user=user
     ).order_by('-last_heartbeat').first()
     
     if not client_worker:

@@ -71,10 +71,10 @@ def client_worker_required(view_func):
         
         timeout_threshold = timezone.now() - timedelta(seconds=ClientWorker.WORKER_TIMEOUT_SECONDS)
         
-        # Efficient DB check: Is there any worker owned by user that has hearted beat recently?
+        # Efficient DB check: Is there any worker owned by user that has heartbeated recently?
+        # Rely on heartbeat timestamp only - is_online() is the source of truth
         has_worker = ClientWorker.objects.filter(
             user=user,
-            is_active=True,
             last_heartbeat__gte=timeout_threshold
         ).exists()
         

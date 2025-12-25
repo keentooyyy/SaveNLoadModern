@@ -17,7 +17,6 @@ class ClientWorker(models.Model):
     
     client_id = models.CharField(max_length=255, unique=True, help_text="Unique identifier for the PC/client")
     last_heartbeat = models.DateTimeField(auto_now=True, help_text="Last time worker sent heartbeat")
-    is_active = models.BooleanField(default=True, help_text="Whether worker is currently active")
     created_at = models.DateTimeField(auto_now_add=True)
     
     # Constants
@@ -40,7 +39,7 @@ class ClientWorker(models.Model):
     
     def is_online(self, timeout_seconds: int = WORKER_TIMEOUT_SECONDS) -> bool:
         """Check if worker is online based on last heartbeat"""
-        # Rely purely on heartbeat timestamp to avoid stale is_active boolean
+        # Rely purely on heartbeat timestamp as the source of truth
         if not self.last_heartbeat:
             return False
         time_since_heartbeat = timezone.now() - self.last_heartbeat
@@ -50,7 +49,7 @@ class ClientWorker(models.Model):
     def get_active_workers(cls, timeout_seconds: int = WORKER_TIMEOUT_SECONDS):
         """Get all active workers that are currently online"""
         # Filter directly in database query for better performance and accuracy
-        # We rely solely on the heartbeat timestamp, ignoring the potentially stale is_active field
+        # We rely solely on the heartbeat timestamp as the source of truth
         from datetime import timedelta
         timeout_threshold = timezone.now() - timedelta(seconds=timeout_seconds)
         return list(cls.objects.filter(
@@ -61,7 +60,6 @@ class ClientWorker(models.Model):
     def get_worker_by_id(cls, client_id: str, timeout_seconds: int = WORKER_TIMEOUT_SECONDS):
         """Get a specific worker by client_id if it's online"""
         try:
-            # Check for worker regardless of stored is_active status
             worker = cls.objects.get(client_id=client_id)
             if worker.is_online(timeout_seconds):
                 return worker
@@ -84,34 +82,4 @@ class ClientWorker(models.Model):
         return cls.objects.filter(
             last_heartbeat__gte=timeout_threshold
         ).exists()
-    
-    @classmethod
-    def cleanup_stale_workers(cls, timeout_seconds: int = WORKER_TIMEOUT_SECONDS):
-        """
-        Mark workers as inactive if they have timed out.
-        Only unclaims workers that are actually offline (not just marked inactive).
-        This prevents active workers from being unclaimed when cleanup runs.
-        """
-        from datetime import timedelta
-        timeout_threshold = timezone.now() - timedelta(seconds=timeout_seconds)
-        
-        # Find workers that are active but haven't heartbeated recently
-        stale_workers = cls.objects.filter(
-            is_active=True,
-            last_heartbeat__lt=timeout_threshold
-        )
-        
-        # Only unclaim workers that are truly offline (double-check with is_online)
-        # This prevents race conditions where cleanup runs between heartbeats
-        unclaimed_count = 0
-        for worker in stale_workers:
-            # Double-check if worker is actually offline before unclaiming
-            if not worker.is_online(timeout_seconds):
-                worker.is_active = False
-                worker.user = None  # Only unclaim if truly offline
-                worker.save()
-                unclaimed_count += 1
-            # If worker is still online, leave it alone (don't modify it)
-        
-        return unclaimed_count
 
