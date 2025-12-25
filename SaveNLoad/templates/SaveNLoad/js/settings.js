@@ -523,7 +523,7 @@ document.addEventListener('DOMContentLoaded', function () {
             
             if (data.error) {
                 console.error('Search error from server:', data.error);
-                showToast('Failed to search games: ' + data.error, 'error');
+                window.showToast('Failed to search games: ' + data.error, 'error');
                 displaySearchResults([]);
             } else {
                 displaySearchResults(data.games || []);
@@ -622,34 +622,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Show toast notification (XSS-safe)
-    function showToast(message, type = 'info') {
-        const toast = document.createElement('div');
-        const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-        
-        // Use textContent for message to prevent XSS
-        const messageSpan = document.createElement('span');
-        messageSpan.textContent = message;
-        toast.appendChild(messageSpan);
-        
-        // Create close button safely
-        const closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'btn-close';
-        closeBtn.setAttribute('data-bs-dismiss', 'alert');
-        closeBtn.setAttribute('aria-label', 'Close');
-        toast.appendChild(closeBtn);
-        
-        document.body.appendChild(toast);
-
-        // Auto remove after 5 seconds
-        setTimeout(() => {
-            if (toast.parentNode) {
-                toast.remove();
-            }
-        }, 5000);
-    }
+    // Uses shared utility functions from utils.js
 
     // Handle form submission via AJAX
     const addGameForm = document.getElementById('addGameForm');
@@ -659,11 +632,8 @@ document.addEventListener('DOMContentLoaded', function () {
         addGameForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const csrfInput = document.querySelector('#addGameForm input[name="csrfmiddlewaretoken"]') ||
-                document.querySelector('[name="csrfmiddlewaretoken"]');
-            const csrfToken = csrfInput ? csrfInput.value : null;
+            const csrfToken = window.getCsrfToken('#addGameForm input[name="csrfmiddlewaretoken"]');
             if (!csrfToken) {
-                showToast('Error: CSRF token not found', 'error');
                 return;
             }
             
@@ -672,7 +642,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const banner = document.getElementById('banner')?.value.trim();
             
             if (!name || saveLocations.length === 0) {
-                showToast('Game name and at least one save file location are required.', 'error');
+                window.showToast('Game name and at least one save file location are required.', 'error');
                 return;
             }
             
@@ -690,11 +660,7 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 const response = await fetch(window.CREATE_GAME_URL, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRFToken': csrfToken
-                    },
+                    headers: window.createFetchHeaders(csrfToken),
                     body: JSON.stringify({
                         name: name,
                         save_file_locations: saveLocations,
@@ -708,7 +674,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     // Server returned HTML (likely an error page)
                     const text = await response.text();
                     console.error('Server returned non-JSON response:', text.substring(0, 200));
-                    showToast(`Server error (${response.status}): Please check the console for details.`, 'error');
+                    window.showToast(`Server error (${response.status}): Please check the console for details.`, 'error');
                     return;
                 }
                 
@@ -716,12 +682,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 if (!response.ok) {
                     // HTTP error status
-                    showToast(data.error || `Failed to create game (${response.status})`, 'error');
+                    window.showToast(data.error || `Failed to create game (${response.status})`, 'error');
                     return;
                 }
                 
                 if (data.success) {
-                    showToast(data.message || 'Game created successfully!', 'success');
+                    window.showToast(data.message || 'Game created successfully!', 'success');
                     // Clear form after successful creation
                     clearForm();
                     // Reload page after a short delay to show the new game
@@ -729,14 +695,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         window.location.reload();
                     }, 1500);
                 } else {
-                    showToast(data.error || 'Failed to create game', 'error');
+                    window.showToast(data.error || 'Failed to create game', 'error');
                 }
             } catch (error) {
                 console.error('Error creating game:', error);
                 if (error instanceof SyntaxError && error.message.includes('JSON')) {
-                    showToast('Server returned invalid response. Please check the console.', 'error');
+                    window.showToast('Server returned invalid response. Please check the console.', 'error');
                 } else {
-                    showToast('Error: Failed to create game. Please try again.', 'error');
+                    window.showToast('Error: Failed to create game. Please try again.', 'error');
                 }
             } finally {
                 // Restore button safely

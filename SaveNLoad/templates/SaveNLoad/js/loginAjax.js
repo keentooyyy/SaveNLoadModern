@@ -6,6 +6,30 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
+    // Safe wrapper for setButtonState with fallback
+    // Ensures the function exists before calling it
+    function safeSetButtonState(button, isLoading, loadingText) {
+        if (typeof window.setButtonState === 'function') {
+            window.setButtonState(button, isLoading, loadingText);
+        } else {
+            // Fallback: simple button state management
+            if (!button) return;
+            if (isLoading) {
+                button.disabled = true;
+                if (loadingText) {
+                    button._originalText = button.textContent;
+                    button.textContent = loadingText;
+                }
+            } else {
+                button.disabled = false;
+                if (button._originalText) {
+                    button.textContent = button._originalText;
+                    button._originalText = null;
+                }
+            }
+        }
+    }
+    
     // Get or create message container
     let alertContainer = document.getElementById('alert-container');
     if (!alertContainer) {
@@ -56,7 +80,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function showAlert(message, type = 'danger') {
+    function showAlert(message, type = 'danger', errors = []) {
         // Remove existing alerts
         const existingAlerts = alertContainer.querySelectorAll('.alert');
         existingAlerts.forEach(alert => alert.remove());
@@ -66,9 +90,23 @@ document.addEventListener('DOMContentLoaded', function() {
         alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
         alertDiv.setAttribute('role', 'alert');
         
-        // Create message text node (safe from XSS)
+        // Create message container
+        const messageContainer = document.createElement('div');
+        
+        // Add main message
         const messageText = document.createTextNode(message);
-        alertDiv.appendChild(messageText);
+        messageContainer.appendChild(messageText);
+        
+        // Add errors if any (each on a new line)
+        if (errors && errors.length > 0) {
+            errors.forEach((error, index) => {
+                if (index > 0) {
+                    messageContainer.appendChild(document.createElement('br'));
+                }
+                const errorText = document.createTextNode(error);
+                messageContainer.appendChild(errorText);
+            });
+        }
         
         // Create close button
         const closeButton = document.createElement('button');
@@ -76,13 +114,17 @@ document.addEventListener('DOMContentLoaded', function() {
         closeButton.className = 'btn-close';
         closeButton.setAttribute('data-bs-dismiss', 'alert');
         closeButton.setAttribute('aria-label', 'Close');
-        alertDiv.appendChild(closeButton);
         
+        // Append elements
+        alertDiv.appendChild(messageContainer);
+        alertDiv.appendChild(closeButton);
         alertContainer.appendChild(alertDiv);
         
         // Scroll to top of form
         alertContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
+    
+    // Uses shared utility functions from utils.js
     
     // Clear field errors when user starts typing
     const usernameInput = document.getElementById('username');
@@ -104,11 +146,9 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         
         const submitButton = loginForm.querySelector('button[type="submit"]');
-        const originalText = submitButton.textContent;
         
-        // Disable submit button
-        submitButton.disabled = true;
-        submitButton.textContent = 'LOGGING IN...';
+        // Set button loading state
+        safeSetButtonState(submitButton, true, 'LOGGING IN...');
         
         // Get form data (includes CSRF token from hidden input)
         const formData = new FormData(loginForm);
@@ -117,8 +157,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
         if (!csrfInput || !csrfInput.value) {
             showAlert('CSRF token not found. Please refresh the page and try again.', 'danger');
-            submitButton.disabled = false;
-            submitButton.textContent = originalText;
+            safeSetButtonState(submitButton, false);
             return;
         }
         
@@ -171,8 +210,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     showAlert(data.errors[0], 'danger', data.errors);
                 }
                 
-                submitButton.disabled = false;
-                submitButton.textContent = originalText;
+                safeSetButtonState(submitButton, false);
             }
         })
         .catch(error => {
@@ -183,8 +221,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 showAlert('An error occurred. Please try again.', 'danger');
             }
-            submitButton.disabled = false;
-            submitButton.textContent = originalText;
+            safeSetButtonState(submitButton, false);
         });
     });
 });

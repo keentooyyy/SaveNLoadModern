@@ -98,6 +98,8 @@ document.addEventListener('DOMContentLoaded', function() {
         alertContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
     
+    // Uses shared utility functions from utils.js
+    
     // Clear field errors when user starts typing
     const usernameInput = document.getElementById('username');
     const emailInput = document.getElementById('email');
@@ -132,11 +134,9 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         
         const submitButton = registerForm.querySelector('button[type="submit"]');
-        const originalText = submitButton.textContent;
         
-        // Disable submit button
-        submitButton.disabled = true;
-        submitButton.textContent = 'REGISTERING...';
+        // Set button loading state
+        window.setButtonState(submitButton, true, 'REGISTERING...');
         
         // Get form data (includes CSRF token from hidden input)
         const formData = new FormData(registerForm);
@@ -145,8 +145,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
         if (!csrfInput || !csrfInput.value) {
             showAlert('CSRF token not found. Please refresh the page and try again.', 'danger');
-            submitButton.disabled = false;
-            submitButton.textContent = originalText;
+            window.setButtonState(submitButton, false);
             return;
         }
         
@@ -199,8 +198,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     showAlert(data.errors[0], 'danger', data.errors);
                 }
                 
-                submitButton.disabled = false;
-                submitButton.textContent = originalText;
+                window.setButtonState(submitButton, false);
             }
         })
         .catch(error => {
@@ -211,8 +209,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 showAlert('An error occurred. Please try again.', 'danger');
             }
-            submitButton.disabled = false;
-            submitButton.textContent = originalText;
+            window.setButtonState(submitButton, false);
         });
     });
 });

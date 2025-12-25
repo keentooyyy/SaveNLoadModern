@@ -213,3 +213,196 @@ window.customConfirm = customConfirm;
 // Override native confirm() globally
 window.confirm = customConfirm;
 
+/**
+ * Show toast notification (XSS-safe)
+ * Used across multiple JavaScript files for consistent toast notifications
+ * @param {string} message - The message to display
+ * @param {string} type - The alert type: 'success', 'error', or 'info' (default)
+ */
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+    toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
+    
+    // Use textContent for message to prevent XSS
+    const messageSpan = document.createElement('span');
+    messageSpan.textContent = message;
+    toast.appendChild(messageSpan);
+    
+    // Create close button safely
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'btn-close';
+    closeBtn.setAttribute('data-bs-dismiss', 'alert');
+    closeBtn.setAttribute('aria-label', 'Close');
+    toast.appendChild(closeBtn);
+    
+    document.body.appendChild(toast);
+
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.remove();
+        }
+    }, 5000);
+}
+
+/**
+ * Get CSRF token from form or cookie
+ * @param {string} selector - Optional selector for CSRF token input (default: '[name="csrfmiddlewaretoken"]')
+ * @returns {string|null} The CSRF token or null if not found
+ */
+function getCsrfToken(selector = '[name="csrfmiddlewaretoken"]') {
+    // Try to get from form input first
+    const csrfInput = document.querySelector(selector);
+    if (csrfInput && csrfInput.value) {
+        return csrfInput.value;
+    }
+    
+    // Fallback: try to get from cookie
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrftoken') {
+            return value;
+        }
+    }
+    
+    // If not found, show error and return null
+    showToast('Error: CSRF token not found', 'error');
+    return null;
+}
+
+/**
+ * Create fetch headers with CSRF token
+ * @param {string} csrfToken - The CSRF token
+ * @returns {Object} Headers object for fetch requests
+ */
+function createFetchHeaders(csrfToken) {
+    return {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': csrfToken
+    };
+}
+
+/**
+ * Set button loading state with spinner
+ * @param {HTMLElement} button - The button element
+ * @param {boolean} isLoading - Whether to show loading state
+ * @param {string} loadingText - Text to show during loading (default: 'Loading...')
+ */
+function setButtonLoadingState(button, isLoading, loadingText = 'Loading...') {
+    if (!button) return;
+    
+    if (isLoading) {
+        const originalContent = Array.from(button.childNodes);
+        button.disabled = true;
+        button.textContent = '';
+        const spinnerIcon = document.createElement('i');
+        spinnerIcon.className = 'fas fa-spinner fa-spin me-1';
+        const loadingTextNode = document.createTextNode(loadingText);
+        button.appendChild(spinnerIcon);
+        button.appendChild(loadingTextNode);
+        // Store original content for restoration
+        button._originalContent = originalContent;
+    } else {
+        button.disabled = false;
+        button.textContent = '';
+        if (button._originalContent) {
+            button._originalContent.forEach(node => {
+                button.appendChild(node.cloneNode(true));
+            });
+            button._originalContent = null;
+        }
+    }
+}
+
+/**
+ * Set button state (simple version - just text change)
+ * @param {HTMLElement} button - The button element
+ * @param {boolean} isLoading - Whether to show loading state
+ * @param {string} loadingText - Text to show during loading (optional, only needed when isLoading is true)
+ */
+function setButtonState(button, isLoading, loadingText) {
+    if (!button) return;
+    
+    if (isLoading) {
+        if (!loadingText) {
+            console.warn('setButtonState: loadingText is required when isLoading is true');
+            return;
+        }
+        button.disabled = true;
+        button._originalText = button.textContent;
+        button.textContent = loadingText;
+    } else {
+        button.disabled = false;
+        if (button._originalText) {
+            button.textContent = button._originalText;
+            button._originalText = null;
+        }
+    }
+}
+
+/**
+ * Show error message in error element
+ * @param {HTMLElement} errorElement - The error display element
+ * @param {string} message - The error message
+ */
+function showError(errorElement, message) {
+    if (errorElement) {
+        errorElement.textContent = message;
+        errorElement.classList.remove('d-none');
+        errorElement.classList.add('d-block');
+    }
+}
+
+/**
+ * Clear error message from error element
+ * @param {HTMLElement} errorElement - The error display element
+ */
+function clearError(errorElement) {
+    if (errorElement) {
+        errorElement.classList.add('d-none');
+        errorElement.classList.remove('d-block');
+        errorElement.textContent = '';
+    }
+}
+
+/**
+ * Setup password visibility toggle
+ * @param {HTMLElement|string} toggleBtn - The toggle button element or its ID
+ * @param {HTMLElement|string} passwordInput - The password input element or its ID
+ */
+function setupPasswordToggle(toggleBtn, passwordInput) {
+    // Support both element ID (string) and element object
+    const toggle = typeof toggleBtn === 'string' ? document.getElementById(toggleBtn) : toggleBtn;
+    const input = typeof passwordInput === 'string' ? document.getElementById(passwordInput) : passwordInput;
+    
+    if (!toggle || !input) return;
+    
+    toggle.addEventListener('click', function() {
+        const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
+        input.setAttribute('type', type);
+        
+        // Toggle icon classes
+        if (type === 'password') {
+            toggle.classList.remove('fa-eye');
+            toggle.classList.add('fa-eye-slash');
+        } else {
+            toggle.classList.remove('fa-eye-slash');
+            toggle.classList.add('fa-eye');
+        }
+    });
+}
+
+// Expose all utility functions to global scope
+window.showToast = showToast;
+window.getCsrfToken = getCsrfToken;
+window.createFetchHeaders = createFetchHeaders;
+window.setButtonLoadingState = setButtonLoadingState;
+window.setButtonState = setButtonState;
+window.showError = showError;
+window.clearError = clearError;
+window.setupPasswordToggle = setupPasswordToggle;
+

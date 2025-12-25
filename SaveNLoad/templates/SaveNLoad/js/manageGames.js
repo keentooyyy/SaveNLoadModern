@@ -206,7 +206,7 @@ document.addEventListener('DOMContentLoaded', function () {
     async function saveGame() {
         if (!currentDetailUrlRef) return;
         if (!csrfToken) {
-            showToast('Error: CSRF token not found', 'error');
+            window.showToast('Error: CSRF token not found', 'error');
             return;
         }
 
@@ -215,7 +215,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const filteredLocations = saveLocations.filter(loc => loc && loc.trim());
         
         if (filteredLocations.length === 0) {
-            showToast('At least one save file location is required', 'error');
+            window.showToast('At least one save file location is required', 'error');
             return;
         }
 
@@ -239,7 +239,7 @@ document.addEventListener('DOMContentLoaded', function () {
             
             // Handle 404 - game was deleted
             if (response.status === 404) {
-                showToast('Game not found (may have been deleted)', 'error');
+                window.showToast('Game not found (may have been deleted)', 'error');
                 if (modalInstance) {
                     modalInstance.hide();
                 }
@@ -253,7 +253,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!response.ok || !data.success) {
                 // Check if it's a "not found" error
                 if (response.status === 404 || (data.error && data.error.includes('not found'))) {
-                    showToast('Game not found (may have been deleted)', 'error');
+                    window.showToast('Game not found (may have been deleted)', 'error');
                     if (modalInstance) {
                         modalInstance.hide();
                     }
@@ -262,7 +262,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     }, 1500);
                     return;
                 }
-                showToast(data.error || data.message || 'Failed to save game', 'error');
+                window.showToast(data.error || data.message || 'Failed to save game', 'error');
                 return;
             }
 
@@ -270,39 +270,16 @@ document.addEventListener('DOMContentLoaded', function () {
             window.location.reload();
         } catch (e) {
             console.error('Error saving game:', e);
-            showToast('Error: Failed to save game. Please try again.', 'error');
+            window.showToast('Error: Failed to save game. Please try again.', 'error');
         }
     }
 
-    // Helper function to show toast notifications
-    function showToast(message, type = 'info') {
-        const toast = document.createElement('div');
-        const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-        
-        const messageText = document.createTextNode(message);
-        toast.appendChild(messageText);
-        
-        const closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'btn-close';
-        closeBtn.setAttribute('data-bs-dismiss', 'alert');
-        closeBtn.setAttribute('aria-label', 'Close');
-        toast.appendChild(closeBtn);
-        
-        document.body.appendChild(toast);
-
-        setTimeout(() => {
-            if (toast.parentNode) {
-                toast.remove();
-            }
-        }, 5000);
-    }
+    // Uses shared utility functions from utils.js
 
     async function deleteGame() {
         if (!currentDeleteUrlRef || !currentDetailUrlRef) return;
         if (!csrfToken) {
-            showToast('Error: CSRF token not found', 'error');
+            window.showToast('Error: CSRF token not found', 'error');
             return;
         }
 
@@ -314,7 +291,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Extract game ID from the delete URL
         const gameIdMatch = currentDeleteUrlRef.match(/\/games\/(\d+)\//);
         if (!gameIdMatch) {
-            showToast('Error: Could not determine game ID', 'error');
+            window.showToast('Error: Could not determine game ID', 'error');
             return;
         }
         const gameId = gameIdMatch[1];
@@ -352,7 +329,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const errorMsg = data.error || data.message || 'Failed to delete game';
                 modal.hide();
                 modalBackdrop.remove();
-                showToast(errorMsg, 'error');
+                window.showToast(errorMsg, 'error');
                 return;
             }
 
@@ -479,7 +456,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             setTimeout(() => {
                                 modal.hide();
                                 modalBackdrop.remove();
-                                showToast(`Game deletion cancelled. ${ops.failed} FTP cleanup operation(s) failed. The game has been kept in the database.`, 'error');
+                                window.showToast(`Game deletion cancelled. ${ops.failed} FTP cleanup operation(s) failed. The game has been kept in the database.`, 'error');
                             }, 4000);
                             return;
                         } else {
@@ -526,7 +503,7 @@ document.addEventListener('DOMContentLoaded', function () {
             console.error('Error deleting game:', e);
             modal.hide();
             modalBackdrop.remove();
-            showToast('Error: Failed to delete game. Please try again.', 'error');
+            window.showToast('Error: Failed to delete game. Please try again.', 'error');
         }
     }
 
@@ -1030,28 +1007,28 @@ document.addEventListener('DOMContentLoaded', function () {
                     data.operation_id,
                     modalData,
                     () => {
-                        showToast('Save folder deleted successfully!', 'success');
+                        window.showToast('Save folder deleted successfully!', 'success');
                         // Reload page after a short delay
                         setTimeout(() => {
                             window.location.reload();
                         }, 1500);
                     },
                     () => {
-                        showToast('Failed to delete save folder', 'error');
+                        window.showToast('Failed to delete save folder', 'error');
                     }
                 );
             } else if (data.success) {
-                showToast(data.message || 'Save folder deleted successfully!', 'success');
+                window.showToast(data.message || 'Save folder deleted successfully!', 'success');
                 // Reload page after a short delay
                 setTimeout(() => {
                     window.location.reload();
                 }, 1500);
             } else {
-                showToast(data.error || 'Failed to delete save folder', 'error');
+                window.showToast(data.error || 'Failed to delete save folder', 'error');
             }
         } catch (error) {
             console.error('Error deleting save folder:', error);
-            showToast('Error: Failed to delete save folder. Please try again.', 'error');
+            window.showToast('Error: Failed to delete save folder. Please try again.', 'error');
         }
     }
 
@@ -1113,20 +1090,20 @@ document.addEventListener('DOMContentLoaded', function () {
                     data.operation_id,
                     modalData,
                     () => {
-                        showToast('Game loaded successfully!', 'success');
+                        window.showToast('Game loaded successfully!', 'success');
                     },
                     () => {
-                        showToast('Failed to load game', 'error');
+                        window.showToast('Failed to load game', 'error');
                     }
                 );
             } else if (data.success) {
-                showToast(data.message || 'Game loaded successfully!', 'success');
+                window.showToast(data.message || 'Game loaded successfully!', 'success');
             } else {
-                showToast(data.error || data.message || 'Failed to load game', 'error');
+                window.showToast(data.error || data.message || 'Failed to load game', 'error');
             }
         } catch (error) {
             console.error('Error loading game:', error);
-            showToast('Error: Failed to load game. Please try again.', 'error');
+            window.showToast('Error: Failed to load game. Please try again.', 'error');
         }
     }
 
@@ -1364,7 +1341,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await response.json();
             
             if (!response.ok || !data.success) {
-                showToast(data.error || 'Failed to open save location', 'error');
+                window.showToast(data.error || 'Failed to open save location', 'error');
                 return;
             }
             
@@ -1397,7 +1374,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     
                     if (attempts > maxAttempts) {
                         stopPolling();
-                        showToast('Operation timed out. Please check if the folder exists.', 'error');
+                        window.showToast('Operation timed out. Please check if the folder exists.', 'error');
                         return false;
                     }
                     
@@ -1413,7 +1390,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         
                         if (!statusResponse.ok) {
                             stopPolling();
-                            showToast('Error checking operation status', 'error');
+                            window.showToast('Error checking operation status', 'error');
                             return false;
                         }
                         
@@ -1422,7 +1399,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         // Check if we have a valid response
                         if (!statusData.success) {
                             stopPolling();
-                            showToast(statusData.error || 'Operation failed', 'error');
+                            window.showToast(statusData.error || 'Operation failed', 'error');
                             return false;
                         }
                         
@@ -1430,16 +1407,16 @@ document.addEventListener('DOMContentLoaded', function () {
                         // { success: true, status: 'pending', completed: false, failed: false, ... }
                         if (statusData.completed === true) {
                             stopPolling();
-                            showToast('Folder opened successfully', 'success');
+                            window.showToast('Folder opened successfully', 'success');
                             return false; // Stop polling
                         } else if (statusData.failed === true) {
                             stopPolling();
                             // Check if it's a "does not exist" error
                             const errorMsg = statusData.message || 'Failed to open folder';
                             if (errorMsg.includes('does not exist') || errorMsg.includes('not found') || errorMsg.includes('not a directory')) {
-                                showToast('The folder or directory does not exist', 'error');
+                                window.showToast('The folder or directory does not exist', 'error');
                             } else {
-                                showToast(errorMsg, 'error');
+                                window.showToast(errorMsg, 'error');
                             }
                             return false; // Stop polling
                         }
@@ -1449,7 +1426,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     } catch (error) {
                         console.error('Error polling operation status:', error);
                         stopPolling();
-                        showToast('Error checking operation status', 'error');
+                        window.showToast('Error checking operation status', 'error');
                         return false;
                     }
                 };
@@ -1470,12 +1447,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 }, pollInterval);
             } else {
-                showToast('Open folder operation queued', 'info');
+                window.showToast('Open folder operation queued', 'info');
             }
             
         } catch (error) {
             console.error('Error opening save location:', error);
-            showToast('Error: Failed to open save location. Please try again.', 'error');
+            window.showToast('Error: Failed to open save location. Please try again.', 'error');
         }
     }
 
@@ -1536,7 +1513,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     }, 5000);
                 }
-                showToast(data.error || 'Failed to create backup', 'error');
+                window.showToast(data.error || 'Failed to create backup', 'error');
                 return;
             }
             
@@ -1577,7 +1554,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 }
                             }, 5000);
                         }
-                        showToast('Backup failed', 'error');
+                        window.showToast('Backup failed', 'error');
                     }
                 );
             } else {
@@ -1605,7 +1582,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     }, 5000);
                 }
-                showToast(data.message || 'Backup operation queued', 'info');
+                window.showToast(data.message || 'Backup operation queued', 'info');
             }
             
         } catch (error) {
@@ -1633,7 +1610,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 }, 5000);
             }
-            showToast('Error: Failed to create backup. Please try again.', 'error');
+            window.showToast('Error: Failed to create backup. Please try again.', 'error');
         }
     }
     
@@ -1672,7 +1649,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             }
                         }, 5000);
                     }
-                    showToast(`Backup complete! Saved to: ${data.result_data.zip_path}`, 'success');
+                    window.showToast(`Backup complete! Saved to: ${data.result_data.zip_path}`, 'success');
                 }
             }
         } catch (error) {
@@ -1749,7 +1726,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     }, 5000);
                 }
-                showToast(data.error || 'Failed to delete all saves', 'error');
+                window.showToast(data.error || 'Failed to delete all saves', 'error');
                 return;
             }
             
@@ -1799,7 +1776,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     }, 5000);
                 }
-                showToast(data.message || 'All saves deleted successfully!', 'success');
+                window.showToast(data.message || 'All saves deleted successfully!', 'success');
                 loadSaveFolders(gameId);
             }
             
@@ -1828,7 +1805,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 }, 5000);
             }
-            showToast('Error: Failed to delete all saves. Please try again.', 'error');
+            window.showToast('Error: Failed to delete all saves. Please try again.', 'error');
         }
     }
     

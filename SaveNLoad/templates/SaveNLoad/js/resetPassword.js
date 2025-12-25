@@ -1,86 +1,23 @@
 /**
  * Reset Password Form Handler
+ * Uses shared utility functions from utils.js
  */
 (function() {
     'use strict';
     
-    // Show toast notification (XSS-safe)
-    function showToast(message, type = 'info') {
-        const toast = document.createElement('div');
-        const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-        
-        // Use textContent for message to prevent XSS
-        const messageSpan = document.createElement('span');
-        messageSpan.textContent = message;
-        toast.appendChild(messageSpan);
-        
-        // Create close button safely
-        const closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'btn-close';
-        closeBtn.setAttribute('data-bs-dismiss', 'alert');
-        closeBtn.setAttribute('aria-label', 'Close');
-        toast.appendChild(closeBtn);
-        
-        document.body.appendChild(toast);
-
-        // Auto remove after 5 seconds
-        setTimeout(() => {
-            if (toast.parentNode) {
-                toast.remove();
-            }
-        }, 5000);
-    }
-    
     const resetPasswordForm = document.getElementById('resetPasswordForm');
     const resetPasswordBtn = document.getElementById('resetPasswordBtn');
     
-    // Password visibility toggles
-    const toggleNewPassword = document.getElementById('toggleNewPassword');
-    const toggleConfirmPassword = document.getElementById('toggleConfirmPassword');
-    const newPasswordInput = document.getElementById('new_password');
-    const confirmPasswordInput = document.getElementById('confirm_password');
-    
-    if (toggleNewPassword && newPasswordInput) {
-        toggleNewPassword.addEventListener('click', function() {
-            const type = newPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            newPasswordInput.setAttribute('type', type);
-            
-            // Toggle icon directly (the toggle element IS the icon)
-            if (type === 'password') {
-                toggleNewPassword.classList.remove('fa-eye');
-                toggleNewPassword.classList.add('fa-eye-slash');
-            } else {
-                toggleNewPassword.classList.remove('fa-eye-slash');
-                toggleNewPassword.classList.add('fa-eye');
-            }
-        });
-    }
-    
-    if (toggleConfirmPassword && confirmPasswordInput) {
-        toggleConfirmPassword.addEventListener('click', function() {
-            const type = confirmPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            confirmPasswordInput.setAttribute('type', type);
-            
-            // Toggle icon directly (the toggle element IS the icon)
-            if (type === 'password') {
-                toggleConfirmPassword.classList.remove('fa-eye');
-                toggleConfirmPassword.classList.add('fa-eye-slash');
-            } else {
-                toggleConfirmPassword.classList.remove('fa-eye-slash');
-                toggleConfirmPassword.classList.add('fa-eye');
-            }
-        });
-    }
+    // Password visibility toggles - using shared utility function
+    window.setupPasswordToggle(document.getElementById('toggleNewPassword'), document.getElementById('new_password'));
+    window.setupPasswordToggle(document.getElementById('toggleConfirmPassword'), document.getElementById('confirm_password'));
     
     if (resetPasswordForm) {
         resetPasswordForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const csrfToken = document.querySelector('[name="csrfmiddlewaretoken"]')?.value;
+            const csrfToken = window.getCsrfToken();
             if (!csrfToken) {
-                showToast('Error: CSRF token not found', 'error');
                 return;
             }
             
@@ -92,46 +29,25 @@
             const confirmPasswordError = document.getElementById('confirm-password-error');
             
             // Clear previous errors
-            [newPasswordError, confirmPasswordError].forEach(el => {
-                if (el) {
-                    el.classList.add('d-none');
-                    el.classList.remove('d-block');
-                    el.textContent = '';
-                }
-            });
+            window.clearError(newPasswordError);
+            window.clearError(confirmPasswordError);
             
             // Validation
             let hasErrors = false;
             
             if (!newPassword) {
-                if (newPasswordError) {
-                    newPasswordError.textContent = 'New password is required.';
-                    newPasswordError.classList.remove('d-none');
-                    newPasswordError.classList.add('d-block');
-                }
+                window.showError(newPasswordError, 'New password is required.');
                 hasErrors = true;
             } else if (newPassword.length < 8) {
-                if (newPasswordError) {
-                    newPasswordError.textContent = 'Password must be at least 8 characters long.';
-                    newPasswordError.classList.remove('d-none');
-                    newPasswordError.classList.add('d-block');
-                }
+                window.showError(newPasswordError, 'Password must be at least 8 characters long.');
                 hasErrors = true;
             }
             
             if (!confirmPassword) {
-                if (confirmPasswordError) {
-                    confirmPasswordError.textContent = 'Please confirm your password.';
-                    confirmPasswordError.classList.remove('d-none');
-                    confirmPasswordError.classList.add('d-block');
-                }
+                window.showError(confirmPasswordError, 'Please confirm your password.');
                 hasErrors = true;
             } else if (newPassword !== confirmPassword) {
-                if (confirmPasswordError) {
-                    confirmPasswordError.textContent = 'Passwords do not match.';
-                    confirmPasswordError.classList.remove('d-none');
-                    confirmPasswordError.classList.add('d-block');
-                }
+                window.showError(confirmPasswordError, 'Passwords do not match.');
                 hasErrors = true;
             }
             
@@ -139,24 +55,13 @@
                 return;
             }
             
-            // Disable button and show loading state
-            const originalContent = Array.from(resetPasswordBtn.childNodes);
-            resetPasswordBtn.disabled = true;
-            resetPasswordBtn.textContent = '';
-            const spinnerIcon = document.createElement('i');
-            spinnerIcon.className = 'fas fa-spinner fa-spin me-1';
-            const loadingText = document.createTextNode('Resetting...');
-            resetPasswordBtn.appendChild(spinnerIcon);
-            resetPasswordBtn.appendChild(loadingText);
+            // Set button loading state
+            window.setButtonLoadingState(resetPasswordBtn, true, 'Resetting...');
             
             try {
                 const response = await fetch('{% url "SaveNLoad:reset_password" %}', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRFToken': csrfToken
-                    },
+                    headers: window.createFetchHeaders(csrfToken),
                     body: JSON.stringify({
                         new_password: newPassword,
                         confirm_password: confirmPassword
@@ -166,7 +71,7 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    showToast(data.message || 'Password reset successfully!', 'success');
+                    window.showToast(data.message || 'Password reset successfully!', 'success');
                     // Check if redirect is provided
                     if (data.redirect_url) {
                         setTimeout(() => {
@@ -182,29 +87,21 @@
                     
                     // Try to show field-specific errors
                     if (data.field_errors) {
-                        if (data.field_errors.new_password && newPasswordError) {
-                            newPasswordError.textContent = data.field_errors.new_password;
-                            newPasswordError.classList.remove('d-none');
-                            newPasswordError.classList.add('d-block');
+                        if (data.field_errors.new_password) {
+                            window.showError(newPasswordError, data.field_errors.new_password);
                         }
-                        if (data.field_errors.confirm_password && confirmPasswordError) {
-                            confirmPasswordError.textContent = data.field_errors.confirm_password;
-                            confirmPasswordError.classList.remove('d-none');
-                            confirmPasswordError.classList.add('d-block');
+                        if (data.field_errors.confirm_password) {
+                            window.showError(confirmPasswordError, data.field_errors.confirm_password);
                         }
                     } else {
-                        showToast(errorMsg, 'error');
+                        window.showToast(errorMsg, 'error');
                     }
                 }
             } catch (error) {
                 console.error('Error resetting password:', error);
-                showToast('Error: Failed to reset password. Please try again.', 'error');
+                window.showToast('Error: Failed to reset password. Please try again.', 'error');
             } finally {
-                resetPasswordBtn.disabled = false;
-                resetPasswordBtn.textContent = '';
-                originalContent.forEach(node => {
-                    resetPasswordBtn.appendChild(node.cloneNode(true));
-                });
+                window.setButtonLoadingState(resetPasswordBtn, false);
             }
         });
     }

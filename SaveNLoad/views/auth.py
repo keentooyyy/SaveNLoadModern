@@ -301,7 +301,7 @@ def verify_otp(request):
                     
                     if email_sent:
                         return json_response_success(
-                            message='A new OTP code has been sent to your email address.'
+                            message='A new code has been sent to your email address.'
                         )
                     else:
                         print(f"ERROR: Failed to resend OTP email to {email}")

@@ -1,52 +1,82 @@
 /**
  * Verify OTP Form Handler
+ * Uses shared utility functions from utils.js
  */
 (function() {
     'use strict';
     
-    // Show toast notification (XSS-safe)
-    function showToast(message, type = 'info') {
-        const toast = document.createElement('div');
-        const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
+    // Clear input and focus - local helper function
+    function clearAndFocusInput() {
+        if (otpInput) {
+            otpInput.value = '';
+            otpInput.focus();
+        }
+    }
+    
+    // Show loading indicator in the input field
+    function showLoadingState(isLoading) {
+        const otpInput = document.getElementById('otp_code');
+        if (!otpInput) return;
         
-        // Use textContent for message to prevent XSS
-        const messageSpan = document.createElement('span');
-        messageSpan.textContent = message;
-        toast.appendChild(messageSpan);
-        
-        // Create close button safely
-        const closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'btn-close';
-        closeBtn.setAttribute('data-bs-dismiss', 'alert');
-        closeBtn.setAttribute('aria-label', 'Close');
-        toast.appendChild(closeBtn);
-        
-        document.body.appendChild(toast);
-
-        // Auto remove after 5 seconds
-        setTimeout(() => {
-            if (toast.parentNode) {
-                toast.remove();
+        if (isLoading) {
+            otpInput.disabled = true;
+            otpInput.style.opacity = '0.6';
+            otpInput.style.cursor = 'not-allowed';
+            // Add loading text as placeholder
+            const originalPlaceholder = otpInput.placeholder;
+            otpInput.setAttribute('data-original-placeholder', originalPlaceholder);
+            otpInput.placeholder = 'Verifying...';
+        } else {
+            otpInput.disabled = false;
+            otpInput.style.opacity = '1';
+            otpInput.style.cursor = 'text';
+            // Restore original placeholder
+            const originalPlaceholder = otpInput.getAttribute('data-original-placeholder');
+            if (originalPlaceholder) {
+                otpInput.placeholder = originalPlaceholder;
             }
-        }, 5000);
+        }
     }
     
     const verifyOtpForm = document.getElementById('verifyOtpForm');
-    const verifyOtpBtn = document.getElementById('verifyOtpBtn');
     const resendOtpBtn = document.getElementById('resendOtpBtn');
     const otpInput = document.getElementById('otp_code');
+    let isSubmitting = false; // Prevent multiple submissions
     
     // Auto-focus OTP input
     if (otpInput) {
         otpInput.focus();
     }
     
+    // Function to check OTP length and handle auto-submit
+    function checkOtpLength() {
+        const otpCode = otpInput?.value.trim() || '';
+        
+        // Only auto-submit if we have 6 digits and not already submitting
+        if (otpCode.length === 6 && !isSubmitting) {
+            // Auto-submit the form after a short delay for better UX
+            setTimeout(() => {
+                if (verifyOtpForm && otpInput.value.length === 6 && !isSubmitting) {
+                    verifyOtpForm.dispatchEvent(new Event('submit'));
+                }
+            }, 300);
+        }
+    }
+    
     // Only allow numbers in OTP input
     if (otpInput) {
         otpInput.addEventListener('input', function(e) {
             e.target.value = e.target.value.replace(/[^0-9]/g, '');
+            // Check if all 6 digits are entered
+            checkOtpLength();
+        });
+        
+        // Also check on paste events
+        otpInput.addEventListener('paste', function(e) {
+            setTimeout(() => {
+                e.target.value = e.target.value.replace(/[^0-9]/g, '');
+                checkOtpLength();
+            }, 10);
         });
     }
     
@@ -54,9 +84,13 @@
         verifyOtpForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const csrfToken = document.querySelector('[name="csrfmiddlewaretoken"]')?.value;
+            // Prevent multiple submissions
+            if (isSubmitting) {
+                return;
+            }
+            
+            const csrfToken = window.getCsrfToken();
             if (!csrfToken) {
-                showToast('Error: CSRF token not found', 'error');
                 return;
             }
             
@@ -89,24 +123,14 @@
                 return;
             }
             
-            // Disable button and show loading state
-            const originalContent = Array.from(verifyOtpBtn.childNodes);
-            verifyOtpBtn.disabled = true;
-            verifyOtpBtn.textContent = '';
-            const spinnerIcon = document.createElement('i');
-            spinnerIcon.className = 'fas fa-spinner fa-spin me-1';
-            const loadingText = document.createTextNode('VERIFYING...');
-            verifyOtpBtn.appendChild(spinnerIcon);
-            verifyOtpBtn.appendChild(loadingText);
+            // Set submitting state and show loading
+            isSubmitting = true;
+            showLoadingState(true);
             
             try {
                 const response = await fetch('{% url "SaveNLoad:verify_otp" %}', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRFToken': csrfToken
-                    },
+                    headers: window.createFetchHeaders(csrfToken),
                     body: JSON.stringify({
                         action: 'verify',
                         otp_code: otpCode
@@ -129,18 +153,19 @@
                         otpError.classList.remove('d-none');
                         otpError.classList.add('d-block');
                     } else {
-                        showToast(errorMsg, 'error');
+                        window.showToast(errorMsg, 'error');
                     }
+                    // Clear input on error so user can try again
+                    clearAndFocusInput();
                 }
             } catch (error) {
                 console.error('Error verifying OTP:', error);
-                showToast('Error: Failed to verify OTP. Please try again.', 'error');
+                window.showToast('Error: Failed to verify OTP. Please try again.', 'error');
+                // Clear input on error so user can try again
+                clearAndFocusInput();
             } finally {
-                verifyOtpBtn.disabled = false;
-                verifyOtpBtn.textContent = '';
-                originalContent.forEach(node => {
-                    verifyOtpBtn.appendChild(node.cloneNode(true));
-                });
+                isSubmitting = false;
+                showLoadingState(false);
             }
         });
     }
@@ -149,9 +174,8 @@
         resendOtpBtn.addEventListener('click', async function(e) {
             e.preventDefault();
             
-            const csrfToken = document.querySelector('[name="csrfmiddlewaretoken"]')?.value;
+            const csrfToken = window.getCsrfToken();
             if (!csrfToken) {
-                showToast('Error: CSRF token not found', 'error');
                 return;
             }
             
@@ -168,11 +192,7 @@
             try {
                 const response = await fetch('{% url "SaveNLoad:verify_otp" %}', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRFToken': csrfToken
-                    },
+                    headers: window.createFetchHeaders(csrfToken),
                     body: JSON.stringify({
                         action: 'resend'
                     })
@@ -181,19 +201,16 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    showToast(data.message || 'A new OTP code has been sent to your email address.', 'success');
+                    window.showToast(data.message || 'A new code has been sent to your email address.', 'success');
                     // Clear OTP input
-                    if (otpInput) {
-                        otpInput.value = '';
-                        otpInput.focus();
-                    }
+                    clearAndFocusInput();
                 } else {
                     const errorMsg = data.error || data.message || 'Failed to resend OTP. Please try again.';
-                    showToast(errorMsg, 'error');
+                    window.showToast(errorMsg, 'error');
                 }
             } catch (error) {
                 console.error('Error resending OTP:', error);
-                showToast('Error: Failed to resend OTP. Please try again.', 'error');
+                window.showToast('Error: Failed to resend OTP. Please try again.', 'error');
             } finally {
                 resendOtpBtn.disabled = false;
                 resendOtpBtn.textContent = '';

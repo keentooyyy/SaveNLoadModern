@@ -238,7 +238,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             progressDetails.textContent = isLoadOperation 
                                 ? `Successfully loaded ${totalOperations} location(s)`
                                 : `Successfully saved ${totalOperations} location(s)`;
-                            showToast(
+                            window.showToast(
                                 isLoadOperation 
                                     ? `Successfully loaded ${totalOperations} location(s)!`
                                     : `Successfully saved ${totalOperations} location(s)!`,
@@ -248,12 +248,12 @@ document.addEventListener('DOMContentLoaded', function () {
                             progressBar.style.backgroundColor = getCSSVariable('--color-warning');
                             progressText.textContent = 'Partially Complete';
                             progressDetails.textContent = 'Some locations saved successfully';
-                            showToast('Partially completed. Some locations saved successfully.', 'warning');
+                            window.showToast('Partially completed. Some locations saved successfully.', 'warning');
                         } else {
                             progressBar.style.backgroundColor = getCSSVariable('--color-danger');
                             progressText.textContent = 'All Operations Failed';
                             progressDetails.textContent = 'Save operation failed for all locations';
-                            showToast('Save operation failed for all locations.', 'error');
+                            window.showToast('Save operation failed for all locations.', 'error');
                         }
                         
                         // Close modal after a delay
@@ -296,7 +296,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         progressText.textContent = 'Operation Complete!';
                         progressDetails.textContent = 'Successfully completed';
                         const isLoadOperation = originalText && originalText.includes('Load');
-                        showToast(
+                        window.showToast(
                             isLoadOperation ? 'Game loaded successfully!' : 'Game saved successfully!',
                             'success'
                         );
@@ -315,7 +315,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         progressBar.style.backgroundColor = getCSSVariable('--color-danger');
                         progressText.textContent = 'Operation Failed';
                         progressDetails.textContent = data.message || 'An error occurred';
-                        showToast(data.message || 'Save operation failed', 'error');
+                        window.showToast(data.message || 'Save operation failed', 'error');
                         // Add close button on failure
                         const modalFooter = document.createElement('div');
                         modalFooter.className = 'modal-footer bg-primary border-secondary';
@@ -366,7 +366,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     progressBar.style.backgroundColor = getCSSVariable('--color-warning');
                     progressText.textContent = 'Operation Timed Out';
                     progressDetails.textContent = 'The operation is taking longer than expected. Please check the operation status manually.';
-                    showToast('Operation is taking longer than expected. Please refresh the page.', 'error');
+                    window.showToast('Operation is taking longer than expected. Please refresh the page.', 'error');
                     // Add close button on timeout
                     const modalFooter = document.createElement('div');
                     modalFooter.className = 'modal-footer bg-primary border-secondary';
@@ -482,7 +482,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (attempts > maxAttempts) {
                 modal.hide();
                 setTimeout(() => modalBackdrop.remove(), 300);
-                showToast('Operation timed out. Please check the status manually.', 'error');
+                window.showToast('Operation timed out. Please check the status manually.', 'error');
                 // Restore button
                 btn.disabled = false;
                 while (btn.firstChild) {
@@ -546,11 +546,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 setTimeout(() => modalBackdrop.remove(), 300);
                 
                 if (allSuccessful) {
-                    showToast(`Successfully saved ${totalPaths} location(s)!`, 'success');
+                    window.showToast(`Successfully saved ${totalPaths} location(s)!`, 'success');
                 } else if (someSuccessful) {
-                    showToast(`Partially completed. Some locations saved successfully.`, 'warning');
+                    window.showToast(`Partially completed. Some locations saved successfully.`, 'warning');
                 } else {
-                    showToast('Save operation failed for all locations.', 'error');
+                    window.showToast('Save operation failed for all locations.', 'error');
                 }
                 
                 // Restore button
@@ -579,32 +579,7 @@ document.addEventListener('DOMContentLoaded', function () {
         setTimeout(pollStatus, pollInterval);
     }
 
-    // Show toast notification
-    function showToast(message, type = 'info') {
-        // Create toast element
-        const toast = document.createElement('div');
-        const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-        
-        const messageText = document.createTextNode(message);
-        toast.appendChild(messageText);
-        
-        const closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'btn-close';
-        closeBtn.setAttribute('data-bs-dismiss', 'alert');
-        closeBtn.setAttribute('aria-label', 'Close');
-        toast.appendChild(closeBtn);
-        
-        document.body.appendChild(toast);
-
-        // Auto remove after 5 seconds
-        setTimeout(() => {
-            if (toast.parentNode) {
-                toast.remove();
-            }
-        }, 5000);
-    }
+    // Uses shared utility functions from utils.js
 
     // Handle Save button clicks
     document.addEventListener('click', async function (e) {
@@ -616,7 +591,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const gameId = btn.dataset.gameId;
             
             if (!gameId) {
-                showToast('Error: Game ID not found', 'error');
+                window.showToast('Error: Game ID not found', 'error');
                 return;
             }
 
@@ -662,7 +637,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 // Handle 404 - game was deleted
                 if (response.status === 404) {
-                    showToast('Game not found (may have been deleted)', 'error');
+                    window.showToast('Game not found (may have been deleted)', 'error');
                     // Restore button
                     btn.disabled = false;
                     while (btn.firstChild) {
@@ -692,7 +667,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         await pollOperationStatus(data.operation_id, btn, originalIcon, originalText);
                     } else {
                         // Success but no operation ID (shouldn't happen, but handle gracefully)
-                        showToast(data.message || 'Save operation completed', 'success');
+                        window.showToast(data.message || 'Save operation completed', 'success');
                         // Restore button
                         btn.disabled = false;
                         while (btn.firstChild) {
@@ -707,12 +682,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     // Check if it's a "not found" error
                     if (response.status === 404 || (data.error && data.error.includes('not found'))) {
-                        showToast('Game not found (may have been deleted)', 'error');
+                        window.showToast('Game not found (may have been deleted)', 'error');
                         setTimeout(() => {
                             window.location.reload();
                         }, 1500);
                     } else {
-                        showToast(data.error || data.message || 'Failed to save game', 'error');
+                        window.showToast(data.error || data.message || 'Failed to save game', 'error');
                     }
                     // Restore button on error
                     btn.disabled = false;
@@ -727,7 +702,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             } catch (error) {
                 console.error('Error saving game:', error);
-                showToast('Error: Failed to save game. Please try again.', 'error');
+                window.showToast('Error: Failed to save game. Please try again.', 'error');
                 // Restore button on error
                 btn.disabled = false;
                 while (btn.firstChild) {
@@ -752,7 +727,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const gameId = btn.dataset.gameId;
             
             if (!gameId) {
-                showToast('Error: Game ID not found', 'error');
+                window.showToast('Error: Game ID not found', 'error');
                 return;
             }
 
@@ -782,7 +757,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         
                         // Handle 404 - game was deleted
                         if (foldersResponse.status === 404) {
-                            showToast('Game not found (may have been deleted)', 'error');
+                            window.showToast('Game not found (may have been deleted)', 'error');
                             // Restore button
                             btn.disabled = false;
                             while (btn.firstChild) {
@@ -804,7 +779,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             const foldersData = await foldersResponse.json();
                             if (!foldersData.success || !foldersData.save_folders || foldersData.save_folders.length === 0) {
                                 // No save folders found - show friendly message
-                                showToast('Oops! You have no save files to load', 'error');
+                                window.showToast('Oops! You have no save files to load', 'error');
                                 // Restore button
                                 btn.disabled = false;
                                 while (btn.firstChild) {
@@ -838,7 +813,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 // Handle 404 - game was deleted
                 if (response.status === 404) {
-                    showToast('Game not found (may have been deleted)', 'error');
+                    window.showToast('Game not found (may have been deleted)', 'error');
                     // Restore button
                     btn.disabled = false;
                     while (btn.firstChild) {
@@ -870,7 +845,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         await pollOperationStatus(data.operation_id, btn, originalIcon, originalText);
                     } else {
                         // Success but no operation ID (shouldn't happen, but handle gracefully)
-                        showToast(data.message || 'Load operation completed', 'success');
+                        window.showToast(data.message || 'Load operation completed', 'success');
                         // Restore button
                         btn.disabled = false;
                         while (btn.firstChild) {
@@ -885,15 +860,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     // Check if it's a "not found" error
                     if (response.status === 404 || (data.error && data.error.includes('not found'))) {
-                        showToast('Game not found (may have been deleted)', 'error');
+                        window.showToast('Game not found (may have been deleted)', 'error');
                         setTimeout(() => {
                             window.location.reload();
                         }, 1500);
                     } else if (data.error && (data.error.includes('No save folders') || data.error.includes('save folder'))) {
                         // Check if error is about no save folders
-                        showToast('Oops! You have no save files to load', 'error');
+                        window.showToast('Oops! You have no save files to load', 'error');
                     } else {
-                        showToast(data.error || data.message || 'Failed to load game', 'error');
+                        window.showToast(data.error || data.message || 'Failed to load game', 'error');
                     }
                     // Restore button on error
                     btn.disabled = false;
@@ -908,7 +883,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             } catch (error) {
                 console.error('Error loading game:', error);
-                showToast('Error: Failed to load game. Please try again.', 'error');
+                window.showToast('Error: Failed to load game. Please try again.', 'error');
                 // Restore button on error
                 btn.disabled = false;
                 while (btn.firstChild) {
@@ -1061,7 +1036,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     progressBar.setAttribute('aria-valuenow', '100');
                     progressText.textContent = 'Operation Complete!';
                     progressDetails.textContent = 'Successfully completed';
-                    showToast('Game loaded successfully!', 'success');
+                    window.showToast('Game loaded successfully!', 'success');
                     // Close modal after a delay
                     setTimeout(() => {
                         modal.hide();
@@ -1083,7 +1058,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     progressBar.style.backgroundColor = getCSSVariable('--color-danger');
                     progressText.textContent = 'Operation Failed';
                     progressDetails.textContent = data.message || 'An error occurred';
-                    showToast(data.message || 'Load operation failed', 'error');
+                    window.showToast(data.message || 'Load operation failed', 'error');
                     // Add close button on failure
                     const modalFooter = document.createElement('div');
                     modalFooter.className = 'modal-footer bg-primary border-secondary';
@@ -1133,7 +1108,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     progressBar.style.backgroundColor = getCSSVariable('--color-warning');
                     progressText.textContent = 'Operation Timed Out';
                     progressDetails.textContent = 'The operation is taking longer than expected. Please check the operation status manually.';
-                    showToast('Operation is taking longer than expected. Please refresh the page.', 'error');
+                    window.showToast('Operation is taking longer than expected. Please refresh the page.', 'error');
                     // Add close button on timeout
                     const modalFooter = document.createElement('div');
                     modalFooter.className = 'modal-footer bg-primary border-secondary';

@@ -2,34 +2,7 @@
 (function() {
     'use strict';
 
-    // Show toast notification (XSS-safe)
-    function showToast(message, type = 'info') {
-        const toast = document.createElement('div');
-        const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-        
-        // Use textContent for message to prevent XSS
-        const messageSpan = document.createElement('span');
-        messageSpan.textContent = message;
-        toast.appendChild(messageSpan);
-        
-        // Create close button safely
-        const closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'btn-close';
-        closeBtn.setAttribute('data-bs-dismiss', 'alert');
-        closeBtn.setAttribute('aria-label', 'Close');
-        toast.appendChild(closeBtn);
-        
-        document.body.appendChild(toast);
-
-        // Auto remove after 5 seconds
-        setTimeout(() => {
-            if (toast.parentNode) {
-                toast.remove();
-            }
-        }, 5000);
-    }
+    // Uses shared utility functions from utils.js
 
     // Load stats on page load
     document.addEventListener('DOMContentLoaded', function() {
@@ -220,7 +193,7 @@
         
         const url = window.OPERATION_QUEUE_CLEANUP_URL;
         if (!url) {
-            showToast('Cleanup URL not configured', 'error');
+            window.showToast('Cleanup URL not configured', 'error');
             button.disabled = false;
             button.replaceWith(originalContent);
             return;
@@ -238,15 +211,15 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showToast(data.message || 'Cleanup completed successfully', 'success');
+                window.showToast(data.message || 'Cleanup completed successfully', 'success');
                 loadStats(); // Refresh stats
             } else {
-                showToast(data.error || 'Cleanup failed', 'error');
+                window.showToast(data.error || 'Cleanup failed', 'error');
             }
         })
         .catch(error => {
             console.error('Error performing cleanup:', error);
-            showToast('Error performing cleanup: ' + error.message, 'error');
+            window.showToast('Error performing cleanup: ' + error.message, 'error');
         })
         .finally(() => {
             button.disabled = false;

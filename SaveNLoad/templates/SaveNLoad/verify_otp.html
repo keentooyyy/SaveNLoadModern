@@ -38,20 +38,17 @@
                                   </svg>
                             </div>
                             <h2 class="card-title mt-3">Save N Load</h2>
-                            <p class="fs-6 opacity-50 text-white mb-4">Enter the OTP code sent to <strong>{{ email }}</strong></p>
+                            <p class="fs-6 opacity-50 text-white mb-4">We've sent a verification code to <strong>{{ email }}</strong></p>
                             
                             <form id="verifyOtpForm">
                                 {% csrf_token %}
                                 <div class="mb-3">
-                                    <label for="otp_code" class="fs-6 opacity-50">OTP CODE</label>
+                                    <label for="otp_code" class="fs-6 opacity-50">6-Digit Verification Code</label>
                                     <input type="text" class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white text-center" id="otp_code" name="otp_code" placeholder="000000" maxlength="6" required style="font-size: 24px; letter-spacing: 8px; font-family: 'Courier New', monospace;">
                                     <div class="invalid-feedback text-warning d-none" id="otp-error"></div>
                                 </div>
-                                <div class="d-grid">
-                                    <button type="submit" class="btn btn-secondary text-white fw-bold mt-3 py-2" id="verifyOtpBtn">VERIFY OTP</button>
-                                </div>
                                 <div class="d-grid mt-2">
-                                    <button type="button" class="btn btn-outline-secondary text-white fw-bold py-2" id="resendOtpBtn">RESEND OTP</button>
+                                    <button type="button" class="btn btn-secondary text-white fw-bold py-2" id="resendOtpBtn">RESEND CODE</button>
                                 </div>
                                 <p class="text-white fs-6 text-center mt-3">Remember your password? <a href="{% url 'SaveNLoad:login' %}" class="text-secondary text-decoration-none fs-6">Login</a></p>
                                 <p class="text-white fs-6 text-center mt-2">Wrong email? <a href="{% url 'SaveNLoad:forgot_password' %}" class="text-secondary text-decoration-none fs-6">Start Over</a></p>
