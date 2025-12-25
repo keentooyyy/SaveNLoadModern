@@ -100,9 +100,15 @@ def heartbeat(request):
         user = get_current_user(request)
         if hasattr(request, 'session'):
             if user:
-                # User is logged in - associate worker with session
-                request.session['client_id'] = client_id
-                request.session.modified = True
+                # User is logged in - only associate if session has no client_id or same client_id
+                # This prevents a different worker from overwriting the session's client_id
+                # (e.g., if user is on PC1 but PC2's worker sends heartbeat)
+                existing_client_id = request.session.get('client_id')
+                if not existing_client_id or existing_client_id == client_id:
+                    # No existing association or same worker - update it
+                    request.session['client_id'] = client_id
+                    request.session.modified = True
+                # If existing_client_id is different, don't overwrite (user is on different PC)
             else:
                 # User is logged out - clear client_id if it exists (revoke association)
                 if 'client_id' in request.session:
@@ -174,35 +180,30 @@ def check_connection(request):
             'last_heartbeat': worker.last_heartbeat.isoformat() if worker and is_connected else None,
         })
     else:
-        # No client_id provided - check if any worker is connected
-        # If user is logged in, try to associate an active worker with their session
+        # No client_id provided - check if user's session has a worker and if it's online
+        # DO NOT assign a random worker - workers should be assigned via heartbeat/register_client
         from SaveNLoad.views.custom_decorators import get_current_user
         user = get_current_user(request)
         
-        is_connected = ClientWorker.is_worker_connected()
         associated_worker = None
+        is_connected = False
         
-        # If user is logged in and worker is connected, try to associate one with session
-        if user and is_connected and hasattr(request, 'session'):
-            # First, check if there's already a client_id in session and if that worker is still online
+        # Check if there's a client_id in session and if that worker is still online
+        if user and hasattr(request, 'session'):
             existing_client_id = request.session.get('client_id')
             if existing_client_id:
                 existing_worker = ClientWorker.get_worker_by_id(existing_client_id)
                 if existing_worker and existing_worker.is_online():
                     # Existing worker in session is still online - use it
                     associated_worker = existing_worker
+                    is_connected = True
                 else:
-                    # Existing worker is offline - clear it and find a new one
+                    # Existing worker is offline - clear it from session
+                    # DO NOT assign a new worker - let the client worker update via heartbeat
                     request.session.pop('client_id', None)
-            
-            # If no worker associated yet, find any active worker and associate it
-            if not associated_worker:
-                active_worker = ClientWorker.get_any_active_worker()
-                if active_worker:
-                    # Associate this worker with the user's session
-                    request.session['client_id'] = active_worker.client_id
                     request.session.modified = True
-                    associated_worker = active_worker
+            # If no client_id in session, do NOT assign one - return connected: false
+            # The client worker will update the session via heartbeat/register_client
         
         # Build response
         response_data = {

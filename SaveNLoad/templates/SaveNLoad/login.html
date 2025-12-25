@@ -86,6 +86,25 @@
         window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
     </script>
     <script>
+        // Clean up client_id URL parameter after it's been stored in session
+        // This makes the URL cleaner for the user
+        (function() {
+            'use strict';
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('client_id')) {
+                // Remove client_id from URL for cleaner appearance
+                // The server has already stored it in session
+                if (window.history && window.history.replaceState) {
+                    urlParams.delete('client_id');
+                    const cleanUrl = window.location.pathname + 
+                        (urlParams.toString() ? '?' + urlParams.toString() : '') + 
+                        window.location.hash;
+                    window.history.replaceState({}, '', cleanUrl);
+                }
+            }
+        })();
+    </script>
+    <script>
         {% include 'SaveNLoad/js/togglePasswordVisibility.js' %}
     </script>
     <script>

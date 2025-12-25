@@ -804,7 +804,10 @@ class ClientWorkerServiceRclone:
         self.console.print(status_panel)
         
         try:
-            webbrowser.open(self.server_url)
+            # Open login page with client_id parameter
+            # This allows the browser to associate the worker with the user's session after login
+            url_with_client = f"{self.server_url}/login/?client_id={client_id}"
+            webbrowser.open(url_with_client)
         except Exception:
             pass
         

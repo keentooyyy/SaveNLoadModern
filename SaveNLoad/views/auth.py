@@ -32,6 +32,18 @@ def login(request):
     if redirect_response:
         return redirect_response
     
+    # Store client_id from URL in session (even if not logged in yet)
+    # This preserves it through the login flow so it can be associated after login
+    client_id_from_url = request.GET.get('client_id', '').strip()
+    if client_id_from_url and hasattr(request, 'session'):
+        # Validate that the worker exists and is online
+        from SaveNLoad.models.client_worker import ClientWorker
+        worker = ClientWorker.get_worker_by_id(client_id_from_url)
+        if worker and worker.is_online():
+            # Store in session for association after login
+            request.session['pending_client_id'] = client_id_from_url
+            request.session.modified = True
+    
     if request.method == 'POST':
         # Sanitize and validate inputs
         # Accept either username or email
@@ -81,6 +93,25 @@ def login(request):
             if user and user.check_password(password):
                 # Store user ID in session
                 request.session['user_id'] = user.id
+                
+                # Associate pending client_id with session if it exists
+                # This links the worker to the user's session after successful login
+                pending_client_id = request.session.get('pending_client_id')
+                if pending_client_id:
+                    # Verify worker is still online before associating
+                    from SaveNLoad.models.client_worker import ClientWorker
+                    worker = ClientWorker.get_worker_by_id(pending_client_id)
+                    if worker and worker.is_online():
+                        # Clear old client_id if it's different (user switched PCs)
+                        existing_client_id = request.session.get('client_id')
+                        if existing_client_id and existing_client_id != pending_client_id:
+                            # User switched to a different PC - clear old association
+                            request.session.pop('client_id', None)
+                        # Associate new worker with user's session
+                        request.session['client_id'] = pending_client_id
+                        request.session.modified = True
+                    # Clear pending_client_id regardless of whether association succeeded
+                    request.session.pop('pending_client_id', None)
                 
                 # Handle "Remember Me" functionality
                 if not remember_me:
