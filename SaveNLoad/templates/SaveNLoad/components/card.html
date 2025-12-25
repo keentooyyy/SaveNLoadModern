@@ -1,5 +1,3 @@
-{% load static %}
-
 <div class="card {{ card_class|default:'border-0 shadow' }} h-100 game-card"{% if game_id %} data-game-id="{{ game_id }}"{% endif %}{% if game_detail_url %} data-game-detail-url="{{ game_detail_url }}"{% endif %}{% if game_delete_url %} data-game-delete-url="{{ game_delete_url }}"{% endif %}>
     {% if image %}
     <div class="card-img-wrapper position-relative overflow-hidden bg-body game-card-img-wrapper"
@@ -8,10 +6,7 @@
             alt="{{ title|default:'' }}">
         <div class="position-absolute bottom-0 start-0 end-0 p-{{ card_padding|default:'2' }} game-card-overlay">
             {% if title %}
-            <{{ card_title_tag|default:'h6' }}
-                class="card-title text-white fw-bold mb-{{ card_title_mb|default:'0' }} game-card-title"
-                style="--card-title-size: {{ card_title_size|default:'0.9rem' }};">{{ title }}</{{
-                card_title_tag|default:'h6' }}>
+            <{{ card_title_tag|default:'h6' }} class="card-title text-white fw-bold mb-{{ card_title_mb|default:'0' }} game-card-title" style="--card-title-size: {{ card_title_size|default:'0.9rem' }};">{{ title }}</{{ card_title_tag|default:'h6' }}>
             {% endif %}
             {% if footer %}
             <small class="text-white-50 d-flex align-items-center mb-2 game-card-footer-text"
@@ -39,8 +34,7 @@
         style="--card-height: {{ card_height|default:'180px' }};">
         <div class="text-center w-100">
             {% if title %}
-            <{{ card_title_tag|default:'h6' }} class="card-title text-white mb-2">{{ title }}</{{
-                card_title_tag|default:'h6' }}>
+            <{{ card_title_tag|default:'h6' }} class="card-title text-white mb-2">{{ title }}</{{ card_title_tag|default:'h6' }}>
             {% endif %}
             {% if footer %}
             <p class="text-white-50 mb-3 small">{{ footer }}</p>
