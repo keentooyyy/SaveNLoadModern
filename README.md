@@ -360,19 +360,21 @@ Users need to configure the client worker before first use:
    - For build-time configuration, see Step 2 in build instructions
    - The FTP remote must be named `ftp` in the rclone configuration (default remote name)
 
-3. **Session Cookie (First Run):**
-   - The client worker will open a browser window
-   - User must log in to the web interface
-   - The session cookie will be automatically captured
+3. **Worker Association (First Run):**
+   - The client worker will open a browser window to your server URL.
+   - If you are not logged in, log in to the web interface.
+   - Navigate to the **Connect Device** page (you will be redirected there automatically if you try to access the dashboard without an active device).
+   - Find your device in the list (refer to the **Tip** for ID matching) and click **Use Worker**.
 
 ### Step 6: Running the Client Worker
 
 1. **First Run:**
    - Double-click `SaveNLoadClient.exe`
    - Grant admin privileges when prompted (required for file operations)
-   - Browser window will open for authentication
-   - Log in to the web interface
-   - Client worker will start polling for operations
+   - Browser window will open to the server URL.
+   - Log in to the web interface if prompted.
+   - Click **Use Worker** on the "Connect Device" page to claim your machine.
+   - Client worker will start polling for operations once claimed.
 
 2. **Subsequent Runs:**
    - Double-click `SaveNLoadClient.exe`
