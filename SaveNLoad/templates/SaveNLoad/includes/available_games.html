@@ -4,31 +4,26 @@
         <div class="d-flex justify-content-between align-items-center w-100 w-md-auto">
             <h4 class="text-white mb-0 fw-bold">Available games</h4>
             <!-- Mobile Toggle Button -->
-            <button 
-                class="btn btn-primary d-md-none" 
-                type="button" 
-                data-bs-toggle="collapse" 
-                data-bs-target="#gameSearchSortCollapse" 
-                aria-expanded="false" 
-                aria-controls="gameSearchSortCollapse">
+            <button class="btn btn-primary d-md-none" type="button" data-bs-toggle="collapse"
+                data-bs-target="#gameSearchSortCollapse" aria-expanded="false" aria-controls="gameSearchSortCollapse">
                 <i class="fas fa-filter"></i> Filter
             </button>
         </div>
         <!-- Collapsible Search/Sort (Mobile) / Always Visible (Desktop) -->
-        <div class="collapse d-md-flex gap-2 align-items-center w-100 w-md-auto py-2 py-md-0" id="gameSearchSortCollapse">
+        <div class="collapse d-md-flex gap-2 align-items-center w-100 w-md-auto py-2 py-md-0"
+            id="gameSearchSortCollapse">
             <div class="d-flex flex-column flex-md-row gap-2 w-100 w-md-auto">
                 <!-- Search Input -->
-                <div class="position-relative flex-grow-1" style="min-width: 200px;">
-                    <input 
-                        type="text" 
-                        id="gameSearchInput" 
-                        class="form-control bg-primary border-secondary text-white pe-5 w-100" 
-                        placeholder="Search games..."
-                        autocomplete="off">
-                    <i class="fas fa-search position-absolute top-50 end-0 translate-middle-y me-3 text-white-50" style="pointer-events: none;"></i>
+                <div class="position-relative flex-grow-1 search-input-container">
+                    <input type="text" id="gameSearchInput"
+                        class="form-control bg-primary border-secondary text-white pe-5 w-100"
+                        placeholder="Search games..." autocomplete="off">
+                    <i
+                        class="fas fa-search position-absolute top-50 end-0 translate-middle-y me-3 text-white-50 pointer-events-none"></i>
                 </div>
                 <!-- Sort Dropdown -->
-                <select id="gameSortSelect" class="form-select bg-primary border-secondary text-white flex-shrink-0" style="width: auto; min-width: 180px;">
+                <select id="gameSortSelect"
+                    class="form-select bg-primary border-secondary text-white flex-shrink-0 sort-select-width">
                     <option value="name_asc">Sort: Name (A-Z)</option>
                     <option value="name_desc">Sort: Name (Z-A)</option>
                     <option value="last_saved_desc">Sort: Last Saved (Recent)</option>
@@ -39,25 +34,29 @@
     </div>
     <div id="availableGamesContainer" class="row g-4">
         {% if available_games %}
-            {% for game in available_games %}
-            <div class="col-12 col-sm-6 col-md-4 col-lg-3 col-xxl-2 game-item" data-game-id="{{ game.id }}" data-game-title="{{ game.title|lower }}">
-                {% if not is_user %}
-                    {% url 'admin:game_detail' game.id as game_detail_url %}
-                    {% url 'admin:game_delete' game.id as game_delete_url %}
-                {% else %}
-                    {# Users don't get edit/delete URLs - they can only view saves #}
-                    {% comment %}No detail or delete URL for users{% endcomment %}
-                {% endif %}
-                {% include 'SaveNLoad/components/card.html' with title=game.title footer=game.footer image=game.image card_height='320px' card_padding='3' card_title_tag='h5' card_title_mb='1' card_title_size='1.1rem' card_footer_size='0.85rem' footer_icon='clock' game_id=game.id game_detail_url=game_detail_url|default:'' game_delete_url=game_delete_url|default:'' is_user=is_user|default:False %}
-            </div>
-            {% endfor %}
+        {% for game in available_games %}
+        <div class="col-12 col-sm-6 col-md-4 col-lg-3 col-xxl-2 game-item" data-game-id="{{ game.id }}"
+            data-game-title="{{ game.title|lower }}">
+            {% if not is_user %}
+            {% url 'admin:game_detail' game.id as game_detail_url %}
+            {% url 'admin:game_delete' game.id as game_delete_url %}
+            {% else %}
+            {# Users don't get edit/delete URLs - they can only view saves #}
+            {% comment %}No detail or delete URL for users{% endcomment %}
+            {% endif %}
+            {% include 'SaveNLoad/components/card.html' with title=game.title footer=game.footer image=game.image
+            card_height='320px' card_padding='3' card_title_tag='h5' card_title_mb='1' card_title_size='1.1rem'
+            card_footer_size='0.85rem' footer_icon='clock' game_id=game.id game_detail_url=game_detail_url|default:''
+            game_delete_url=game_delete_url|default:'' is_user=is_user|default:False %}
+        </div>
+        {% endfor %}
         {% else %}
-            <!-- Fallback if no games are available -->
-            <div class="col-12">
-                <div class="text-center py-5">
-                    <p class="text-white-50 mb-2">No games available</p>
-                </div>
+        <!-- Fallback if no games are available -->
+        <div class="col-12">
+            <div class="text-center py-5">
+                <p class="text-white-50 mb-2">No games available</p>
             </div>
+        </div>
         {% endif %}
     </div>
 
@@ -66,4 +65,3 @@
         {% csrf_token %}
     </form>
 </div>
-

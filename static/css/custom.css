@@ -5,20 +5,20 @@
     --sidebar-width: 300px;
     --sidebar-bg: #283046;
     --body-bg: #1c222f;
-    
+
     /* Primary Colors */
     --color-primary: #5a8dee;
     --color-primary-bootstrap: #0d6efd;
-    
+
     /* Status Colors */
     --color-success: #198754;
     --color-danger: #dc3545;
     --color-warning: #ffc107;
-    
+
     /* Neutral Colors */
     --color-white: #ffffff;
     --color-black: #000000;
-    
+
     /* Opacity Variants - White */
     --white-opacity-08: rgba(255, 255, 255, 0.08);
     --white-opacity-10: rgba(255, 255, 255, 0.1);
@@ -26,19 +26,19 @@
     --white-opacity-30: rgba(255, 255, 255, 0.3);
     --white-opacity-50: rgba(255, 255, 255, 0.5);
     --white-opacity-60: rgba(255, 255, 255, 0.6);
-    
+
     /* Opacity Variants - Primary Blue */
     --primary-opacity-15: rgba(90, 141, 238, 0.15);
     --primary-opacity-20: rgba(90, 141, 238, 0.2);
     --primary-opacity-30: rgba(90, 141, 238, 0.3);
-    
+
     /* Opacity Variants - Black */
     --black-opacity-30: rgba(0, 0, 0, 0.3);
     --black-opacity-40: rgba(0, 0, 0, 0.4);
     --black-opacity-50: rgba(0, 0, 0, 0.5);
     --black-opacity-80: rgba(0, 0, 0, 0.8);
     --black-opacity-90: rgba(0, 0, 0, 0.9);
-    
+
     /* Overlay */
     --overlay-bg: rgba(28, 34, 47, 0.85);
 }
@@ -94,7 +94,7 @@ body {
         --bs-offcanvas-width: 80% !important;
         width: 80% !important;
     }
-    
+
     .sidebar.offcanvas.offcanvas-start {
         width: 80% !important;
     }
@@ -107,7 +107,7 @@ body {
         width: 320px !important;
         max-width: 320px !important;
     }
-    
+
     .sidebar.offcanvas.offcanvas-start {
         width: 320px !important;
         max-width: 320px !important;
@@ -127,15 +127,15 @@ body {
         border: none !important;
         max-width: var(--sidebar-width) !important;
     }
-    
+
     .sidebar.offcanvas.show {
         transform: none !important;
     }
-    
+
     .offcanvas-backdrop {
         display: none !important;
     }
-    
+
     .main-content {
         margin-left: var(--sidebar-width);
     }
@@ -172,21 +172,21 @@ body {
         padding: 0.5rem 0.75rem !important;
         gap: 0.5rem !important;
     }
-    
+
     .sidebar-header-content {
         gap: 0.5rem !important;
     }
-    
+
     .sidebar .logo-icon img,
     .sidebar .logo-icon svg {
         max-width: 32px !important;
         min-width: 28px !important;
     }
-    
+
     .sidebar-header-text {
         font-size: 1rem !important;
     }
-    
+
     .sidebar-header-container .btn-close {
         margin-left: 0.25rem !important;
         padding: 0.25rem !important;
@@ -223,21 +223,21 @@ body {
     .sidebar .border-bottom span {
         font-size: 1.4rem !important;
     }
-    
+
     .sidebar-nav-link {
         font-size: 1.1rem !important;
         padding: 0.875rem 1rem !important;
     }
-    
+
     .sidebar-nav-link i {
         font-size: 1.1rem !important;
         width: 24px !important;
     }
-    
+
     .sidebar-footer {
         font-size: 1rem !important;
     }
-    
+
     .sidebar-footer .small {
         font-size: 0.95rem !important;
     }
@@ -347,17 +347,17 @@ body {
         padding-left: 0 !important;
         padding-right: 0 !important;
     }
-    
+
     #gameSearchInput {
         width: 100% !important;
     }
-    
+
     #gameSortSelect {
         width: auto !important;
         min-width: 180px !important;
         flex-shrink: 0 !important;
     }
-    
+
     #availableGamesSection {
         padding-left: 1rem !important;
         padding-right: 1rem !important;
@@ -540,4 +540,57 @@ body {
 
 #usersList .table tbody tr:hover td {
     background-color: var(--primary-opacity-15) !important;
+}
+
+/* Container and Layout */
+.max-width-600 {
+    max-width: 600px;
+}
+
+.spinner-lg {
+    width: 3rem;
+    height: 3rem;
+}
+
+.recent-game-card-width {
+    width: 260px;
+}
+
+.search-input-container {
+    min-width: 200px;
+}
+
+.sort-select-width {
+    width: auto;
+    min-width: 180px;
+}
+
+/* Special Inputs */
+.otp-input-code {
+    font-size: 24px;
+    letter-spacing: 8px;
+    font-family: 'Courier New', monospace;
+}
+
+/* Utilities */
+.pointer-events-none {
+    pointer-events: none;
+}
+
+.scrollbar-thin {
+    scrollbar-width: thin;
+}
+
+/* Components */
+.game-banner-preview {
+    height: 260px;
+    max-width: 180px;
+    object-fit: cover;
+}
+
+/* Worker ID hint box */
+.worker-id-hint {
+    background-color: var(--primary-opacity-15);
+    border: 1px solid var(--primary-opacity-30);
+    color: var(--color-primary-bootstrap);
 }

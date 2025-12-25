@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="container d-flex align-items-center justify-content-center min-vh-80">
-    <div class="text-center w-100" style="max-width: 600px;">
+    <div class="text-center w-100 max-width-600">
         <div class="mb-4">
             <i class="fas fa-desktop text-info fs-1"></i>
         </div>
@@ -12,6 +12,14 @@
         <p class="text-white-50 mb-4">
             To use SaveNLoad, you need to connect a client device running the worker script.
         </p>
+
+        <div class="p-3 mb-4 rounded d-flex align-items-start worker-id-hint">
+            <i class="fas fa-info-circle me-3 mt-1 fs-5"></i>
+            <div>
+                <strong>Tip:</strong> The correct Worker ID contains your PC name + a unique code.<br>
+                Example: <code>DESKTOP-8K3J2L_a1b2c3d4</code>
+            </div>
+        </div>
 
         {% if unpaired_workers %}
         <div class="card bg-dark border-secondary">
@@ -26,7 +34,7 @@
                         <span class="badge bg-success">Online</span>
                     </div>
                     <button class="btn btn-primary btn-sm claim-btn" data-client-id="{{ worker.client_id }}">
-                        Claim
+                        Use Worker
                     </button>
                 </div>
                 {% endfor %}
@@ -35,7 +43,7 @@
         {% else %}
         <div class="card bg-dark border-secondary p-4 text-center">
             <div class="mb-3">
-                <div class="spinner-border text-white" role="status" style="width: 3rem; height: 3rem;">
+                <div class="spinner-border text-white spinner-lg" role="status">
                     <span class="visually-hidden">Loading...</span>
                 </div>
             </div>
@@ -52,11 +60,14 @@
 </div>
 
 {# Data for JS #}
-<div id="worker-config" data-claim-url="{% url 'client_worker:claim' %}" style="display:none;"></div>
-{{ unpaired_workers|length|json_script:"worker-count" }}
+<script>
+    window.CLAIM_WORKER_URL = '{% url "client_worker:claim" %}';
+    window.UNPAIRED_WORKERS_POLL_URL = '{% url "client_worker:unpaired" %}';
+    window.WORKER_COUNT = {{ unpaired_workers | length }};
+</script>
 
 {# CSRF Token for fetch requests #}
-<div style="display:none;">
+<div class="d-none">
     {% csrf_token %}
 </div>
 

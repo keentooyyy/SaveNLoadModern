@@ -11,20 +11,20 @@
             </button>
         </div>
     </div>
-    <div id="cardsScrollContainer" class="d-flex gap-2 overflow-x-auto pb-2 cards-scroll-container" style="scrollbar-width: thin;">
+    <div id="cardsScrollContainer" class="d-flex gap-2 overflow-x-auto pb-2 cards-scroll-container scrollbar-thin">
         {% if recent_games %}
-            {% for game in recent_games %}
-            <div class="flex-shrink-0 recent-game-card" style="width: 260px;" data-game-title="{{ game.title }}">
-                {% include 'SaveNLoad/components/card.html' with title=game.title footer=game.playtime image=game.image %}
-            </div>
-            {% endfor %}
+        {% for game in recent_games %}
+        <div class="flex-shrink-0 recent-game-card recent-game-card-width" data-game-title="{{ game.title }}">
+            {% include 'SaveNLoad/components/card.html' with title=game.title footer=game.playtime image=game.image %}
+        </div>
+        {% endfor %}
         {% else %}
-            <!-- Fallback if no games are available -->
-            <div class="flex-shrink-0 w-100">
-                <div class="text-center py-3">
-                    <p class="text-white-50 mb-0">No recently played games</p>
-                </div>
+        <!-- Fallback if no games are available -->
+        <div class="flex-shrink-0 w-100">
+            <div class="text-center py-3">
+                <p class="text-white-50 mb-0">No recently played games</p>
             </div>
+        </div>
         {% endif %}
     </div>
 </div>
@@ -32,4 +32,3 @@
 <script>
     {% include 'SaveNLoad/js/horizontalScroll.js' %}
 </script>
-

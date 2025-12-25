@@ -830,14 +830,11 @@ class ClientWorkerServiceRclone:
         )
         self.console.print(status_panel)
         
-        # Browser opening removed - using Dashboard Claim flow
-        # try:
-        #     # Open login page (root URL) with client_id parameter
-        #     # This allows the browser to associate the worker with the user's session after login
-        #     url_with_client = f"{self.server_url}/?client_id={client_id}"
-        #     webbrowser.open(url_with_client)
-        # except Exception:
-        #     pass
+        # Open browser to server URL for convenience (so user can login and claim)
+        try:
+            webbrowser.open(self.server_url)
+        except Exception:
+            pass
         
         # Important message panel
         info_panel = Panel(
@@ -906,6 +903,17 @@ class ClientWorkerServiceRclone:
                     )
                     if response.status_code == 200:
                         data = response.json()
+                        
+                        # Update linked user status if changed (faster than heartbeat)
+                        # This fixes the delay issue where unclaim took 10s+ to reflect
+                        new_user = data.get('linked_user')
+                        if new_user != self.linked_user:
+                            if new_user:
+                                self._safe_console_print(f"\n[green][OK] Device claimed by user: {new_user}[/green]")
+                            else:
+                                self._safe_console_print(f"\n[yellow][!] Device unclaimed (waiting for owner)[/yellow]")
+                            self.linked_user = new_user
+                            
                         operations = data.get('operations', [])
                         for op in operations:
                             self._process_operation(op)

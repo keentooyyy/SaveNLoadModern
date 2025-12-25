@@ -1,16 +1,55 @@
 document.addEventListener('DOMContentLoaded', function () {
     const claimBtns = document.querySelectorAll('.claim-btn');
 
-    // Get config from data attributes
-    const configDiv = document.getElementById('worker-config');
-    const claimUrl = configDiv ? configDiv.dataset.claimUrl : null;
+    // URLs and config from global window object (injected in template)
+    const claimUrl = window.CLAIM_WORKER_URL;
+    const pollUrl = window.UNPAIRED_WORKERS_POLL_URL;
+    const workerCount = window.WORKER_COUNT || 0;
 
-    // Get worker count from json_script
-    const workerCountScript = document.getElementById('worker-count');
-    const workerCount = workerCountScript ? JSON.parse(workerCountScript.textContent) : 0;
+    // Smart polling to keep list up to date
+    if (pollUrl) {
+        // Collect current worker IDs from DOM
+        const getCurrentWorkerIds = () => {
+            const ids = new Set();
+            document.querySelectorAll('.claim-btn').forEach(btn => {
+                ids.add(btn.dataset.clientId);
+            });
+            return ids;
+        };
 
-    // Auto-refresh logic if no workers found
-    if (workerCount === 0) {
+        setInterval(() => {
+            fetch(pollUrl)
+                .then(r => r.json())
+                .then(data => {
+                    const workers = data.workers || [];
+                    const currentIds = getCurrentWorkerIds();
+
+                    // Check if list changed
+                    let changed = false;
+
+                    // Check for new workers
+                    if (workers.length !== currentIds.size) {
+                        changed = true;
+                    } else {
+                        // Check if content matches
+                        for (const w of workers) {
+                            if (!currentIds.has(w.client_id)) {
+                                changed = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (changed) {
+                        // List changed (new worker appeared or existing one went offline)
+                        // Reload to update UI
+                        location.reload();
+                    }
+                })
+                .catch(e => console.error('Polling error:', e));
+        }, 3000); // Check every 3 seconds
+    } else if (workerCount === 0) {
+        // Fallback if no poll URL
         setTimeout(() => {
             location.reload();
         }, 5000);

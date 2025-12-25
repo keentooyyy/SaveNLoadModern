@@ -236,7 +236,10 @@ def get_pending_operations(request, client_id):
                 'path_index': op.path_index,  # Add path_index to response
             })
         
-        return JsonResponse({'operations': operations_list})
+        return JsonResponse({
+            'operations': operations_list,
+            'linked_user': worker.user.username if worker.user else None
+        })
         
     except ClientWorker.DoesNotExist:
         return json_response_error('Client worker not found', status=404)
@@ -462,7 +465,7 @@ def get_unpaired_workers(request):
     """Get list of active workers that are not paired with any user"""
     from SaveNLoad.views.custom_decorators import get_current_user
     from SaveNLoad.models.client_worker import ClientWorker
-    from SaveNLoad.settings import WORKER_TIMEOUT_SECONDS
+
     
     user = get_current_user(request)
     if not user:
