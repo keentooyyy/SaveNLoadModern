@@ -169,7 +169,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             // Set button loading state
-            window.setButtonLoadingState(saveAccountSettingsBtn, true, 'Saving...');
+            window.setButtonLoadingState(saveAccountSettingsBtn, true, 'SAVING...');
 
             try {
                 const requestBody = {};

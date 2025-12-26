@@ -56,7 +56,7 @@
             }
 
             // Set button loading state
-            setButtonLoadingState(resetPasswordBtn, true, 'Resetting...');
+            setButtonLoadingState(resetPasswordBtn, true, 'RESETTING...');
 
             try {
                 const response = await fetch('{% url "SaveNLoad:reset_password" %}', {

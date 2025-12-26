@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const clientId = this.dataset.clientId;
 
             // Use shared utility for button state (handles spinner)
-            setButtonLoadingState(this, true, 'Connecting...');
+            setButtonLoadingState(this, true, 'CONNECTING...');
 
             fetch(claimUrl, {
                 method: 'POST',

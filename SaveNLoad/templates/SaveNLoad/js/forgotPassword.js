@@ -12,6 +12,11 @@
         forgotPasswordForm.addEventListener('submit', async function (e) {
             e.preventDefault();
 
+            const emailInput = document.getElementById('email');
+            const emailError = document.getElementById('email-error');
+            const email = emailInput.value.trim();
+            const csrfToken = getCsrfToken();
+
             // Clear previous errors
             clearError(emailError);
 
