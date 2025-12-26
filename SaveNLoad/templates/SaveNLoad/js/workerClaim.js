@@ -108,5 +108,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     setButtonLoadingState(this, false);
                 });
         });
+
+        // Auto-click if it's the only worker
+        if (claimBtns.length === 1) {
+            showToast('Auto-connecting to worker...', 'info');
+            btn.click();
+        }
     });
 });
+
