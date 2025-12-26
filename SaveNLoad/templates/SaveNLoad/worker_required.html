@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Connect Device{% endblock %}
+{% block title %}Connect Worker{% endblock %}
 
 {% block content %}
 <div class="container d-flex align-items-center justify-content-center min-vh-80">
@@ -8,16 +8,16 @@
         <div class="mb-4">
             <i class="fas fa-desktop text-info fs-1"></i>
         </div>
-        <h2 class="text-white mb-3">Connect Your Device</h2>
+        <h2 class="text-white mb-3">Worker Missing</h2>
         <p class="text-white-50 mb-4">
-            To use SaveNLoad, you need to connect a client device running the worker script.
+            To use the application you need to have a client worker running.
         </p>
 
         <div class="p-3 mb-4 rounded d-flex align-items-start worker-id-hint">
             <i class="fas fa-info-circle me-3 mt-1 fs-5"></i>
             <div>
                 <strong>Tip:</strong> The correct Worker ID contains your PC name + a unique code.<br>
-                Example: <code>DESKTOP-8K3J2L_a1b2c3d4</code>
+                Example: <code>YOUR-PC-NAME_a1:b2:c3:d4:e5:f6</code>
             </div>
         </div>
 
