@@ -25,7 +25,17 @@ services:
           memory: 128M
 
   web:
+    # CONFIGURATION NOTE:
+    # 1. PRE-BUILT IMAGE: The 'image' property points to a private package on GitHub Container Registry (GHCR).
+    #    To use it, you must authenticate Docker with a Personal Access Token (PAT).
+    # 2. LOCAL BUILD (OPEN SOURCE): Since this project is open source, you can build the image locally
+    #    without needing access to the private registry.
+    #    The 'build' configuration below enables this.
+    # 3. USAGE: If you don't have a PAT, run: 'docker-compose -f docker-compose.prod.yml up -d --build' to compile from source.
     image: ghcr.io/keentooyyy/savenloadmodern:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
     container_name: savenload_web_prod
     command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 1 --worker-class sync --worker-connections 1000 --timeout 120 --max-requests 1000 --max-requests-jitter 50 --access-logfile - --error-logfile -"
     ports:
