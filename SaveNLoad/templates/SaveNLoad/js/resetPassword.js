@@ -2,7 +2,7 @@
  * Reset Password Form Handler
  * Uses shared utility functions from utils.js
  */
-(function () {
+document.addEventListener('DOMContentLoaded', function () {
     'use strict';
 
     const resetPasswordForm = document.getElementById('resetPasswordForm');
@@ -105,5 +105,4 @@
             }
         });
     }
-})();
-
+});

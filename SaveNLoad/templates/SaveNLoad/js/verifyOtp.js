@@ -2,7 +2,7 @@
  * Verify OTP Form Handler
  * Uses shared utility functions from utils.js
  */
-(function () {
+document.addEventListener('DOMContentLoaded', function () {
     'use strict';
 
     // Clear input and focus - local helper function
@@ -209,5 +209,4 @@
             }
         });
     }
-})();
-
+});
