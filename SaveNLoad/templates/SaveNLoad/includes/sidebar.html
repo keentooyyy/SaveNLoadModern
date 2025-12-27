@@ -1,16 +1,19 @@
 {% load static %}
 
 <!-- Sidebar Navigation -->
-<aside class="offcanvas offcanvas-start sidebar h-100 d-flex flex-column" tabindex="-1" id="{% if sidebar_id %}{{ sidebar_id }}{% else %}sidebar{% endif %}" aria-labelledby="sidebarLabel">
+<aside class="offcanvas offcanvas-start sidebar h-100 d-flex flex-column" tabindex="-1"
+    id="{% if sidebar_id %}{{ sidebar_id }}{% else %}sidebar{% endif %}" aria-labelledby="sidebarLabel">
     <!-- Sidebar Header -->
-    <div class="border-bottom border-secondary d-flex align-items-center justify-content-between p-2 p-md-3 gap-2 gap-md-3 sidebar-header-container">
+    <div
+        class="border-bottom border-secondary d-flex align-items-center justify-content-between p-2 p-md-3 gap-2 gap-md-3 sidebar-header-container">
         <div class="d-flex align-items-center flex-grow-1 min-w-0 gap-2 gap-md-3 sidebar-header-content">
             <div class="d-flex align-items-center justify-content-center flex-shrink-0 logo-icon">
                 <img src="{% static 'images/icon.png' %}" alt="Save N Load" class="img-fluid">
             </div>
             <span class="text-white fw-bold text-truncate fs-5 sidebar-header-text">Save N Load</span>
         </div>
-        <button type="button" class="btn-close btn-close-white d-lg-none flex-shrink-0 ms-2" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        <button type="button" class="btn-close btn-close-white d-lg-none flex-shrink-0 ms-2" data-bs-dismiss="offcanvas"
+            aria-label="Close"></button>
     </div>
 
     <!-- Navigation Menu -->
@@ -19,22 +22,24 @@
         <ul class="list-unstyled mb-0">
             <li class="mb-2">
                 {% if is_user %}
-                    {% url 'user:dashboard' as dashboard_url %}
+                {% url 'user:dashboard' as dashboard_url %}
                 {% else %}
-                    {% url 'admin:dashboard' as dashboard_url %}
+                {% url 'admin:dashboard' as dashboard_url %}
                 {% endif %}
-                <a href="{{ dashboard_url }}" class="sidebar-nav-link d-flex align-items-center text-white text-decoration-none px-3 py-2 rounded {% if request.path == dashboard_url %}active{% endif %}">
+                <a href="{{ dashboard_url }}"
+                    class="sidebar-nav-link d-flex align-items-center text-white text-decoration-none px-3 py-2 rounded {% if request.path == dashboard_url %}active{% endif %}">
                     <i class="fas fa-home me-2"></i>
                     <span class="flex-grow-1">Home</span>
                 </a>
             </li>
             <li class="mb-2">
                 {% if is_user %}
-                    {% url 'user:settings' as settings_url %}
+                {% url 'user:settings' as settings_url %}
                 {% else %}
-                    {% url 'admin:settings' as settings_url %}
+                {% url 'admin:settings' as settings_url %}
                 {% endif %}
-                <a href="{{ settings_url }}" class="sidebar-nav-link d-flex align-items-center text-white text-decoration-none px-3 py-2 rounded {% if request.path == settings_url %}active{% endif %}">
+                <a href="{{ settings_url }}"
+                    class="sidebar-nav-link d-flex align-items-center text-white text-decoration-none px-3 py-2 rounded {% if request.path == settings_url %}active{% endif %}">
                     <i class="fas fa-cog me-2"></i>
                     <span class="flex-grow-1">Settings</span>
                 </a>
@@ -49,10 +54,10 @@
         </div>
         <div class="d-flex align-items-center justify-content-between">
             <div class="text-white-50 small opacity-75">© 2025 Save N Load</div>
-            <a href="{% url 'SaveNLoad:logout' %}" class="text-white-50 text-decoration-none" title="Logout" aria-label="Logout">
+            <a href="{% url 'SaveNLoad:logout' %}" id="sidebarLogoutLink" class="text-white-50 text-decoration-none"
+                title="Logout" aria-label="Logout">
                 <i class="fas fa-sign-out-alt fs-4"></i>
             </a>
         </div>
     </div>
 </aside>
-

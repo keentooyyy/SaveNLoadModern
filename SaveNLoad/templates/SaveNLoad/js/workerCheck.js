@@ -23,6 +23,9 @@
                     // Worker disconnected - reload page (decorator will show worker required page)
                     console.warn('Client worker disconnected. Reloading...');
                     window.location.reload();
+                } else if (data.client_id) {
+                    // Store client_id for logout handling
+                    localStorage.setItem('savenload_client_id', data.client_id);
                 }
             })
             .catch(error => {

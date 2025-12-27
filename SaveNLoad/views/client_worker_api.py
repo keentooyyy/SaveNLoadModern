@@ -117,8 +117,7 @@ def check_connection(request):
     from SaveNLoad.views.custom_decorators import get_current_user
     from SaveNLoad.models.client_worker import ClientWorker
     
-    # Auto-unclaim offline workers before checking (uses 25 second timeout = 5 heartbeats)
-    ClientWorker.unclaim_offline_workers()
+
     
     # Check for worker owned by this user - rely on relationship and is_online() check
     user = get_current_user(request)

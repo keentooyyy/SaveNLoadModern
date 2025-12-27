@@ -445,15 +445,20 @@ def reset_password(request):
 def logout(request):
     """Logout and clear session"""
     # Unclaim any client workers associated with this user before logging out
+    # Unclaim specific client worker if client_id is provided in the request
+    # This allows unclaiming ONLY the worker associated with the current device
     try:
-        user = get_current_user(request)
-        if user:
-            from SaveNLoad.models.client_worker import ClientWorker
-            # Update all workers owned by this user to be unclaimed
-            ClientWorker.objects.filter(user=user).update(user=None)
-            print(f"Unclaimed workers for user {user.username} on logout")
+        client_id = request.GET.get('client_id')
+        if client_id:
+            user = get_current_user(request)
+            if user:
+                from SaveNLoad.models.client_worker import ClientWorker
+                # Only unclaim the specific worker for this session
+                updated_count = ClientWorker.objects.filter(user=user, client_id=client_id).update(user=None)
+                if updated_count > 0:
+                    print(f"Unclaimed worker {client_id} for user {user.username} on logout")
     except Exception as e:
-        print(f"Error unclaiming workers on logout: {e}")
+        print(f"Error unclaiming worker on logout: {e}")
         
     request.session.flush()
     return redirect(reverse('SaveNLoad:login'))
