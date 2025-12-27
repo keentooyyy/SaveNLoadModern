@@ -110,6 +110,7 @@ def get_current_user(request):
     - Verifies user still exists in database (prevents deleted user access)
     - Clears invalid sessions automatically
     - Returns None if any validation fails (fail-secure)
+    - Implements request-level caching to prevent multiple DB queries
     
     Args:
         request: Django request object
@@ -117,6 +118,10 @@ def get_current_user(request):
     Returns:
         SimpleUsers instance if valid, None otherwise
     """
+    # Check cache first
+    if hasattr(request, '_cached_user'):
+        return request._cached_user
+
     # Check if session exists
     if not hasattr(request, 'session'):
         return None
@@ -143,6 +148,8 @@ def get_current_user(request):
     # Get user from database - verify it still exists
     try:
         user = SimpleUsers.objects.get(id=user_id)
+        # Cache for subsequent calls in same request
+        request._cached_user = user
         return user
     except SimpleUsers.DoesNotExist:
         # User was deleted - clear session to prevent orphaned sessions

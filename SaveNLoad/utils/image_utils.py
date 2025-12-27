@@ -177,31 +177,13 @@ def get_image_url_or_fallback(game, request=None):
             # Log for debugging but don't fail
             print(f"DEBUG: Failed to get banner.url for game {game.id}: {e}")
             pass
-    else:
-        # Database field is empty - check if file exists in filesystem
-        print(f"DEBUG: game.banner is empty for game {game.id}, checking filesystem...")
+    # Fallback to original URL (should already be absolute)
+    # This is used when local cached file doesn't exist or fails
+    if game.banner_url:
+        return game.banner_url
     
-    # Check if file exists in filesystem even if database field is empty
-    # This handles cases where file was saved but database wasn't updated
-    if game.id:
-        try:
-            from django.conf import settings
-            import glob
-            # Look for banner files matching the pattern banner_{game_id}.*
-            banner_pattern = os.path.join(settings.MEDIA_ROOT, 'game_banners', f'banner_{game.id}.*')
-            matching_files = glob.glob(banner_pattern)
-            if matching_files:
-                # Found a file - construct the URL
-                file_path = matching_files[0]
-                relative_path = os.path.relpath(file_path, settings.MEDIA_ROOT)
-                url = os.path.join(settings.MEDIA_URL, relative_path).replace('\\', '/')
-                # Convert relative URL to absolute if request is provided
-                if request and url.startswith('/'):
-                    return request.build_absolute_uri(url)
-                return url
-        except Exception as e:
-            print(f"DEBUG: Error checking filesystem for game {game.id} banner: {e}")
-            pass
+    # No banner available
+    return ''
     
     # Fallback to original URL (should already be absolute)
     # This is used when local cached file doesn't exist or fails

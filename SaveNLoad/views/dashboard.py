@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.utils import timezone
-from django.db.models import Max
+from django.db.models import Max, Subquery, OuterRef, F
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from datetime import timedelta
@@ -45,15 +45,19 @@ def format_last_played(last_played):
         return f"Last played {years} year{'s' if years != 1 else ''} ago"
 
 
-def _get_user_game_last_played_map(user):
+def _get_annotated_games(user):
     """
-    Get user's last played timestamp for all games
-    Returns: dict {game_id: datetime}
+    Get games queryset annotated with user's specific last_played timestamp
     """
-    return {
-        sf['game']: sf['last_played'] 
-        for sf in SaveFolder.objects.filter(user=user).values('game').annotate(last_played=Max('created_at'))
-    }
+    # Subquery to get the latest save creation time for each game for THIS user
+    last_played_subquery = SaveFolder.objects.filter(
+        game=OuterRef('pk'),
+        user=user
+    ).order_by('-created_at').values('created_at')[:1]
+    
+    return Game.objects.annotate(
+        user_last_played=Subquery(last_played_subquery)
+    )
 
 
 def _get_dashboard_context_data(user):
@@ -61,44 +65,33 @@ def _get_dashboard_context_data(user):
     Helper to get shared dashboard context data
     Returns: (recent_games, available_games)
     """
-    # Get user's most recent game plays from SaveFolder records
-    recent_save_folders = SaveFolder.objects.filter(
-        user=user
-    ).values('game').annotate(
-        last_played=Max('created_at')
-    ).order_by('-last_played')[:10]
+    # Optimized: Get annotated games directly
+    # This replaces fetching ALL games and sorting in Python
+    annotated_games = _get_annotated_games(user)
     
-    # Get game IDs and their last_played timestamps
-    game_last_played = {sf['game']: sf['last_played'] for sf in recent_save_folders}
-    
-    # Fetch games ordered by user's last_played
-    recent_db_games = Game.objects.filter(
-        id__in=game_last_played.keys()
-    )
-    
-    # Sort by last_played timestamp from save folders
-    from SaveNLoad.utils.list_utils import sort_by_dict_lookup
-    recent_db_games = sort_by_dict_lookup(recent_db_games, game_last_played, reverse=True)
+    # Recent games: Filter by having played, sort by date desc, limit 10
+    # Use the annotated user_last_played field
+    recent_db_games = annotated_games.filter(
+        user_last_played__isnull=False
+    ).order_by('-user_last_played')[:10]
     
     recent_games = []
     for game in recent_db_games:
-        last_played = game_last_played.get(game.id)
         recent_games.append({
             'title': game.name,
             'image': get_image_url_or_fallback(game),
-            'playtime': format_last_played(last_played),
+            'playtime': format_last_played(game.user_last_played),
         })
     
-    # Fetch all games from database for available games section (sorted alphabetically)
-    # Get per-user last_played for each game
-    db_games = Game.objects.all().order_by('name', 'id')  # Add 'id' for stable sorting
+    # Available games section (all games)
+    # Sort alphabetically by default for the main list
+    # Use order_by('name', 'id') for stable sorting on DB side
+    db_games = annotated_games.order_by('name', 'id')
     available_games = []
     
-    # Get last_played map for all games
-    game_last_played_all = _get_user_game_last_played_map(user)
-    
     for game in db_games:
-        last_played = game_last_played_all.get(game.id)
+        # Use annotated field instead of map lookup
+        last_played = game.user_last_played
         save_locations = game.save_file_locations if isinstance(game.save_file_locations, list) else []
         available_games.append({
             'id': game.id,
@@ -106,13 +99,9 @@ def _get_dashboard_context_data(user):
             'image': get_image_url_or_fallback(game),
             'footer': format_last_played(last_played),
             'save_file_locations': save_locations,
-            'save_file_locations_json': json.dumps(save_locations),  # JSON string for template
+            'save_file_locations_json': json.dumps(save_locations),
         })
     
-    # Sort available games case-insensitively by title
-    from SaveNLoad.utils.list_utils import sort_by_field
-    available_games = sort_by_field(available_games, 'title', reverse=False, case_insensitive=True)
-
     return recent_games, available_games
 
 
@@ -170,25 +159,35 @@ def search_available_games(request):
     search_query = sanitize_search_query(raw_search_query) if raw_search_query else None
     sort_by = request.GET.get('sort', 'name_asc')  # Default: name ascending
     
-    # Validate sort_by parameter (prevent injection)
-    valid_sorts = ['name_asc', 'name_desc', 'last_saved_asc', 'last_saved_desc']
-    if sort_by not in valid_sorts:
-        sort_by = 'name_asc'
-    
-    # Fetch all games with consistent default ordering (by name, then ID for stability)
-    db_games = Game.objects.all().order_by('name', 'id')
+    # Start with annotated games to get efficient last_played access
+    db_games = _get_annotated_games(user)
     
     # Apply search filter if provided
     if search_query:
+        # Case-insensitive containment test
         db_games = db_games.filter(name__icontains=search_query)
-    
-    # Get last_played map for all games
-    game_last_played_all = _get_user_game_last_played_map(user)
+        
+    # Apply DB-side sorting
+    # This is much more efficient than fetching all and sorting in Python
+    if sort_by == 'name_desc':
+        db_games = db_games.order_by('-name', 'id')
+    elif sort_by == 'last_saved_desc':
+        # Sort by user_last_played (newest first).
+        # Filter out games that have never been played (no last_played_timestamp) per user request
+        db_games = db_games.filter(user_last_played__isnull=False).order_by(F('user_last_played').desc(), 'name')
+    elif sort_by == 'last_saved_asc':
+        # Sort by user_last_played (oldest first). 
+        # Filter out games that have never been played (no last_played_timestamp) per user request
+        db_games = db_games.filter(user_last_played__isnull=False).order_by(F('user_last_played').asc(), 'name')
+    else: # name_asc or invalid
+        db_games = db_games.order_by('name', 'id')
     
     # Build games list with last_played data
     games_list = []
+    
+    # Execute query
     for game in db_games:
-        last_played = game_last_played_all.get(game.id)
+        last_played = game.user_last_played
         save_locations = game.save_file_locations if isinstance(game.save_file_locations, list) else []
         games_list.append({
             'id': game.id,
@@ -197,25 +196,8 @@ def search_available_games(request):
             'footer': format_last_played(last_played),
             'last_played_timestamp': last_played.isoformat() if last_played else None,
             'save_file_locations': save_locations,
-            'save_file_locations_json': json.dumps(save_locations),  # JSON string for template
+            'save_file_locations_json': json.dumps(save_locations),
         })
-    
-    # Apply sorting
-    from SaveNLoad.utils.list_utils import sort_by_field, filter_none_values
-    if sort_by == 'name_asc':
-        games_list = sort_by_field(games_list, 'title', reverse=False, case_insensitive=True)
-    elif sort_by == 'name_desc':
-        games_list = sort_by_field(games_list, 'title', reverse=True, case_insensitive=True)
-    elif sort_by == 'last_saved_desc':
-        # Filter out games that have never been played (no last_played_timestamp)
-        games_list = filter_none_values(games_list, 'last_played_timestamp')
-        # Sort by timestamp (most recent first)
-        games_list = sort_by_field(games_list, 'last_played_timestamp', reverse=True)
-    elif sort_by == 'last_saved_asc':
-        # Filter out games that have never been played (no last_played_timestamp)
-        games_list = filter_none_values(games_list, 'last_played_timestamp')
-        # Sort by timestamp (oldest first)
-        games_list = sort_by_field(games_list, 'last_played_timestamp', reverse=False)
     
     return JsonResponse({
         'success': True,

@@ -11,10 +11,15 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='simpleusers',
-            name='pending_deletion',
-            field=models.BooleanField(default=False, help_text='If True, user is marked for deletion and will be deleted after all FTP cleanup operations complete'),
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.AddField(
+                    model_name='simpleusers',
+                    name='pending_deletion',
+                    field=models.BooleanField(default=False, help_text='If True, user is marked for deletion and will be deleted after all FTP cleanup operations complete'),
+                ),
+            ],
+            database_operations=[],
         ),
         migrations.AlterField(
             model_name='operationqueue',

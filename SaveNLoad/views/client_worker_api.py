@@ -128,10 +128,18 @@ def check_connection(request):
             'last_heartbeat': None,
         })
     
-    # Get all workers owned by this user and filter by online status
-    # No need for is_active check - is_online() is the source of truth
-    user_workers = ClientWorker.objects.filter(user=user).order_by('-last_heartbeat')
-    valid_workers = [w for w in user_workers if w.is_online(WORKER_TIMEOUT_SECONDS)]
+    # Get online workers owned by this user
+    # DB-side filtering is much more efficient than fetching all and filtering in Python
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    threshold = timezone.now() - timedelta(seconds=WORKER_TIMEOUT_SECONDS)
+    
+    # Filter by user AND last_heartbeat
+    valid_workers = ClientWorker.objects.filter(
+        user=user,
+        last_heartbeat__gte=threshold
+    ).order_by('-last_heartbeat')
     
     if not valid_workers:
         return JsonResponse({
@@ -189,6 +197,7 @@ def get_pending_operations(request, client_id):
         # Use select_for_update with skip_locked to prevent concurrent access
         with transaction.atomic():
             # Lock and get pending operations for this worker atomically
+            # Removed select_related from select_for_update because it locks related rows (User, Game)
             operations = list(OperationQueue.objects.select_for_update(skip_locked=True).filter(
                 client_worker=worker,
                 status=OperationStatus.PENDING
@@ -202,7 +211,8 @@ def get_pending_operations(request, client_id):
                     started_at=timezone.now()
                 )
                 # Re-fetch to get updated objects with new status
-                operations = list(OperationQueue.objects.filter(id__in=operation_ids))
+                # Safe to use select_related here as we are not locking, just reading for response
+                operations = list(OperationQueue.objects.select_related('game', 'user').filter(id__in=operation_ids))
         
         operations_list = []
         for op in operations:
@@ -404,7 +414,8 @@ def complete_operation(request, operation_id):
     
     try:
         data = json.loads(request.body or "{}")
-        operation = OperationQueue.objects.get(pk=operation_id)
+        # Use select_related to avoid N+1 queries when accessing game/user in checks
+        operation = OperationQueue.objects.select_related('game', 'user').get(pk=operation_id)
         
         success = data.get('success', False)
         if success:

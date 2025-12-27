@@ -320,7 +320,8 @@ def check_operation_status(request, operation_id):
     
     # Get operation
     try:
-        operation = OperationQueue.objects.get(pk=operation_id)
+        # Optimize: Fetch operation with user to prevent extra DB hit during permission check
+        operation = OperationQueue.objects.select_related('user').get(pk=operation_id)
     except OperationQueue.DoesNotExist:
         # Operation doesn't exist - could be deleted due to CASCADE
         # Check if this might be a user deletion operation by checking recent operations
