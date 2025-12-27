@@ -62,7 +62,7 @@ def is_save_folder_operation(operation) -> bool:
     
     Args:
         operation: OperationQueue instance or dict
-        
+    
     Returns:
         True if this is a save folder deletion operation
     """
@@ -73,6 +73,34 @@ def is_save_folder_operation(operation) -> bool:
         return operation.save_folder_number is not None
     elif isinstance(operation, dict):
         return operation.get('save_folder_number') is not None
+    
+    return False
+
+
+def is_user_deletion_operation(operation) -> bool:
+    """
+    Check if operation is a user deletion operation
+    (DELETE operation with game=None and save_folder_number=None)
+    
+    Used in:
+    - User deletion completion checks
+    
+    Args:
+        operation: OperationQueue instance or dict
+    
+    Returns:
+        True if this is a user deletion operation
+    """
+    if not is_operation_type(operation, OperationType.DELETE):
+        return False
+    
+    # User deletion operations have game=None and save_folder_number=None
+    if hasattr(operation, 'game'):
+        game_is_none = operation.game is None
+        save_folder_is_none = hasattr(operation, 'save_folder_number') and operation.save_folder_number is None
+        return game_is_none and save_folder_is_none
+    elif isinstance(operation, dict):
+        return operation.get('game') is None and operation.get('save_folder_number') is None
     
     return False
 

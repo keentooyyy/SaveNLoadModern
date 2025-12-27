@@ -48,7 +48,7 @@ class OperationQueue(models.Model):
     operation_type = models.CharField(max_length=30, choices=OperationType.CHOICES)
     status = models.CharField(max_length=20, choices=OperationStatus.CHOICES, default=OperationStatus.PENDING)
     user = models.ForeignKey(SimpleUsers, on_delete=models.CASCADE)
-    game = models.ForeignKey(Game, on_delete=models.CASCADE)
+    game = models.ForeignKey(Game, on_delete=models.CASCADE, null=True, blank=True, help_text="Game associated with the operation (null for user deletion operations)")
     client_worker = models.ForeignKey(ClientWorker, on_delete=models.SET_NULL, null=True, blank=True,
                                      help_text="Client worker assigned to this operation")
     local_save_path = models.CharField(max_length=500, help_text="Local save file path")
@@ -71,7 +71,10 @@ class OperationQueue(models.Model):
         ordering = ['-created_at']
     
     def __str__(self):
-        return f"{self.operation_type.upper()} - {self.game.name} ({self.status})"
+        if self.game:
+            return f"{self.operation_type.upper()} - {self.game.name} ({self.status})"
+        else:
+            return f"{self.operation_type.upper()} - User: {self.user.username} ({self.status})"
     
     def assign_to_worker(self, worker: ClientWorker):
         """Assign this operation to a client worker"""
@@ -104,8 +107,8 @@ class OperationQueue(models.Model):
         ).order_by('created_at')
     
     @classmethod
-    def create_operation(cls, operation_type: str, user: SimpleUsers, game: Game, 
-                        local_save_path: str, save_folder_number=None, smb_path=None, 
+    def create_operation(cls, operation_type: str, user: SimpleUsers, game: Game = None, 
+                        local_save_path: str = '', save_folder_number=None, smb_path=None, 
                         client_worker=None, path_index=None):
         """
         Create a new operation in the queue
@@ -113,8 +116,8 @@ class OperationQueue(models.Model):
         Args:
             operation_type: Type of operation (save, load, delete, etc.)
             user: User who owns the operation
-            game: Game associated with the operation
-            local_save_path: Local file path
+            game: Game associated with the operation (None for user deletion operations)
+            local_save_path: Local file path (empty string for delete operations)
             save_folder_number: Optional save folder number
             smb_path: Remote FTP path
             client_worker: ClientWorker instance (REQUIRED - must be provided to avoid collisions)

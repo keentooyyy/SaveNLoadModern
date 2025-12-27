@@ -226,6 +226,12 @@
             const actionsCell = document.createElement('td');
             actionsCell.style.padding = '1rem';
             actionsCell.style.backgroundColor = 'transparent';
+            
+            // Button container
+            const buttonContainer = document.createElement('div');
+            buttonContainer.className = 'd-flex gap-2';
+            
+            // Reset Password Button
             const resetBtn = document.createElement('button');
             resetBtn.type = 'button';
             resetBtn.className = 'btn btn-sm btn-secondary text-white';
@@ -241,7 +247,26 @@
                 e.stopPropagation();
                 resetUserPassword(user.id, user.username);
             };
-            actionsCell.appendChild(resetBtn);
+            buttonContainer.appendChild(resetBtn);
+            
+            // Delete User Button
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'btn btn-sm btn-danger text-white';
+            
+            const deleteIcon = document.createElement('i');
+            deleteIcon.className = 'fas fa-trash me-1';
+            deleteBtn.appendChild(deleteIcon);
+            deleteBtn.appendChild(document.createTextNode('Delete'));
+            
+            deleteBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                deleteUser(user.id, user.username);
+            };
+            buttonContainer.appendChild(deleteBtn);
+            
+            actionsCell.appendChild(buttonContainer);
             row.appendChild(actionsCell);
 
             tbody.appendChild(row);
@@ -390,6 +415,318 @@
         paginationDiv.appendChild(navDiv);
 
         return paginationDiv;
+    }
+
+    // Create progress modal for user deletion
+    function createUserDeletionProgressModal(operationId, username) {
+        const modalId = `progressModal_delete_user_${operationId}`;
+        const modalBackdrop = document.createElement('div');
+        modalBackdrop.className = 'modal fade';
+        modalBackdrop.id = modalId;
+        modalBackdrop.setAttribute('data-bs-backdrop', 'static');
+        modalBackdrop.setAttribute('data-bs-keyboard', 'false');
+        modalBackdrop.setAttribute('tabindex', '-1');
+        modalBackdrop.setAttribute('aria-labelledby', `${modalId}Label`);
+        modalBackdrop.setAttribute('aria-hidden', 'true');
+
+        const modalDialog = document.createElement('div');
+        modalDialog.className = 'modal-dialog modal-dialog-centered';
+
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content bg-primary text-white border-0';
+
+        const modalHeader = document.createElement('div');
+        modalHeader.className = 'modal-header bg-primary border-secondary';
+
+        const modalTitle = document.createElement('h5');
+        modalTitle.className = 'modal-title text-white';
+        modalTitle.id = `${modalId}Label`;
+        modalTitle.textContent = `Deleting User: ${username}`;
+
+        modalHeader.appendChild(modalTitle);
+
+        const modalBody = document.createElement('div');
+        modalBody.className = 'modal-body bg-primary';
+
+        const progressBarWrapper = document.createElement('div');
+        progressBarWrapper.className = 'progress mb-3';
+        progressBarWrapper.style.height = '30px';
+        progressBarWrapper.style.backgroundColor = getCSSVariable('--white-opacity-10') || 'rgba(255, 255, 255, 0.1)';
+
+        const progressBar = document.createElement('div');
+        progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated';
+        progressBar.setAttribute('role', 'progressbar');
+        progressBar.style.width = '0%';
+        progressBar.style.backgroundColor = getCSSVariable('--color-primary-bootstrap') || '#0d6efd';
+        progressBar.setAttribute('aria-valuenow', '0');
+        progressBar.setAttribute('aria-valuemin', '0');
+        progressBar.setAttribute('aria-valuemax', '100');
+
+        const progressText = document.createElement('div');
+        progressText.className = 'text-center mt-3 text-white fs-6 fw-medium';
+        progressText.textContent = 'Starting deletion...';
+
+        const progressDetails = document.createElement('div');
+        progressDetails.className = 'text-center text-white-50 mt-2 small';
+        progressDetails.textContent = 'Cleaning up FTP server and removing user account...';
+
+        progressBarWrapper.appendChild(progressBar);
+        modalBody.appendChild(progressBarWrapper);
+        modalBody.appendChild(progressText);
+        modalBody.appendChild(progressDetails);
+
+        modalContent.appendChild(modalHeader);
+        modalContent.appendChild(modalBody);
+        modalDialog.appendChild(modalContent);
+        modalBackdrop.appendChild(modalDialog);
+
+        const nextZIndex = getNextModalZIndex();
+        modalBackdrop.style.zIndex = nextZIndex;
+
+        document.body.appendChild(modalBackdrop);
+
+        const modal = new bootstrap.Modal(modalBackdrop, {
+            backdrop: 'static',
+            keyboard: false
+        });
+
+        modal._element.addEventListener('shown.bs.modal', function () {
+            const backdrop = document.querySelector('.modal-backdrop:last-of-type');
+            if (backdrop) {
+                backdrop.style.zIndex = (nextZIndex - 10).toString();
+            }
+        }, { once: true });
+
+        modal.show();
+
+        const updateProgress = (progressData) => {
+            const percentage = progressData.percentage || 0;
+            const current = progressData.current || 0;
+            const total = progressData.total || 0;
+            const message = progressData.message || '';
+
+            progressBar.style.width = `${percentage}%`;
+            progressBar.setAttribute('aria-valuenow', percentage);
+
+            if (total > 0) {
+                progressText.textContent = `${current}/${total} ${message || 'Processing...'}`;
+                progressDetails.textContent = `${percentage}% complete`;
+            } else if (message) {
+                progressText.textContent = message;
+            } else {
+                progressText.textContent = 'Processing...';
+                progressDetails.textContent = 'Please wait...';
+            }
+        };
+
+        return { modal, modalBackdrop, modalContent, updateProgress, progressBar, progressText, progressDetails };
+    }
+
+    // Poll operation status for user deletion
+    async function pollUserDeletionStatus(operationId, modalData, username) {
+        const maxAttempts = 300; // 5 minutes max
+        let attempts = 0;
+        const pollInterval = 1000; // 1 second
+        let consecutive404s = 0; // Track consecutive 404s
+
+        const { modal, modalBackdrop, modalContent, updateProgress, progressBar, progressText, progressDetails } = modalData;
+
+        const checkStatus = async () => {
+            try {
+                const urlPattern = window.CHECK_OPERATION_STATUS_URL_PATTERN;
+                if (!urlPattern) {
+                    throw new Error('Operation status URL not configured');
+                }
+                // Replace the placeholder '0' with the actual operation ID
+                // URL pattern is like: /admin/operations/0/status/
+                const url = urlPattern.replace('/0/', `/${operationId}/`);
+                const response = await fetch(url, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+
+                // Handle 404 - for user deletion, operation may be deleted due to CASCADE
+                // If the operation is gone, it likely means the user was deleted successfully
+                if (response.status === 404) {
+                    // Check if response has success data (backend may return success even for 404)
+                    try {
+                        const data = await response.json();
+                        if (data.success && data.completed) {
+                            // Backend returned success for missing operation (user deletion completed)
+                            progressBar.classList.remove('progress-bar-animated');
+                            progressBar.style.backgroundColor = getCSSVariable('--color-success') || '#198754';
+                            progressBar.style.width = '100%';
+                            progressBar.setAttribute('aria-valuenow', '100');
+                            progressText.textContent = 'User Deleted Successfully!';
+                            progressDetails.textContent = `User "${username}" has been permanently deleted`;
+                            setTimeout(() => {
+                                modal.hide();
+                                setTimeout(() => {
+                                    modalBackdrop.remove();
+                                    // Reload page to refresh everything
+                                    window.location.reload();
+                                }, 300);
+                            }, 1500);
+                            return true;
+                        }
+                    } catch (e) {
+                        // Not JSON, treat as real 404
+                    }
+                    // Real 404 - operation not found, but for user deletion this might mean success
+                    // If we get multiple consecutive 404s (operation was deleted due to CASCADE), treat as success
+                    consecutive404s++;
+                    if (consecutive404s >= 2) {
+                        // Operation is gone, which means user was deleted (CASCADE) - treat as success
+                        progressBar.classList.remove('progress-bar-animated');
+                        progressBar.style.backgroundColor = getCSSVariable('--color-success') || '#198754';
+                        progressBar.style.width = '100%';
+                        progressBar.setAttribute('aria-valuenow', '100');
+                        progressText.textContent = 'User Deleted Successfully!';
+                        progressDetails.textContent = `User "${username}" has been permanently deleted`;
+                        setTimeout(() => {
+                            modal.hide();
+                            setTimeout(() => {
+                                modalBackdrop.remove();
+                                // Reload page to refresh everything
+                                window.location.reload();
+                            }, 300);
+                        }, 1500);
+                        return true;
+                    }
+                    return false;
+                }
+
+                if (!response.ok) {
+                    throw new Error('Failed to check operation status');
+                }
+
+                const data = await response.json();
+
+                // Reset 404 counter on successful response
+                consecutive404s = 0;
+
+                if (data.progress) {
+                    updateProgress(data.progress);
+                }
+
+                if (data.completed) {
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.style.backgroundColor = getCSSVariable('--color-success') || '#198754';
+                    progressBar.style.width = '100%';
+                    progressBar.setAttribute('aria-valuenow', '100');
+                    progressText.textContent = 'User Deleted Successfully!';
+                    progressDetails.textContent = `User "${username}" has been permanently deleted`;
+                    setTimeout(() => {
+                        modal.hide();
+                        setTimeout(() => {
+                            modalBackdrop.remove();
+                            // Reload page to refresh everything
+                            window.location.reload();
+                        }, 300);
+                    }, 1500);
+                    return true;
+                } else if (data.failed) {
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.style.backgroundColor = getCSSVariable('--color-danger') || '#dc3545';
+                    progressText.textContent = 'Deletion Failed';
+                    progressDetails.textContent = data.message || 'An error occurred during deletion';
+                    const modalFooter = document.createElement('div');
+                    modalFooter.className = 'modal-footer bg-primary border-secondary';
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn btn-outline-secondary text-white';
+                    closeBtn.textContent = 'Close';
+                    closeBtn.onclick = () => {
+                        modal.hide();
+                        modalBackdrop.remove();
+                    };
+                    modalFooter.appendChild(closeBtn);
+                    modalContent.appendChild(modalFooter);
+                    return true;
+                }
+
+                return false;
+            } catch (error) {
+                console.error('Error checking operation status:', error);
+                return false;
+            }
+        };
+
+        const completed = await checkStatus();
+        if (completed) return;
+
+        const poll = setInterval(async () => {
+            attempts++;
+            const completed = await checkStatus();
+
+            if (completed || attempts >= maxAttempts) {
+                clearInterval(poll);
+                if (attempts >= maxAttempts && !completed) {
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.style.backgroundColor = getCSSVariable('--color-warning') || '#ffc107';
+                    progressText.textContent = 'Operation Timed Out';
+                    progressDetails.textContent = 'The operation is taking longer than expected. Please check the operation status manually.';
+                    const modalFooter = document.createElement('div');
+                    modalFooter.className = 'modal-footer bg-primary border-secondary';
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn btn-outline-secondary text-white';
+                    closeBtn.textContent = 'Close';
+                    closeBtn.onclick = () => {
+                        modal.hide();
+                        modalBackdrop.remove();
+                    };
+                    modalFooter.appendChild(closeBtn);
+                    modalContent.appendChild(modalFooter);
+                }
+            }
+        }, pollInterval);
+    }
+
+    async function deleteUser(userId, username) {
+        const confirmed = await window.customConfirm(
+            `Are you sure you want to DELETE user "${username}"? This will permanently delete the account and all their save data from the server. This action cannot be undone.`
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        const url = window.DELETE_USER_URL_PATTERN ? window.DELETE_USER_URL_PATTERN.replace('0', userId) : null;
+        if (!url) {
+            window.showToast('Delete user URL not configured', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(url, {
+                method: 'DELETE',
+                headers: window.createFetchHeaders ? window.createFetchHeaders(window.getCsrfToken()) : {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': window.getCsrfToken() || '',
+                },
+                credentials: 'same-origin'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Check if operation was queued (has operation_id) or was immediate (no saves)
+                if (data.operation_id) {
+                    // Show progress modal and poll for status
+                    const modalData = createUserDeletionProgressModal(data.operation_id, username);
+                    pollUserDeletionStatus(data.operation_id, modalData, username);
+                } else {
+                    // Immediate deletion (no saves to clean up)
+                    window.showToast(`User "${username}" deleted successfully`, 'success');
+                    loadUsers(currentPage);
+                }
+            } else {
+                window.showToast(data.error || 'Failed to delete user', 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            window.showToast('Error deleting user. Please try again.', 'error');
+        }
     }
 
     async function resetUserPassword(userId, username) {

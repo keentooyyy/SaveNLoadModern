@@ -206,18 +206,27 @@ def get_pending_operations(request, client_id):
         
         operations_list = []
         for op in operations:
-            operations_list.append({
+            operation_data = {
                 'id': op.id,
                 'type': op.operation_type,
-                'game_id': op.game.id,
-                'game_name': op.game.name,
                 'local_save_path': op.local_save_path,
                 'save_folder_number': op.save_folder_number,
                 'remote_path': op.smb_path,  # Keep smb_path for backward compatibility, but use remote_path
                 'smb_path': op.smb_path,  # Backward compatibility
                 'username': op.user.username,
                 'path_index': op.path_index,  # Add path_index to response
-            })
+            }
+            
+            # Add game info only if game exists (user deletion operations have game=None)
+            if op.game:
+                operation_data['game_id'] = op.game.id
+                operation_data['game_name'] = op.game.name
+            else:
+                # User deletion operation - no game associated
+                operation_data['game_id'] = None
+                operation_data['game_name'] = None
+            
+            operations_list.append(operation_data)
         
         return JsonResponse({
             'operations': operations_list,
@@ -270,7 +279,7 @@ def _check_and_handle_game_deletion_completion(operation):
         check_all_operations_succeeded
     )
     
-    if not (operation.game.pending_deletion and is_game_deletion_operation(operation)):
+    if not (operation.game and operation.game.pending_deletion and is_game_deletion_operation(operation)):
         return
 
     # Check if all operations for this game are complete
@@ -310,6 +319,82 @@ def _check_and_handle_game_deletion_completion(operation):
         print(f"WARNING: Game {operation.game.id} ({operation.game.name}) deletion cancelled - {failed_ops_count} FTP operation(s) failed")
 
 
+def _check_and_handle_user_deletion_completion(operation):
+    """
+    Check if user deletion is pending and all operations are complete.
+    If so, either delete the user (if all succeeded) or cancel deletion (if any failed).
+    """
+    from SaveNLoad.models.operation_queue import OperationQueue, OperationStatus
+    from SaveNLoad.utils.operation_utils import (
+        is_user_deletion_operation,
+        get_pending_or_in_progress_operations,
+    )
+    
+    # Refresh operation from database to get latest status
+    try:
+        operation.refresh_from_db()
+        # Also refresh the user to get latest pending_deletion status
+        operation.user.refresh_from_db()
+    except (OperationQueue.DoesNotExist, AttributeError):
+        return
+    
+    # Check if this is a user deletion operation
+    if not (operation.user and hasattr(operation.user, 'pending_deletion') and operation.user.pending_deletion and is_user_deletion_operation(operation)):
+        return
+
+    print(f"DEBUG: Checking user deletion completion for user {operation.user.id} ({operation.user.username})")
+    
+    # Get all user deletion operations for this user (including the current one)
+    # User deletion operations have game=None
+    all_operations = OperationQueue.objects.filter(
+        user=operation.user,
+        game__isnull=True,  # User deletion operations
+        operation_type='delete',
+        save_folder_number__isnull=True
+    )
+    
+    print(f"DEBUG: Found {all_operations.count()} user deletion operations for user {operation.user.id}")
+    
+    # Check if all operations are complete (including the current one)
+    # The current operation should already be marked as COMPLETED when this function is called
+    remaining_operations = get_pending_or_in_progress_operations(all_operations)
+    
+    if remaining_operations.exists():
+        print(f"DEBUG: Still {remaining_operations.count()} pending/in-progress operations for user {operation.user.id}")
+        # Log which operations are still pending
+        for op in remaining_operations:
+            print(f"DEBUG: Operation {op.id} status: {op.status}")
+        return
+
+    # All operations are complete - check if all succeeded
+    failed_ops_count = all_operations.filter(status=OperationStatus.FAILED).count()
+    completed_ops_count = all_operations.filter(status=OperationStatus.COMPLETED).count()
+    total_ops_count = all_operations.count()
+    
+    # All operations must be completed (not failed, not pending, not in_progress)
+    all_succeeded = (failed_ops_count == 0) and (completed_ops_count == total_ops_count) and (total_ops_count > 0)
+    
+    print(f"DEBUG: User deletion operations - Total: {total_ops_count}, Completed: {completed_ops_count}, Failed: {failed_ops_count}, All succeeded: {all_succeeded}")
+    
+    if all_succeeded:
+        # All operations succeeded - delete the user
+        username = operation.user.username
+        user_id = operation.user.id
+        
+        # Add a small delay before deleting to give frontend time to poll operation status
+        # This prevents the operation from being deleted (CASCADE) before the frontend can check it
+        import time
+        time.sleep(3)  # 3 second delay to allow frontend polling
+        
+        operation.user.delete()  # This will CASCADE delete all SaveFolders and OperationQueue records
+        print(f"User {user_id} ({username}) deleted from database after FTP cleanup operation completed successfully")
+    else:
+        # Some operations failed - keep the user, clear pending_deletion flag
+        operation.user.pending_deletion = False
+        operation.user.save()
+        print(f"WARNING: User {operation.user.id} ({operation.user.username}) deletion cancelled - {failed_ops_count} FTP operation(s) failed")
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def complete_operation(request, operation_id):
@@ -324,13 +409,16 @@ def complete_operation(request, operation_id):
         success = data.get('success', False)
         if success:
             operation.mark_completed(result_data=data)
+            # Refresh from DB to ensure we have the latest status
+            operation.refresh_from_db()
+            
             # Update game's last_played when save operation completes successfully
             from SaveNLoad.utils.operation_utils import is_operation_type, is_save_folder_operation
-            if is_operation_type(operation, 'save'):
+            if is_operation_type(operation, 'save') and operation.game:
                 operation.game.last_played = timezone.now()
                 operation.game.save()
             # Delete save folder from database when DELETE operation completes successfully
-            elif is_save_folder_operation(operation):
+            elif is_save_folder_operation(operation) and operation.game:
                 from SaveNLoad.models.save_folder import SaveFolder
                 try:
                     save_folder = SaveFolder.get_by_number(
@@ -346,6 +434,9 @@ def complete_operation(request, operation_id):
             
             # Check if game is pending deletion and all operations are complete
             _check_and_handle_game_deletion_completion(operation)
+            
+            # Check if user is pending deletion and all operations are complete
+            _check_and_handle_user_deletion_completion(operation)
         else:
             error_message = data.get('error', data.get('message', 'Operation failed'))
             
@@ -357,6 +448,9 @@ def complete_operation(request, operation_id):
             
             # Check if game is pending deletion and all operations are complete
             _check_and_handle_game_deletion_completion(operation)
+            
+            # Check if user is pending deletion and all operations are complete
+            _check_and_handle_user_deletion_completion(operation)
             
             # Cleanup: If SAVE operation failed due to missing local path or empty saves, delete the save folder
             # This prevents orphaned save folders when user provides invalid path or empty saves

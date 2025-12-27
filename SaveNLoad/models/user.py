@@ -24,6 +24,7 @@ class SimpleUsers(models.Model):
         choices=UserRole.CHOICES,
         default=UserRole.USER
     )
+    pending_deletion = models.BooleanField(default=False, help_text="If True, user is marked for deletion and will be deleted after all FTP cleanup operations complete")
     
     class Meta:
         db_table = 'simple_users'

@@ -27,5 +27,6 @@ urlpatterns = [
     path('operations/queue/cleanup/', settings.operation_queue_cleanup, name='operation_queue_cleanup'),
     path('users/', settings.list_users, name='list_users'),
     path('users/<int:user_id>/reset-password/', settings.reset_user_password, name='reset_user_password'),
+    path('users/<int:user_id>/delete/', settings.delete_user, name='delete_user'),
 ]
 

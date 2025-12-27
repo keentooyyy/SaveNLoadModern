@@ -861,6 +861,120 @@ def list_users(request):
         return json_response_error(f'Failed to list users: {str(e)}', status=500)
 
 
+def _queue_user_deletion_operations(user: 'SimpleUsers', admin_user, request=None):
+    """
+    Queue operations to delete all FTP saves for a user before deletion.
+    Creates a single delete operation for the entire user directory.
+    The operation is assigned to the admin's worker (the one making the delete request).
+    
+    Args:
+        user: SimpleUsers instance to delete
+        admin_user: Admin user making the delete request (their worker will handle the deletion)
+        request: Optional request object for worker lookup
+    
+    Returns:
+        tuple: (success: bool, error_message: str or None, operation_id: int or None)
+        - (True, None, operation_id) if operations were queued successfully
+        - (True, "no_saves", None) if no saves exist (immediate deletion safe)
+        - (False, error_message, None) if FTP cleanup failed (no worker available, etc.)
+    """
+    from SaveNLoad.models.save_folder import SaveFolder
+    from SaveNLoad.models.operation_queue import OperationQueue, OperationType
+    
+    try:
+        # Get all save folders for this user
+        save_folders = SaveFolder.objects.filter(user=user)
+        
+        if not save_folders.exists():
+            print(f"No save folders found for user {user.id} ({user.username}), no FTP cleanup needed")
+            # No saves to clean up, so we can return a special flag indicating immediate deletion is safe
+            return (True, "no_saves", None)  # Special flag: no saves means immediate deletion is safe
+        
+        # Get the admin's worker (from session - automatic association)
+        from SaveNLoad.views.api_helpers import get_client_worker_or_error
+        client_worker, error_response = get_client_worker_or_error(admin_user, request)
+        if error_response:
+            error_msg = f"No active client worker available. Cannot delete FTP saves for user '{user.username}'. Please ensure a client worker is running and try again."
+            print(f"WARNING: No active client worker available for admin {admin_user.username}, cannot delete FTP saves for user {user.id}")
+            return (False, error_msg, None)
+        
+        # Create DELETE operation for the entire user directory (username/)
+        # This will delete all saves for the user across all games
+        # Operation is assigned to the admin's worker
+        operation = OperationQueue.create_operation(
+            operation_type=OperationType.DELETE,
+            user=user,  # User being deleted (for tracking)
+            game=None,  # No game association for user deletion
+            local_save_path='',  # Not needed for delete
+            save_folder_number=None,  # Deleting entire user directory
+            smb_path=user.username,  # Full path to user directory (just username/)
+            client_worker=client_worker  # Admin's worker handles the deletion
+        )
+        
+        print(f"Queued delete operation for user directory: {user.username}/ (assigned to admin's worker: {client_worker.client_id})")
+        return (True, None, operation.id)  # Return operation_id for progress tracking
+    except Exception as e:
+        error_msg = f"Error queueing user deletion operations: {str(e)}"
+        print(f"ERROR: Error queueing user deletion operations for user {user.id}: {e}")
+        return (False, error_msg, None)
+
+
+def _handle_user_deletion(request, user, admin_user):
+    """
+    Helper to handle user deletion logic
+    Returns: JsonResponse
+    """
+    # Queue operations to delete all FTP saves for this user
+    # Use admin's worker (the one making the delete request)
+    # Do NOT delete user if FTP cleanup fails to queue
+    success, error_message, operation_id = _queue_user_deletion_operations(user, admin_user=admin_user, request=request)
+    if not success:
+        return json_response_error(error_message or "Failed to queue FTP cleanup operations", status=503)
+    
+    # If no saves exist, delete immediately (nothing to clean up)
+    if error_message == "no_saves":
+        user.delete()
+        print(f"User {user.id} ({user.username}) deleted immediately - no FTP saves to clean up")
+        return json_response_success(message=f'User "{user.username}" deleted successfully')
+    else:
+        # Mark user for deletion - actual deletion happens after FTP operation completes successfully
+        user.pending_deletion = True
+        user.save()
+        print(f"User {user.id} ({user.username}) marked for deletion - will be deleted after FTP cleanup operation completes")
+        return json_response_success(
+            message=f'User "{user.username}" deletion queued. FTP cleanup in progress...',
+            data={'operation_id': operation_id}
+        )
+
+
+@login_required
+@require_http_methods(["POST", "DELETE"])
+def delete_user(request, user_id):
+    """Delete a user account (Admin only)"""
+    admin_user = get_current_user(request)
+    error_response = check_admin_or_error(admin_user)
+    if error_response:
+        return error_response
+    
+    try:
+        from SaveNLoad.models import SimpleUsers
+        
+        # Get target user
+        try:
+            target_user = SimpleUsers.objects.get(id=user_id)
+        except SimpleUsers.DoesNotExist:
+            return json_response_error('User not found.', status=404)
+        
+        # Prevent admin from deleting themselves
+        if target_user.id == admin_user.id:
+            return json_response_error('You cannot delete your own account.', status=400)
+        
+        return _handle_user_deletion(request, target_user, admin_user)
+    except Exception as e:
+        print(f"ERROR: Error deleting user: {str(e)}")
+        return json_response_error(f'Failed to delete user: {str(e)}', status=500)
+
+
 @login_required
 @require_http_methods(["POST"])
 def reset_user_password(request, user_id):

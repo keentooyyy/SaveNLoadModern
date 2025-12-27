@@ -431,23 +431,28 @@ class ClientWorkerServiceRclone:
         except Exception as e:
             return self._handle_operation_exception('List', e)
     
-    def delete_save_folder(self, game_id: int, username: str, game_name: str,
-                          save_folder_number: int, remote_path: Optional[str] = None,
+    def delete_save_folder(self, game_id: Optional[int], username: str, game_name: Optional[str],
+                          save_folder_number: Optional[int], remote_path: Optional[str] = None,
                           operation_id: Optional[int] = None,
                           path_index: Optional[int] = None) -> Dict[str, Any]:
-        """Delete save folder - rclone handles it"""
-        print(f"Deleting save folder...")
-        
-        if not remote_path:
-            return self._create_error_response(
-                'Remote path is required for delete operation'
-            )
-        
-        try:
+        """Delete save folder or user directory - rclone handles it"""
+        # Check if this is a user deletion operation (game_name is None)
+        if game_name is None:
+            print(f"Deleting user directory for {username}...")
+            # For user deletion, remote_path is just the username (e.g., "spamonly31")
+            remote_path_base = remote_path if remote_path else username
+        else:
+            print(f"Deleting save folder...")
+            if not remote_path:
+                return self._create_error_response(
+                    'Remote path is required for delete operation'
+                )
             # Update to use _build_remote_path_base with path_index
             remote_path_base = self._build_remote_path_base(
                 username, game_name, save_folder_number, remote_path, path_index
             )
+        
+        try:
             # Let rclone delete it
             success, message = self.rclone_client.delete_directory(remote_path_base)
             
@@ -938,11 +943,15 @@ class ClientWorkerServiceRclone:
         username = operation.get('username')
         game_name = operation.get('game_name')
         save_folder_number = operation.get('save_folder_number')
-        remote_path = operation.get('remote_path')  # Base path like "username/gamename/save_1"
+        remote_path = operation.get('remote_path')  # Base path like "username/gamename/save_1" or "username" for user deletion
         path_index = operation.get('path_index')  # Extract path_index from operation
         
         op_type_display = op_type.capitalize()
-        print(f"\nProcessing: {op_type_display} operation for {game_name}")
+        # Handle user deletion operations (game_name is None)
+        if game_name:
+            print(f"\nProcessing: {op_type_display} operation for {game_name}")
+        else:
+            print(f"\nProcessing: {op_type_display} operation for user {username}")
         
         # For delete operations, remote_path is sufficient (can delete entire directories)
         if op_type == 'delete' and not remote_path:
