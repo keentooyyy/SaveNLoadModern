@@ -9,7 +9,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 e.preventDefault();
                 const url = new URL(this.href, window.location.origin);
                 url.searchParams.set('client_id', clientId);
+                // Clear localStorage to prevent stale data
+                localStorage.removeItem('savenload_client_id');
                 window.location.href = url.toString();
+            } else {
+                // Even if no client_id, clear any stale data
+                localStorage.removeItem('savenload_client_id');
             }
         });
     }

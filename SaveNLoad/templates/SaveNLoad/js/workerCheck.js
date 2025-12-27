@@ -12,6 +12,12 @@
     let checkInterval = null;
 
     function checkWorkerConnection() {
+        // Validate API endpoint is defined
+        if (!API_ENDPOINT || API_ENDPOINT === 'undefined') {
+            console.error('WORKER_CHECK_URL is not defined. Skipping worker check.');
+            return;
+        }
+
         const headers = window.createFetchHeaders
             ? window.createFetchHeaders(window.getCsrfToken ? window.getCsrfToken() : null)
             : { 'X-Requested-With': 'XMLHttpRequest' };
@@ -20,8 +26,9 @@
             .then(response => response.json())
             .then(data => {
                 if (!data.connected) {
-                    // Worker disconnected - reload page (decorator will show worker required page)
-                    console.warn('Client worker disconnected. Reloading...');
+                    // Worker disconnected - clear localStorage and reload page (decorator will show worker required page)
+                    console.warn('Client worker disconnected. Clearing localStorage and reloading...');
+                    localStorage.removeItem('savenload_client_id');
                     window.location.reload();
                 } else if (data.client_id) {
                     // Store client_id for logout handling
@@ -30,13 +37,20 @@
             })
             .catch(error => {
                 console.error('Error checking worker connection:', error);
-                // On error, assume disconnected and reload (decorator will handle it)
+                // On error, clear localStorage and reload (decorator will handle it)
+                localStorage.removeItem('savenload_client_id');
                 window.location.reload();
             });
     }
 
     // Start checking when page loads
     function startWorkerCheck() {
+        // Validate API endpoint before starting checks
+        if (!API_ENDPOINT || API_ENDPOINT === 'undefined') {
+            console.error('WORKER_CHECK_URL is not defined. Worker check disabled.');
+            return;
+        }
+
         // Initial check
         checkWorkerConnection();
 
