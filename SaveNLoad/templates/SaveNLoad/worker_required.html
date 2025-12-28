@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Connect Worker{% endblock %}
 
@@ -6,7 +7,7 @@
 <div class="container d-flex align-items-center justify-content-center min-vh-80">
     <div class="text-center w-100 max-width-600">
         <div class="mb-4">
-            <i class="fas fa-desktop text-info fs-1"></i>
+            <img src="{% static 'images/icon.png' %}" alt="Worker Missing" width="80" height="80">
         </div>
         <h2 class="text-white mb-3">Worker Missing</h2>
         <p class="text-white-50 mb-4">

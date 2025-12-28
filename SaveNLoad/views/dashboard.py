@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.db.models import Max, Subquery, OuterRef, F
+from django.db.models.functions import Lower
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from datetime import timedelta
@@ -85,8 +86,8 @@ def _get_dashboard_context_data(user):
     
     # Available games section (all games)
     # Sort alphabetically by default for the main list
-    # Use order_by('name', 'id') for stable sorting on DB side
-    db_games = annotated_games.order_by('name', 'id')
+    # Use order_by(Lower('name'), 'id') for stable, case-insensitive sorting
+    db_games = annotated_games.order_by(Lower('name'), 'id')
     available_games = []
     
     for game in db_games:
@@ -170,17 +171,17 @@ def search_available_games(request):
     # Apply DB-side sorting
     # This is much more efficient than fetching all and sorting in Python
     if sort_by == 'name_desc':
-        db_games = db_games.order_by('-name', 'id')
+        db_games = db_games.order_by(Lower('name').desc(), 'id')
     elif sort_by == 'last_saved_desc':
         # Sort by user_last_played (newest first).
         # Filter out games that have never been played (no last_played_timestamp) per user request
-        db_games = db_games.filter(user_last_played__isnull=False).order_by(F('user_last_played').desc(), 'name')
+        db_games = db_games.filter(user_last_played__isnull=False).order_by(F('user_last_played').desc(), Lower('name'))
     elif sort_by == 'last_saved_asc':
         # Sort by user_last_played (oldest first). 
         # Filter out games that have never been played (no last_played_timestamp) per user request
-        db_games = db_games.filter(user_last_played__isnull=False).order_by(F('user_last_played').asc(), 'name')
+        db_games = db_games.filter(user_last_played__isnull=False).order_by(F('user_last_played').asc(), Lower('name'))
     else: # name_asc or invalid
-        db_games = db_games.order_by('name', 'id')
+        db_games = db_games.order_by(Lower('name'), 'id')
     
     # Build games list with last_played data
     games_list = []
