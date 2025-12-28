@@ -69,13 +69,16 @@ def client_worker_required(view_func):
         from django.utils import timezone
         from datetime import timedelta
         
-        timeout_threshold = timezone.now() - timedelta(seconds=ClientWorker.WORKER_TIMEOUT_SECONDS)
+        from SaveNLoad.models.client_worker import SERVER_PING_INTERVAL_SECONDS, MAX_MISSED_PINGS
+        ping_threshold = timezone.now() - timedelta(seconds=SERVER_PING_INTERVAL_SECONDS * 2)
         
-        # Efficient DB check: Is there any worker owned by user that has heartbeated recently?
-        # Rely on heartbeat timestamp only - is_online() is the source of truth
+        # Efficient DB check: Is there any worker owned by user that is online?
+        # Rely on ping data - is_online() is the source of truth
         has_worker = ClientWorker.objects.filter(
             user=user,
-            last_heartbeat__gte=timeout_threshold
+            is_offline=False,
+            missed_ping_count__lt=MAX_MISSED_PINGS,
+            last_ping_response__gte=ping_threshold
         ).exists()
         
         if not has_worker:
@@ -148,6 +151,12 @@ def get_current_user(request):
     # Get user from database - verify it still exists
     try:
         user = SimpleUsers.objects.get(id=user_id)
+        # Update user's last authenticated request timestamp
+        # This tracks actual authenticated requests to detect when cookies are cleared
+        # More reliable than session data which can persist for days
+        from django.utils import timezone
+        user.last_authenticated_request = timezone.now()
+        user.save(update_fields=['last_authenticated_request'])
         # Cache for subsequent calls in same request
         request._cached_user = user
         return user

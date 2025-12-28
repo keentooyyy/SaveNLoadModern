@@ -36,11 +36,9 @@ if getattr(sys, 'frozen', False):
 else:
     load_dotenv()
 
-# Add constants at the top after imports, before the class
-RCLONE_TRANSFERS = 10  # This might already exist, but add if not
 
 # Client worker configuration constants
-HEARTBEAT_INTERVAL = 5  # Heartbeat interval in seconds
+PING_INTERVAL = 5  # Ping interval in seconds (how often to poll ping endpoint)
 DEFAULT_POLL_INTERVAL = 1  # Default polling interval in seconds
 
 class ClientWorkerServiceRclone:
@@ -69,7 +67,7 @@ class ClientWorkerServiceRclone:
         self.poll_interval = poll_interval
         self.session = requests.Session()
         self.running = False
-        self._heartbeat_thread = None
+        self._ping_thread = None
         self._current_client_id = None
         self.linked_user = None  # Track ownership status
         
@@ -671,12 +669,11 @@ class ClientWorkerServiceRclone:
         except Exception:
             return False
     
-    def send_heartbeat(self, client_id: str) -> bool:
-        """Send heartbeat to Django server"""
+    def send_ping(self, client_id: str) -> bool:
+        """Send ping to Django server to confirm worker is alive"""
         try:
-            response = self.session.post(
-                f"{self.server_url}/api/client/heartbeat/",
-                json={'client_id': client_id},
+            response = self.session.get(
+                f"{self.server_url}/api/client/ping/{client_id}/",
                 timeout=5
             )
             if response.status_code == 200:
@@ -698,15 +695,15 @@ class ClientWorkerServiceRclone:
         except Exception:
             return False
     
-    def _heartbeat_loop(self, client_id: str):
-        """Background thread that continuously sends heartbeats"""
-        heartbeat_interval = HEARTBEAT_INTERVAL
+    def _ping_loop(self, client_id: str):
+        """Background thread that continuously sends pings"""
+        ping_interval = PING_INTERVAL
         while self.running:
             try:
-                self.send_heartbeat(client_id)
+                self.send_ping(client_id)
             except Exception:
                 pass
-            for _ in range(heartbeat_interval * 10):
+            for _ in range(ping_interval * 10):
                 if not self.running:
                     break
                 time.sleep(0.1)
@@ -731,10 +728,10 @@ class ClientWorkerServiceRclone:
         
         self.running = False
         
-        # Wait for heartbeat thread to finish
-        if self._heartbeat_thread and self._heartbeat_thread.is_alive():
-            self._safe_console_print("[dim]Waiting for heartbeat thread...[/dim]")
-            self._heartbeat_thread.join(timeout=2)
+        # Wait for ping thread to finish
+        if self._ping_thread and self._ping_thread.is_alive():
+            self._safe_console_print("[dim]Waiting for ping thread...[/dim]")
+            self._ping_thread.join(timeout=2)
         
         # Unregister from server
         if client_id:
@@ -822,9 +819,9 @@ class ClientWorkerServiceRclone:
 {rclone_status} {rclone_message}
 {owner_status}"""
         
-        self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, args=(client_id,), daemon=True)
-        self._heartbeat_thread.start()
-        status_content += f"\n[green][OK][/green] Heartbeat active (every {HEARTBEAT_INTERVAL}s)"
+        self._ping_thread = threading.Thread(target=self._ping_loop, args=(client_id,), daemon=True)
+        self._ping_thread.start()
+        status_content += f"\n[green][OK][/green] Ping active (every {PING_INTERVAL}s)"
         
         status_panel = Panel(
             status_content,
@@ -909,7 +906,7 @@ class ClientWorkerServiceRclone:
                     if response.status_code == 200:
                         data = response.json()
                         
-                        # Update linked user status if changed (faster than heartbeat)
+                        # Update linked user status if changed (faster than ping)
                         # This fixes the delay issue where unclaim took 10s+ to reflect
                         new_user = data.get('linked_user')
                         if new_user != self.linked_user:

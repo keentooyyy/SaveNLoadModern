@@ -5,7 +5,7 @@ app_name = 'client_worker'
 
 urlpatterns = [
     path('register/', client_worker_api.register_client, name='register'),
-    path('heartbeat/', client_worker_api.heartbeat, name='heartbeat'),
+    path('ping/<str:client_id>/', client_worker_api.ping_worker, name='ping'),
     path('unregister/', client_worker_api.unregister_client, name='unregister'),
     path('check/', client_worker_api.check_connection, name='check'),
     path('pending/<str:client_id>/', client_worker_api.get_pending_operations, name='pending'),

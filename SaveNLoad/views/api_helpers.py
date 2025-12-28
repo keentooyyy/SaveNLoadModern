@@ -85,14 +85,14 @@ def get_client_worker_or_error(user, request=None):
     if not user:
         return None, json_response_error('User is required', status=400)
     
-    # Auto-unclaim offline workers before checking (uses 25 second timeout = 5 heartbeats)
-    ClientWorker.unclaim_offline_workers()
+    # Auto-unclaim offline workers and cookie-cleared workers before checking
+    ClientWorker.check_claimed_workers()
     
     # Get worker owned by this user - rely on relationship and is_online() check
     # No need for is_active check - is_online() is the source of truth
     client_worker = ClientWorker.objects.filter(
         user=user
-    ).order_by('-last_heartbeat').first()
+    ).order_by('-last_ping_response').first()
     
     if not client_worker:
         return None, JsonResponse({

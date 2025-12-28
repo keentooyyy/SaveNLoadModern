@@ -5,19 +5,18 @@ import os
 import sys
 
 def worker_cleanup_loop():
-    """Background thread to clean up offline workers"""
-
+    """Background thread to check claimed workers and unclaim offline/cookie-cleared workers"""
     
-    from SaveNLoad.models.client_worker import ClientWorker
+    from SaveNLoad.models.client_worker import ClientWorker, SERVER_PING_INTERVAL_SECONDS
     print("Worker cleanup thread started")
     
     while True:
         try:
-            # Run cleanup every 30 seconds
-            ClientWorker.unclaim_offline_workers()
+            # Run check every 5 seconds to match ping interval
+            ClientWorker.check_claimed_workers()
         except Exception as e:
             print(f"Cleanup error: {e}")
-        time.sleep(30)
+        time.sleep(SERVER_PING_INTERVAL_SECONDS)
 
 class SavenloadConfig(AppConfig):
     name = 'SaveNLoad'

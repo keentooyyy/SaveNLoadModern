@@ -27,7 +27,8 @@
 
 <script>
     // Inject Django URLs for worker check
-     window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
+    window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
+
 
     // Inject Django URL patterns (with placeholder for game_id or operation_id)
     {% if is_user %}
@@ -67,6 +68,7 @@
 <script>
     {% include 'SaveNLoad/js/gameFormUtils.js' %}
     {% include 'SaveNLoad/js/workerCheck.js' %}
+
     {% include 'SaveNLoad/js/logoutHandler.js' %}
     {% include 'SaveNLoad/js/manageGames.js' %}
     {% include 'SaveNLoad/js/saveLoad.js' %}

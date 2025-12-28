@@ -222,3 +222,34 @@ PERMISSIONS_POLICY = {
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
 
+
+# Logging Configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'filters': {
+        'suppress_worker_polling': {
+            '()': 'SaveNLoad.utils.logging_utils.SuppressEndpointFilter',
+            'endpoints': ['/api/client/pending/'],
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'filters': ['suppress_worker_polling'],
+        },
+    },
+    'loggers': {
+        'django.server': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # Also filter django.request to be safe, though django.server usually handles the access logs
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}

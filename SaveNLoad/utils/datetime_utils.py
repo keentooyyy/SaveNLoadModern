@@ -33,7 +33,7 @@ def get_time_threshold(seconds: int = None, minutes: int = None, hours: int = No
     
     Used in:
     - Operation timeout checks
-    - Worker heartbeat checks
+    - Worker ping checks
     - OTP expiration checks
     
     Args:

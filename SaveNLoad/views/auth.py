@@ -441,6 +441,9 @@ def reset_password(request):
     })
 
 
+
+
+
 @login_required
 def logout(request):
     """Logout and clear session"""

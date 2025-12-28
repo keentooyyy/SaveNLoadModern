@@ -35,15 +35,10 @@ def register_client(request):
         # Create or update client worker
         worker, created = ClientWorker.objects.get_or_create(
             client_id=client_id,
-            defaults={
-                'last_heartbeat': timezone.now()
-            }
+            defaults={}
         )
         
-        if not created:
-            # Update existing worker
-            worker.last_heartbeat = timezone.now()
-            worker.save()
+        # No need to update anything on registration - ping endpoint will handle it
         
         print(f"Client worker registered: {client_id}")
         return json_response_success(
@@ -60,21 +55,18 @@ def register_client(request):
 
 
 @csrf_exempt
-@require_http_methods(["POST"])
-def heartbeat(request):
-    """Receive heartbeat from client worker and update status"""
+@require_http_methods(["GET"])
+def ping_worker(request, client_id):
+    """Ping endpoint for workers to confirm they're alive - replaces heartbeat system"""
     try:
-        data, error_response = parse_json_body(request)
-        if error_response:
-            return error_response
-        
-        client_id = data.get('client_id', '').strip()
-        
         worker, error_response = get_client_worker_by_id_or_error(client_id)
         if error_response:
             return error_response
         
-        worker.last_heartbeat = timezone.now()
+        # Update ping response timestamp and reset missed ping count
+        worker.last_ping_response = timezone.now()
+        worker.missed_ping_count = 0
+        worker.is_offline = False
         worker.save()
         
         return json_response_success(data={
@@ -82,7 +74,7 @@ def heartbeat(request):
         })
         
     except Exception as e:
-        print(f"ERROR: Failed to process heartbeat: {e}")
+        print(f"ERROR: Failed to process ping: {e}")
         return json_response_error(str(e), status=500)
 
 
@@ -125,27 +117,30 @@ def check_connection(request):
         return JsonResponse({
             'connected': False,
             'client_id': None,
-            'last_heartbeat': None,
+            'last_ping_response': None,
         })
     
     # Get online workers owned by this user
     # DB-side filtering is much more efficient than fetching all and filtering in Python
     from django.utils import timezone
     from datetime import timedelta
+    from SaveNLoad.models.client_worker import SERVER_PING_INTERVAL_SECONDS, MAX_MISSED_PINGS
     
-    threshold = timezone.now() - timedelta(seconds=WORKER_TIMEOUT_SECONDS)
+    ping_threshold = timezone.now() - timedelta(seconds=SERVER_PING_INTERVAL_SECONDS * 2)
     
-    # Filter by user AND last_heartbeat
+    # Filter by user AND ping data
     valid_workers = ClientWorker.objects.filter(
         user=user,
-        last_heartbeat__gte=threshold
-    ).order_by('-last_heartbeat')
+        is_offline=False,
+        missed_ping_count__lt=MAX_MISSED_PINGS,
+        last_ping_response__gte=ping_threshold
+    ).order_by('-last_ping_response')
     
     if not valid_workers:
         return JsonResponse({
             'connected': False,
             'client_id': None,
-            'last_heartbeat': None,
+            'last_ping_response': None,
             'message': 'No active devices found. Please ensure your client is running.'
         })
     
@@ -157,7 +152,7 @@ def check_connection(request):
     return JsonResponse({
         'connected': True,
         'client_id': worker.client_id,
-        'last_heartbeat': worker.last_heartbeat.isoformat(),
+        'last_ping_response': worker.last_ping_response.isoformat() if worker.last_ping_response else None,
         'worker_count': len(valid_workers)
     })
 
@@ -559,8 +554,8 @@ def get_unpaired_workers(request):
     if not user:
         return json_response_error('Authentication required', status=401)
     
-    # Auto-unclaim offline workers to keep list accurate
-    ClientWorker.unclaim_offline_workers(timeout_seconds=WORKER_TIMEOUT_SECONDS)
+    # Auto-unclaim offline workers and cookie-cleared workers to keep list accurate
+    ClientWorker.check_claimed_workers()
     
     # Get online workers that have no user assigned
     # Rely on is_online() check instead of cleanup
@@ -571,7 +566,7 @@ def get_unpaired_workers(request):
         'workers': [
             {
                 'client_id': w.client_id,
-                'last_heartbeat': w.last_heartbeat.isoformat(),
+                'last_ping_response': w.last_ping_response.isoformat() if w.last_ping_response else None,
                 # IP address was removed from plan, relying on hostname/client_id
                 'hostname': w.client_id  # Assuming client_id contains hostname for now
             }
@@ -615,6 +610,10 @@ def claim_worker(request):
         # Claim it
         worker.user = user
         worker.save()
+        
+        # Force immediate session save to ensure last_authenticated_request is persisted
+        # This avoids race condition with background cleanup thread
+        # request.session.save() - Removed as part of DB source of truth cleanup
         
         print(f"Worker {client_id} claimed by {user.username}")
         return json_response_success(message='Worker claimed successfully')

@@ -10,5 +10,6 @@ urlpatterns = [
     path('verify-otp/', auth.verify_otp, name='verify_otp'),
     path('reset-password/', auth.reset_password, name='reset_password'),
     path('logout/', auth.logout, name='logout'),
+
 ]
 
