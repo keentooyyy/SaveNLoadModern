@@ -123,7 +123,8 @@ class ClientWorker(models.Model):
         
         This method:
         1. Checks if workers have pinged recently (within last 10 seconds)
-        2. Unclaims workers that are offline (missed 2+ pings)
+        2. Calculates missed ping count based on actual time elapsed
+        3. Unclaims workers that are offline (missed 2+ pings)
         
         Returns:
             offline_count - number of workers unclaimed
@@ -137,6 +138,7 @@ class ClientWorker(models.Model):
         ping_threshold = timezone.now() - timedelta(seconds=SERVER_PING_INTERVAL_SECONDS * 2)
         
         offline_count = 0
+        now = timezone.now()
         
         for worker in claimed_workers:
             # Check if worker has pinged recently
@@ -146,8 +148,18 @@ class ClientWorker(models.Model):
                 worker.is_offline = False
                 worker.save()
             else:
-                # Worker hasn't pinged recently - increment missed count
-                worker.missed_ping_count += 1
+                # Worker hasn't pinged recently - calculate missed pings based on time elapsed
+                if worker.last_ping_response:
+                    # Calculate how many ping intervals have passed since last ping
+                    time_since_last_ping = (now - worker.last_ping_response).total_seconds()
+                    # Calculate expected missed pings (each ping interval is 5 seconds)
+                    expected_missed = int(time_since_last_ping / SERVER_PING_INTERVAL_SECONDS)
+                    # Cap at MAX_MISSED_PINGS to avoid counting beyond threshold
+                    worker.missed_ping_count = min(expected_missed, MAX_MISSED_PINGS)
+                else:
+                    # No ping history - treat as missed
+                    worker.missed_ping_count = MAX_MISSED_PINGS
+                
                 worker.save()
                 
                 if worker.missed_ping_count >= MAX_MISSED_PINGS:
