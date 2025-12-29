@@ -714,6 +714,42 @@ Please ensure:
         except Exception:
             return False
     
+    def _check_claim_status(self, client_id: str):
+        """Check and update claim status from Redis - can be called from heartbeat or Pub/Sub"""
+        try:
+            # Check for ownership changes by reading from Redis - NO HTTP CALLS!
+            user_id = self.redis_client.hget(f'worker:{client_id}:info', 'user_id')
+            username = self.redis_client.hget(f'worker:{client_id}:info', 'username')  # Should be stored by server
+            
+            # Determine current claim status - user_id is the source of truth
+            is_claimed = user_id and user_id != ''
+            current_username = username if (username and username != '') else None
+            
+            # Detect state changes - check if claim status changed
+            was_claimed = self.linked_user is not None
+            
+            if is_claimed:
+                # Worker is claimed - use username if available, otherwise show as claimed but unknown user
+                if current_username:
+                    # Has username - check if it changed
+                    if current_username != self.linked_user:
+                        self._safe_console_print(f"\n[green][OK] Device claimed by user: {current_username}[/green]")
+                        self.linked_user = current_username
+                else:
+                    # Claimed but no username yet (might be set by another process) - still update state
+                    if not was_claimed:
+                        self._safe_console_print(f"\n[green][OK] Device claimed (user ID: {user_id})[/green]")
+                        self.linked_user = f"user_{user_id}"  # Temporary until username is set
+            else:
+                # Worker is unclaimed
+                if was_claimed:
+                    # Was claimed, now unclaimed
+                    self._safe_console_print(f"\n[yellow][!] Device unclaimed (waiting for owner)[/yellow]")
+                    self.linked_user = None
+        except Exception as e:
+            # Don't fail on claim status check errors
+            pass
+    
     def _heartbeat_loop(self, client_id: str):
         """Background thread that continuously updates heartbeat in Redis and checks ownership"""
         heartbeat_interval = HEARTBEAT_INTERVAL
@@ -731,32 +767,8 @@ Please ensure:
                 # Update last_ping in info hash
                 self.redis_client.hset(f'worker:{client_id}:info', 'last_ping', datetime.datetime.now().isoformat())
                 
-                # Check for ownership changes by reading from Redis
-                user_id = self.redis_client.hget(f'worker:{client_id}:info', 'user_id')
-                if user_id and user_id != '':
-                    # Worker is claimed - fetch username from server to update display
-                    try:
-                        response = self.session.get(
-                            f"{self.server_url}/api/client/pending/{client_id}/",
-                            timeout=2
-                        )
-                        if response.status_code == 200:
-                            data = response.json()
-                            new_user = data.get('linked_user')
-                            if new_user != self.linked_user:
-                                if new_user:
-                                    self._safe_console_print(f"\n[green][OK] Device claimed by user: {new_user}[/green]")
-                                else:
-                                    self._safe_console_print(f"\n[yellow][!] Device unclaimed (waiting for owner)[/yellow]")
-                                self.linked_user = new_user
-                    except Exception:
-                        # If we can't fetch, just continue - will check again next heartbeat
-                        pass
-                else:
-                    # Worker is unclaimed
-                    if self.linked_user:
-                        self._safe_console_print(f"\n[yellow][!] Device unclaimed (waiting for owner)[/yellow]")
-                        self.linked_user = None
+                # Check claim status (called from heartbeat loop and Pub/Sub notifications)
+                self._check_claim_status(client_id)
                         
             except redis.ConnectionError:
                 # Redis connection lost - this is fatal, worker should exit
@@ -995,9 +1007,18 @@ Please ensure:
                 try:
                     message = pubsub.get_message(timeout=1.0, ignore_subscribe_messages=True)
                     if message and message['type'] == 'message':
-                        # New operation notification - fetch operations
-                        self._safe_console_print(f"[cyan][*] Received operation notification via Redis Pub/Sub[/cyan]")
-                        self._fetch_and_process_operations(client_id)
+                        message_data = message.get('data', '')
+                        if isinstance(message_data, bytes):
+                            message_data = message_data.decode('utf-8')
+                        
+                        # Check if it's a claim status change notification
+                        if message_data == 'claim_status_changed':
+                            # Immediately check claim status (don't wait for next heartbeat)
+                            self._check_claim_status(client_id)
+                        else:
+                            # New operation notification - fetch operations
+                            self._safe_console_print(f"[cyan][*] Received operation notification via Redis Pub/Sub[/cyan]")
+                            self._fetch_and_process_operations(client_id)
                 except redis.ConnectionError:
                     # Redis connection lost - this is fatal
                     self._safe_console_print("[red][ERROR] Redis connection lost - worker cannot continue without Redis[/red]")
@@ -1016,29 +1037,74 @@ Please ensure:
                 pass
     
     def _fetch_and_process_operations(self, client_id: str):
-        """Fetch pending operations from server and process them"""
+        """Fetch pending operations directly from Redis and process them"""
         try:
-            response = self.session.get(
-                f"{self.server_url}/api/client/pending/{client_id}/",
-                timeout=5
-            )
-            if response.status_code == 200:
-                data = response.json()
+            # Read operations directly from Redis - no HTTP polling!
+            operation_ids = self.redis_client.lrange(f'worker:{client_id}:operations', 0, -1)
+            
+            if not operation_ids:
+                return
+            
+            # Linked user status is already tracked in heartbeat loop - no HTTP needed
+            
+            # Process each pending operation
+            operations_to_remove = []
+            for operation_id in operation_ids:
+                # Get operation hash from Redis
+                operation_hash = self.redis_client.hgetall(f'operation:{operation_id}')
                 
-                # Update linked user status if changed
-                new_user = data.get('linked_user')
-                if new_user != self.linked_user:
-                    if new_user:
-                        self._safe_console_print(f"\n[green][OK] Device claimed by user: {new_user}[/green]")
-                    else:
-                        self._safe_console_print(f"\n[yellow][!] Device unclaimed (waiting for owner)[/yellow]")
-                    self.linked_user = new_user
+                if not operation_hash:
+                    # Operation doesn't exist, mark for removal
+                    operations_to_remove.append(operation_id)
+                    continue
+                
+                status = operation_hash.get('status', '')
+                
+                # Only process pending operations
+                if status == 'pending':
+                    # Mark as in_progress in Redis
+                    self.redis_client.hset(f'operation:{operation_id}', 'status', 'in_progress')
+                    from datetime import datetime
+                    self.redis_client.hset(f'operation:{operation_id}', 'started_at', datetime.now().isoformat())
                     
-                operations = data.get('operations', [])
-                for op in operations:
-                    self._process_operation(op)
+                    # Build operation dict (same format as HTTP endpoint returned)
+                    operation_dict = {
+                        'id': operation_id,
+                        'type': operation_hash.get('type', ''),
+                        'local_save_path': operation_hash.get('local_save_path', ''),
+                        'save_folder_number': int(operation_hash['save_folder_number']) if operation_hash.get('save_folder_number') else None,
+                        'remote_path': operation_hash.get('smb_path', ''),
+                        'path_index': int(operation_hash['path_index']) if operation_hash.get('path_index') else None,
+                        'username': operation_hash.get('username', self.linked_user or ''),  # From hash or cached
+                    }
+                    
+                    # Get game_id and game_name from operation hash (should be stored by server)
+                    game_id = operation_hash.get('game_id')
+                    if game_id:
+                        try:
+                            operation_dict['game_id'] = int(game_id)
+                            # Game name should be in operation hash - if not stored, use empty string
+                            operation_dict['game_name'] = operation_hash.get('game_name', '')
+                        except ValueError:
+                            operation_dict['game_id'] = None
+                            operation_dict['game_name'] = None
+                    else:
+                        operation_dict['game_id'] = None
+                        operation_dict['game_name'] = None
+                    
+                    # Process the operation
+                    self._process_operation(operation_dict)
+            
+            # Remove invalid operation IDs from list
+            for operation_id in operations_to_remove:
+                self.redis_client.lrem(f'worker:{client_id}:operations', 0, operation_id)
+                
+        except redis.ConnectionError:
+            # Redis connection lost - fatal error
+            self._safe_console_print("[red][ERROR] Redis connection lost - worker cannot continue without Redis[/red]")
+            self.running = False
         except Exception as e:
-            # Silently handle errors
+            # Silently handle other errors
             pass
     
     def _process_operation(self, operation: Dict[str, Any]):

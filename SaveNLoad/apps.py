@@ -4,11 +4,15 @@ import threading
 
 class SavenloadConfig(AppConfig):
     name = 'SaveNLoad'
+    _cleanup_thread_started = False
+    _cleanup_lock = threading.Lock()
 
     def ready(self):
         # Start background thread to listen for Redis keyspace notifications
         # Real-time cleanup: when worker heartbeat expires, automatically unclaim the worker
-        if not hasattr(self, '_cleanup_thread_started'):
+        with self._cleanup_lock:
+            if self._cleanup_thread_started:
+                return  # Already started
             self._cleanup_thread_started = True
             
             def realtime_cleanup_listener():
@@ -52,20 +56,31 @@ class SavenloadConfig(AppConfig):
                     pubsub.psubscribe(keyevent_pattern)
                     
                     print(f"Real-time worker cleanup listener started (Redis keyspace notifications)")
-                    print(f"DEBUG: Subscribed to keyevent pattern: {keyevent_pattern}")
+                    
+                    # Track processed keys to prevent duplicate processing (thread-safe)
+                    processed_keys = set()
+                    processing_lock = threading.Lock()
                     
                     # Verify subscription worked
                     for message in pubsub.listen():
                         # Handle subscription confirmation
                         if message['type'] == 'psubscribe':
-                            print(f"DEBUG: Successfully subscribed to pattern: {message['channel']}")
                             continue
                         
-                        # Debug: log all messages to see what we're receiving
+                        # Process expired key notifications
                         if message['type'] == 'pmessage':
                             channel = message['channel']
                             key_name = message['data']  # In keyevent, data is the key name
-                            print(f"DEBUG: Received keyevent notification - channel: {channel}, expired key: {key_name}")
+                            
+                            # Prevent duplicate processing with thread-safe check
+                            with processing_lock:
+                                if key_name in processed_keys:
+                                    continue  # Already processed
+                                processed_keys.add(key_name)
+                                
+                                # Clean up old processed keys (keep last 1000 to prevent memory leak)
+                                if len(processed_keys) > 1000:
+                                    processed_keys.clear()
                             
                             # Check if this is a worker heartbeat key
                             # Worker heartbeat keys: worker:{client_id} (client_id can contain colons)
@@ -83,27 +98,23 @@ class SavenloadConfig(AppConfig):
                                 if not is_sub_key:
                                     # This is a worker heartbeat key
                                     client_id = suffix
-                                    print(f"DEBUG: Worker heartbeat expired for {client_id}")
                                     
                                     # Check if worker has a user_id set (is claimed)
                                     try:
                                         user_id = redis_client.hget(f'worker:{client_id}:info', 'user_id')
-                                        print(f"DEBUG: Worker {client_id} user_id: {user_id}")
                                         if user_id and user_id != '':
                                             # Worker heartbeat expired and it's still claimed - unclaim it
+                                            # Double-check with lock to prevent duplicate unclaim
+                                            with processing_lock:
+                                                # Check if we already processed this client_id
+                                                if f'unclaimed_{client_id}' in processed_keys:
+                                                    continue
+                                                processed_keys.add(f'unclaimed_{client_id}')
+                                            
                                             unclaim_worker(client_id)
                                             print(f"Real-time cleanup: Auto-unclaimed offline worker {client_id}")
-                                        else:
-                                            print(f"DEBUG: Worker {client_id} not claimed, skipping unclaim")
                                     except Exception as e:
                                         print(f"Error auto-unclaiming offline worker {client_id}: {e}")
-                                else:
-                                    print(f"DEBUG: Ignoring expired sub-key: {key_name}")
-                            else:
-                                print(f"DEBUG: Ignoring expired key (not a worker key): {key_name}")
-                        else:
-                            # Log other message types for debugging
-                            print(f"DEBUG: Received message type: {message['type']}, channel: {message.get('channel', 'N/A')}, data: {message.get('data', 'N/A')}")
                                     
                 except redis.ConnectionError:
                     print("Error: Redis connection lost in cleanup listener")

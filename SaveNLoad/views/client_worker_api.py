@@ -53,15 +53,7 @@ def register_client(request):
         worker_info = get_worker_info(client_id)
         user_id = worker_info['user_id'] if worker_info and worker_info.get('user_id') else None
         
-        # Auto-claim to currently logged-in user if not already claimed
-        if not user_id:
-            from SaveNLoad.views.custom_decorators import get_current_user
-            current_user = get_current_user(request)
-            if current_user:
-                user_id = current_user.id
-                print(f"Auto-claiming worker {client_id} to logged-in user: {current_user.username}")
-        
-        # Register worker (creates or updates)
+        # Register worker (creates or updates) - no auto-claiming, user must manually claim via frontend
         register_worker(client_id, user_id)
         
         # Get linked user username if exists
@@ -537,8 +529,8 @@ def claim_worker(request):
         if worker_info and worker_info.get('user_id') and worker_info['user_id'] != user.id:
             return json_response_error('Worker is already claimed by another user', status=409)
             
-        # Claim it
-        success = redis_claim_worker(client_id, user.id)
+        # Claim it - pass username so client worker can display it
+        success = redis_claim_worker(client_id, user.id, username=user.username)
         if not success:
             return json_response_error('Failed to claim worker', status=500)
         

@@ -72,47 +72,26 @@ def client_worker_required(view_func):
         has_worker = len(worker_ids) > 0
         
         if not has_worker:
-            # Auto-claim first available unclaimed worker
-            unpaired_worker_ids = get_unclaimed_workers()
-            if unpaired_worker_ids:
-                # Auto-claim the first available worker
-                from SaveNLoad.services.redis_worker_service import claim_worker
-                client_id = unpaired_worker_ids[0]
-                if claim_worker(client_id, user.id):
-                    print(f"Auto-claimed worker {client_id} to user {user.username}")
-                    # Re-check for workers after auto-claim
-                    worker_ids = get_user_workers(user.id)
-                    has_worker = len(worker_ids) > 0
-            
-            if not has_worker:
                 if is_ajax:
                     return JsonResponse({
                         'error': 'Client worker not connected. Please ensure the client worker is running and claimed.',
                         'requires_worker': True
                     }, status=503)
                 
-                # Fetch all online workers to show in the UI
-                from SaveNLoad.services.redis_worker_service import get_online_workers, get_worker_info
-                online_worker_ids = get_online_workers()
-                online_workers = []
-                for wid in online_worker_ids:
+                # Fetch all online workers to show in the UI (only unclaimed ones)
+                from SaveNLoad.services.redis_worker_service import get_unclaimed_workers, get_worker_info
+                unclaimed_worker_ids = get_unclaimed_workers()
+                unclaimed_workers = []
+                for wid in unclaimed_worker_ids:
                     worker_info = get_worker_info(wid)
-                    user_id = worker_info.get('user_id') if worker_info else None
-                    linked_username = None
-                    if user_id:
-                        try:
-                            linked_user = SimpleUsers.objects.get(pk=user_id)
-                            linked_username = linked_user.username
-                        except SimpleUsers.DoesNotExist:
-                            pass
-                    online_workers.append({
+                    unclaimed_workers.append({
                         'client_id': wid,
-                        'linked_user': linked_username,
-                        'claimed': user_id is not None
+                        'linked_user': None,  # Unclaimed workers have no linked user
+                        'claimed': False
                     })
                 
                 return render(request, 'SaveNLoad/worker_required.html', {
-                    'unpaired_workers': online_workers
+                    'unpaired_workers': unclaimed_workers
                 })
         
         return view_func(request, *args, **kwargs)

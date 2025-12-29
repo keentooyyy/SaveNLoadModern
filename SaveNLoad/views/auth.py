@@ -81,16 +81,6 @@ def login(request):
                 # Store user ID in session
                 request.session['user_id'] = user.id
                 
-                # Auto-claim first available unclaimed worker if user doesn't have one
-                from SaveNLoad.services.redis_worker_service import get_user_workers, get_unclaimed_workers, claim_worker
-                user_workers = get_user_workers(user.id)
-                if not user_workers:
-                    unclaimed_workers = get_unclaimed_workers()
-                    if unclaimed_workers:
-                        # Auto-claim the first available worker
-                        client_id = unclaimed_workers[0]
-                        if claim_worker(client_id, user.id):
-                            print(f"Auto-claimed worker {client_id} to user {user.username} on login")
                 
                 # Handle "Remember Me" functionality
                 if not remember_me:

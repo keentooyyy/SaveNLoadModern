@@ -111,13 +111,14 @@ def get_worker_info(client_id):
     }
 
 
-def claim_worker(client_id, user_id):
+def claim_worker(client_id, user_id, username=None):
     """
     Claim a worker for a user
     
     Args:
         client_id: Worker identifier
         user_id: User ID to claim the worker
+        username: Optional username to store in Redis (for client worker display)
     
     Returns:
         True if successful, False if worker not found or already claimed by another user
@@ -135,9 +136,17 @@ def claim_worker(client_id, user_id):
     if current_user_id and int(current_user_id) != user_id:
         return False
     
-    # Claim the worker
+    # Claim the worker - store both user_id and username
     redis_client.hset(f'worker:{client_id}:info', 'user_id', str(user_id))
+    if username:
+        redis_client.hset(f'worker:{client_id}:info', 'username', username)
     redis_client.sadd(f'user:{user_id}:workers', client_id)
+    
+    # Notify worker via Pub/Sub that claim status changed
+    try:
+        redis_client.publish(f'worker:{client_id}:notify', 'claim_status_changed')
+    except Exception:
+        pass  # Don't fail if Pub/Sub fails
     
     return True
 
@@ -163,8 +172,15 @@ def unclaim_worker(client_id):
     # Remove from user's worker set
     redis_client.srem(f'user:{user_id}:workers', client_id)
     
-    # Clear user_id from worker info
+    # Clear user_id and username from worker info
     redis_client.hset(f'worker:{client_id}:info', 'user_id', '')
+    redis_client.hset(f'worker:{client_id}:info', 'username', '')
+    
+    # Notify worker via Pub/Sub that claim status changed
+    try:
+        redis_client.publish(f'worker:{client_id}:notify', 'claim_status_changed')
+    except Exception:
+        pass  # Don't fail if Pub/Sub fails
     
     return True
 
