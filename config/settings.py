@@ -116,11 +116,11 @@ DATABASES = {
 }
 
 # Redis Configuration
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
-REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
-REDIS_DB = int(os.getenv('REDIS_DB', 0))
-REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
-REDIS_URL = os.getenv('REDIS_URL', f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}')
+REDIS_HOST = os.getenv('REDIS_HOST')
+REDIS_PORT = int(os.getenv('REDIS_PORT'))
+REDIS_DB = int(os.getenv('REDIS_DB'))
+REDIS_PASSWORD = os.getenv('REDIS_PASSWORD')
+REDIS_URL = os.getenv(f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}')
 
 
 # Password validation
@@ -231,32 +231,4 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
 
 # Logging Configuration
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'filters': {
-        'suppress_worker_polling': {
-            '()': 'SaveNLoad.utils.logging_utils.SuppressEndpointFilter',
-            'endpoints': ['/api/client/pending/'],
-        },
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'filters': ['suppress_worker_polling'],
-        },
-    },
-    'loggers': {
-        'django.server': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        # Also filter django.request to be safe, though django.server usually handles the access logs
-        'django.request': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-    },
-}
+

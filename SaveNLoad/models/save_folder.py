@@ -1,5 +1,5 @@
 """
-Save Folder model for tracking save folders on FTP server
+Save Folder model for tracking save folders on remote storage
 """
 from django.db import models
 from django.utils import timezone
@@ -8,14 +8,14 @@ from SaveNLoad.models.game import Game
 
 
 class SaveFolder(models.Model):
-    """Tracks save folders for user+game combinations on FTP server"""
+    """Tracks save folders for user+game combinations on remote storage"""
     
     MAX_SAVE_FOLDERS = 10
     
     user = models.ForeignKey(SimpleUsers, on_delete=models.CASCADE, related_name='save_folders')
     game = models.ForeignKey(Game, on_delete=models.CASCADE, related_name='save_folders')
     folder_number = models.IntegerField(help_text="Save folder number (1-10)")
-    smb_path = models.CharField(max_length=500, blank=True, null=True, help_text="Full remote path (e.g., username/gamename/save_1) - FTP path format with forward slashes")
+    smb_path = models.CharField(max_length=500, blank=True, null=True, help_text="Full remote path (e.g., username/gamename/save_1) - Remote path format with forward slashes")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -45,11 +45,11 @@ class SaveFolder(models.Model):
     
     @staticmethod
     def _generate_remote_path(username: str, game_name: str, folder_number: int) -> str:
-        """Generate the full remote path for a save folder in FTP format (forward slashes)"""
+        """Generate the full remote path for a save folder in remote format (forward slashes)"""
         # Sanitize game name
         from SaveNLoad.utils.path_utils import sanitize_game_name
         safe_game_name = sanitize_game_name(game_name)
-        # Generate full path in FTP format: username/gamename/save_1
+        # Generate full path in remote format: username/gamename/save_1
         return f"{username}/{safe_game_name}/save_{folder_number}"
     
     @classmethod

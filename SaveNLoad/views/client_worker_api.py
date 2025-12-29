@@ -269,12 +269,12 @@ def _check_and_handle_game_deletion_completion(operation_dict, game):
         delete_game_banner_file(game)
         
         game.delete()
-        print(f"Game {game_id} ({game_name}) deleted from database after all FTP cleanup operations completed successfully")
+        print(f"Game {game_id} ({game_name}) deleted from database after all storage cleanup operations completed successfully")
     else:
         # Some operations failed - keep the game, clear pending_deletion flag
         game.pending_deletion = False
         game.save()
-        print(f"WARNING: Game {game.id} ({game.name}) deletion cancelled - {len(failed_ops)} FTP operation(s) failed")
+        print(f"WARNING: Game {game.id} ({game.name}) deletion cancelled - {len(failed_ops)} storage operation(s) failed")
 
 
 def _check_and_handle_user_deletion_completion(operation_dict, user):
@@ -336,12 +336,12 @@ def _check_and_handle_user_deletion_completion(operation_dict, user):
         time.sleep(3)
         
         user.delete()
-        print(f"User {user_id} ({username}) deleted from database after FTP cleanup operation completed successfully")
+        print(f"User {user_id} ({username}) deleted from database after storage cleanup operation completed successfully")
     else:
         # Some operations failed - keep the user, clear pending_deletion flag
         user.pending_deletion = False
         user.save()
-        print(f"WARNING: User {user.id} ({user.username}) deletion cancelled - {len(failed_ops)} FTP operation(s) failed")
+        print(f"WARNING: User {user.id} ({user.username}) deletion cancelled - {len(failed_ops)} storage operation(s) failed")
 
 
 @csrf_exempt

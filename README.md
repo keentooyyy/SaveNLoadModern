@@ -13,9 +13,10 @@ SaveNLoadModern is a modern, web-based game save file management system built wi
 ### Architecture Overview
 
 - **Django Backend**: Manages user authentication, game database, operation queue, and API endpoints
+- **Redis**: Handles operation queue, real-time status updates, and worker coordination (ping/heartbeat)
 - **Client Worker**: Standalone executable that runs on user PCs to perform actual file operations (save/load/delete)
-- **FTP Server**: Stores all save files (configured separately, accessible via rclone)
-- **Operation Flow**: Backend queues operations → Client worker polls and executes → Results reported back to backend
+- **Remote Storage**: Stores all save files (typically FTP, accessed via rclone)
+- **Operation Flow**: Backend queues operations in Redis → Client worker polls Redis → Executes and reports progress via API
 
 ### Key Features
 
@@ -40,9 +41,9 @@ SaveNLoadModern is a modern, web-based game save file management system built wi
 Before setting up the project, ensure you have the following installed:
 
 **Required:**
-- **[Docker](https://www.docker.com/get-started)** and **Docker Compose** - Primary deployment method for the Django application and database
-- **FTP Server** - An FTP server for storing save files (can be on the same machine or separate server)
-- **[rclone](https://rclone.org/downloads/)** - Required for client worker file transfers (Windows executable needed for building client worker)
+- **[Docker](https://www.docker.com/get-started)** and **Docker Compose** - Primary deployment method (includes Redis)
+- **Remote Storage** - An FTP server or other rclone-compatible storage for save files
+- **[rclone](https://rclone.org/downloads/)** - Required ONLY for **building** the client worker (bundled into the final executable; end users do not need to install this)
 
 **Separate Services (Required, not included in Docker):**
 - **FTP Server** - An FTP server accessible from both the Django server and client worker machines
@@ -59,6 +60,16 @@ You can verify Docker installation with:
 docker --version
 docker-compose --version
 ```
+
+### Redis Requirement
+
+SaveNLoadModern relies heavily on Redis for:
+- Operation queuing (background tasks)
+- Real-time progress updates
+- Worker presence (pings/heartbeats)
+
+**Docker Deployment**: Redis is automatically included and configured.
+**Manual Deployment**: You must install and run a Redis server individually.
 
 ## FTP Server Setup
 
@@ -125,6 +136,14 @@ DEFAULT_ADMIN_PASSWORD=your-admin-password-here
 # Admin password reset (for manage accounts feature)
 RESET_PASSWORD_DEFAULT=ResetPassword123
 
+# Redis Configuration
+# For Docker: REDIS_HOST=redis
+# For Local: REDIS_HOST=localhost
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_DB=1
+REDIS_PASSWORD=
+
 # Version
 VERSION_GITHUB_URL=https://raw.githubusercontent.com/keentooyyy/SaveNLoadModern/refs/heads/main/version.txt
 ```
@@ -140,7 +159,7 @@ VERSION_GITHUB_URL=https://raw.githubusercontent.com/keentooyyy/SaveNLoadModern/
 Docker deployment automatically handles all system dependencies and configuration. This method is recommended for both development and production environments.
 
 **Benefits of Docker Deployment:**
-- Automatic dependency management (Python, PostgreSQL, Node.js)
+- Automatic dependency management (Python, PostgreSQL, Redis, Node.js)
 - Consistent environments across different systems
 - Simplified database setup and migrations
 - Integrated service orchestration
@@ -558,44 +577,6 @@ Docker Compose automatically handles:
 - **Settings**: Configure system-wide settings
 - **Statistics**: View usage statistics and analytics
 
-## API Endpoints
-
-### Authentication
-
-- `POST /api/login/` - User login
-- `POST /api/register/` - User registration
-- `POST /api/logout/` - User logout
-- `POST /api/forgot-password/` - Request password reset OTP
-- `POST /api/verify-otp/` - Verify OTP and reset password
-
-### Game Management
-
-- `GET /api/games/` - List all games
-- `POST /api/games/add/` - Add new game
-- `GET /api/games/{id}/` - Get game details
-- `PUT /api/games/{id}/` - Update game
-- `DELETE /api/games/{id}/` - Delete game
-- `GET /api/games/search/` - Search games via RAWG API
-
-### Save/Load Operations
-
-- `POST /api/save/{game_id}/` - Save game file (supports multiple save paths)
-- `POST /api/load/{game_id}/` - Load game file (supports multiple save paths)
-- `GET /api/save-folders/{game_id}/` - Get save folders for game
-- `POST /api/open-save-location/{game_id}/` - Open save file location(s) in file explorer
-- `GET /api/operation-queue/` - Get operation queue status
-
-### Admin API (Admin Only)
-
-- `GET /admin/users/` - List all users (with optional search query parameter)
-- `POST /admin/users/{user_id}/reset-password/` - Reset user password to default constant value
-
-### Client Worker API
-
-- `POST /api/client-worker/register/` - Register client worker
-- `GET /api/client-worker/operations/` - Get pending operations
-- `POST /api/client-worker/progress/{operation_id}/` - Update operation progress
-- `POST /api/client-worker/complete/{operation_id}/` - Mark operation complete
 
 ## Troubleshooting
 
@@ -633,7 +614,7 @@ If password reset emails don't send:
 2. **Check 2FA**: Gmail requires 2FA enabled for App Passwords
 3. **Check Credentials**: Verify `GMAIL_USER` and `GMAIL_APP_PASSWORD` in `.env`
 4. **Check SMTP**: Test SMTP connection manually
-5. **Check Logs**: Review `logs/django.log` for email errors
+5. **Check Logs**: Check Docker logs (`docker-compose logs web`) or console output for email errors
 
 ### Client Worker Issues
 
@@ -674,6 +655,7 @@ SaveNLoadModern/
 ├── client_worker/              # Client worker application
 │   ├── client_service_rclone.py # Main client worker service
 │   ├── rclone_client.py         # Rclone-based FTP client
+│   ├── version_utils.py         # Version checking utilities
 │   ├── rclone/                  # Rclone executable and config (for building)
 │   │   ├── rclone.exe          # Rclone Windows executable (bundled into .exe)
 │   │   └── rclone.conf         # Rclone FTP configuration (bundled into .exe)
@@ -695,8 +677,7 @@ SaveNLoadModern/
 │   │   ├── user.py             # User model
 │   │   ├── game.py             # Game model
 │   │   ├── save_folder.py     # Save folder model
-│   │   ├── operation_queue.py  # Operation queue model
-│   │   ├── client_worker.py    # Client worker model
+│   │   ├── operation_constants.py # Operation constants
 │   │   └── password_reset_otp.py # OTP model
 │   │
 │   ├── views/                  # View logic
@@ -705,7 +686,14 @@ SaveNLoadModern/
 │   │   ├── save_load_api.py    # Save/load API endpoints
 │   │   ├── client_worker_api.py # Client worker API
 │   │   ├── rawg_api.py         # RAWG API integration
-│   │   └── settings.py         # Settings views
+│   │   ├── settings.py         # Settings views
+│   │   ├── api_helpers.py      # API helper functions
+│   │   ├── custom_decorators.py # Custom decorators
+│   │   └── input_sanitizer.py  # Input sanitization
+│   │
+│   ├── services/               # Business logic services
+│   │   ├── redis_operation_service.py # Redis operation logic
+│   │   └── redis_worker_service.py    # Redis worker logic
 │   │
 │   ├── url_configs/            # URL routing
 │   │   ├── user/               # User URLs
@@ -722,7 +710,9 @@ SaveNLoadModern/
 │   │   └── base.html           # Base template
 │   │
 │   ├── utils/                  # Utility functions
-│   │   └── email_service.py    # Email sending utilities
+│   │   ├── email_service.py    # Email sending utilities
+│   │   ├── redis_client.py     # Redis client wrapper
+│   │   └── ...                 # Various utility modules
 │   │
 │   └── management/             # Management commands
 │       └── commands/           # Custom commands
@@ -743,7 +733,8 @@ SaveNLoadModern/
 ├── Dockerfile.prod             # Production Dockerfile
 ├── requirements.txt            # Python dependencies
 ├── package.json                # Node.js dependencies
-└── manage.py                   # Django management script
+├── manage.py                   # Django management script
+└── update_version.py           # Version update script
 ```
 
 ## Development Notes
@@ -752,7 +743,7 @@ SaveNLoadModern/
 - **Migrations**: Run `python manage.py makemigrations` after model changes
 - **Admin Panel**: Access at `/admin/` (requires admin account)
 - **Debug Mode**: Set `DEBUG=True` in `.env` for development
-- **Logging**: Logs are written to `logs/django.log`
+- **Logging**: Logs are output to console (stdout/stderr) - use `docker-compose logs web` to view
 - **Media Files**: User-uploaded files stored in `media/` directory
 - **Session Storage**: Uses database-backed sessions
 
@@ -760,6 +751,7 @@ SaveNLoadModern/
 
 - **Backend Framework**: Django 6.0
 - **Database**: PostgreSQL 16
+- **Message Broker/Cache**: Redis
 - **Frontend**: Bootstrap 5.3, JavaScript (Vanilla)
 - **Styling**: Sass/SCSS
 - **Containerization**: Docker, Docker Compose
@@ -776,6 +768,7 @@ SaveNLoadModern/
 - **Django**: Web framework
 - **psycopg2-binary**: PostgreSQL adapter
 - **python-dotenv**: Environment variable management
+- **redis**: Python client for Redis
 - **requests**: HTTP library for API calls
 - **gunicorn**: Production WSGI server
 - **whitenoise**: Static file serving
@@ -800,6 +793,7 @@ SaveNLoadModern/
 **Prerequisites:**
 - **[Python 3.12](https://www.python.org/downloads/)** installed
 - **[PostgreSQL 16](https://www.postgresql.org/download/)** installed and running
+- **[Redis](https://redis.io/download/)** installed and running
 - **[Node.js 20.x](https://nodejs.org/)** installed
 
 **Setup Steps:**
@@ -841,34 +835,44 @@ See `package.json` for the complete list of Node.js dependencies.
 createdb savenload_db
 ```
 
-5. **Configure environment variables:**
+5. **Start Redis Server:**
+
+Ensure your Redis server is running on the default port (6379).
+
+```bash
+# Verify Redis is running (should return PONG)
+redis-cli ping
+```
+
+6. **Configure environment variables:**
 
 Ensure your `.env` file is properly configured with production settings:
 - Set `DEBUG=False`
 - Configure `ALLOWED_HOSTS` with your production domain
+- Set `REDIS_HOST=localhost` (assuming Redis is on the same machine)
 - Set strong `SECRET_KEY`
 - Configure production database credentials
 - Set email and RAWG API credentials
 
-6. **Run database migrations:**
+7. **Run database migrations:**
 
 ```bash
 python manage.py migrate
 ```
 
-7. **Create admin user (if not exists):**
+8. **Create admin user (if not exists):**
 
 ```bash
 python manage.py seed_admin
 ```
 
-8. **Collect static files:**
+9. **Collect static files:**
 
 ```bash
 python manage.py collectstatic --noinput
 ```
 
-9. **Start with Gunicorn:**
+10. **Start with Gunicorn:**
 
 ```bash
 gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --threads 2 --timeout 120

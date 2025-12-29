@@ -35,7 +35,7 @@ def sanitize_game_name(game_name: str) -> str:
 
 def generate_save_folder_path(username: str, game_name: str, folder_number: int) -> str:
     """
-    Generate full remote path for a save folder in FTP format (forward slashes)
+    Generate full remote path for a save folder in remote format (forward slashes)
     
     Used in:
     - SaveFolder._generate_remote_path
@@ -73,7 +73,7 @@ def generate_game_directory_path(username: str, game_name: str) -> str:
 
 def normalize_path_separators(path: str) -> str:
     """
-    Normalize path separators to forward slashes (FTP format)
+    Normalize path separators to forward slashes (Remote format)
     Removes leading/trailing slashes
     
     Used in:
@@ -99,7 +99,7 @@ def normalize_path_separators(path: str) -> str:
 
 def build_rclone_remote_path(remote_name: str, path: str) -> str:
     """
-    Build rclone remote path string (e.g., "ftp:/path/to/file")
+    Build rclone remote path string (e.g., "remote:/path/to/file")
     
     Used in:
     - RcloneClient._build_remote_path

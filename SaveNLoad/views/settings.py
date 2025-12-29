@@ -225,7 +225,7 @@ def _queue_game_deletion_operations(game: Game, admin_user, request=None):
         save_folders = SaveFolder.objects.filter(game=game)
         
         if not save_folders.exists():
-            print(f"No save folders found for game {game.id} ({game.name}), no FTP cleanup needed")
+            print(f"No save folders found for game {game.id} ({game.name}), no storage cleanup needed")
             # No saves to clean up, so we can return a special flag indicating immediate deletion is safe
             return (True, "no_saves")  # Special flag: no saves means immediate deletion is safe
         
@@ -236,8 +236,8 @@ def _queue_game_deletion_operations(game: Game, admin_user, request=None):
         from SaveNLoad.views.api_helpers import get_client_worker_or_error
         client_worker, error_response = get_client_worker_or_error(admin_user, request)
         if error_response:
-            error_msg = f"No active client worker available. Cannot delete FTP saves for game '{game.name}'. Please ensure a client worker is running and try again."
-            print(f"WARNING: No active client worker available for admin {admin_user.username}, cannot delete FTP saves for game {game.id}")
+            error_msg = f"No active client worker available. Cannot delete remote saves for game '{game.name}'. Please ensure a client worker is running and try again."
+            print(f"WARNING: No active client worker available for admin {admin_user.username}, cannot delete remote saves for game {game.id}")
             return (False, error_msg)
         
         # Build safe game name (same logic as SaveFolder._generate_remote_path)
@@ -273,13 +273,13 @@ def _queue_game_deletion_operations(game: Game, admin_user, request=None):
                 print(f"Queued delete operation for game directory: {game_directory_path} (assigned to admin's worker: {client_worker})")
             except Exception as e:
                 print(f"ERROR: Failed to create delete operation for user {user_id}: {e}")
-                return (False, f"Failed to queue FTP cleanup operation: {str(e)}")
+                return (False, f"Failed to queue storage cleanup operation: {str(e)}")
         
         if operations_created > 0:
             print(f"Queued {operations_created} delete operation(s) for game {game.id} ({game.name}) - all assigned to admin's worker")
             return (True, None)
         else:
-            return (False, "Failed to create any FTP cleanup operations")
+            return (False, "Failed to create any storage cleanup operations")
     except Exception as e:
         error_msg = f"Error queueing game deletion operations: {str(e)}"
         print(f"ERROR: Error queueing game deletion operations for game {game.id}: {e}")
@@ -291,24 +291,24 @@ def _handle_game_deletion(request, game, user):
     Helper to handle game deletion logic
     Returns: JsonResponse
     """
-    # Queue operations to delete all FTP saves for this game
+    # Queue operations to delete all remote saves for this game
     # Use admin's worker (the one making the delete request)
-    # Do NOT delete game if FTP cleanup fails to queue
+    # Do NOT delete game if storage cleanup fails to queue
     success, error_message = _queue_game_deletion_operations(game, admin_user=user, request=request)
     if not success:
-        return json_response_error(error_message or "Failed to queue FTP cleanup operations", status=503)
+        return json_response_error(error_message or "Failed to queue storage cleanup operations", status=503)
     
     # If no saves exist, delete immediately (nothing to clean up)
     if error_message == "no_saves":
         # Delete banner file before deleting game
         delete_game_banner_file(game)
         game.delete()
-        print(f"Game {game.id} ({game.name}) deleted immediately - no FTP saves to clean up")
+        print(f"Game {game.id} ({game.name}) deleted immediately - no remote saves to clean up")
     else:
-        # Mark game for deletion - actual deletion happens after all FTP operations complete successfully
+        # Mark game for deletion - actual deletion happens after all storage cleanup operations complete successfully
         game.pending_deletion = True
         game.save()
-        print(f"Game {game.id} ({game.name}) marked for deletion - will be deleted after all FTP cleanup operations complete")
+        print(f"Game {game.id} ({game.name}) marked for deletion - will be deleted after all storage cleanup operations complete")
     return json_response_success()
 
 

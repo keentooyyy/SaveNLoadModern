@@ -78,15 +78,13 @@ class ClientWorkerServiceRclone:
         self.rclone_client = RcloneClient(remote_name=remote_name)
         
         # Setup Redis connection (REQUIRED - no fallbacks)
-        redis_host = os.getenv('REDIS_HOST', 'localhost')
-        redis_port = int(os.getenv('REDIS_PORT', 6379))
-        redis_password = os.getenv('REDIS_PASSWORD', None)
+        redis_host = os.getenv('REDIS_HOST')
+        redis_port = int(os.getenv('REDIS_PORT'))
+        redis_password = os.getenv('REDIS_PASSWORD')
         
-        # Try to extract host from server_url if Redis host not set
-        if redis_host == 'localhost' and '://' in server_url:
-            from urllib.parse import urlparse
-            parsed = urlparse(server_url)
-            redis_host = parsed.hostname or 'localhost'
+        
+        # Redis connection is now strictly from env vars
+
         
         try:
             if redis_password:

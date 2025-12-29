@@ -16,12 +16,18 @@ RUN apt-get update \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Node.js dependencies
+COPY package.json package-lock.json* /app/
+RUN npm install
+
 # Install Python dependencies
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
 # Copy project
+# Copy project
 COPY . /app/
 
-CMD sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+# Build frontend assets
+RUN npm run build
