@@ -14,6 +14,17 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:8-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   web:
     # Build locally for development (files are localized to the dev machine)
     build:
@@ -27,6 +38,10 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      - REDIS_HOST=redis
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy

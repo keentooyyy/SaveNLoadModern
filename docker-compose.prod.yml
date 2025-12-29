@@ -24,6 +24,27 @@ services:
         reservations:
           memory: 128M
 
+  redis:
+    image: redis:8-alpine
+    container_name: savenload_redis_prod
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - savenload_network
+    # Memory limit for Redis (56MB - remaining from 512MB total)
+    deploy:
+      resources:
+        limits:
+          memory: 56M
+        reservations:
+          memory: 32M
+
   web:
     # CONFIGURATION NOTE:
     # 1. PRE-BUILT IMAGE: The 'image' property points to a private package on GitHub Container Registry (GHCR).
@@ -44,8 +65,11 @@ services:
       - .env
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
+      - REDIS_HOST=redis
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
     networks:

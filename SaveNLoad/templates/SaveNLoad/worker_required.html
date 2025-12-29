@@ -25,18 +25,29 @@
         {% if unpaired_workers %}
         <div class="card bg-dark border-secondary">
             <div class="card-header border-secondary">
-                <h5 class="mb-0 text-white">Available Workers</h5>
+                <h5 class="mb-0 text-white">Online Workers</h5>
             </div>
             <div class="list-group list-group-flush">
                 {% for worker in unpaired_workers %}
                 <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
                     <div class="text-start">
                         <strong class="text-white d-block">Worker ID: {{ worker.client_id }}</strong>
-                        <span class="badge bg-success">Online</span>
+                        <div class="mt-1">
+                            <span class="badge bg-success">Online</span>
+                            {% if worker.claimed %}
+                                <span class="badge bg-warning text-dark">Claimed by: {{ worker.linked_user|default:"Unknown" }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Unclaimed</span>
+                            {% endif %}
+                        </div>
                     </div>
+                    {% if not worker.claimed %}
                     <button class="btn btn-primary btn-sm claim-btn" data-client-id="{{ worker.client_id }}">
                         Use Worker
                     </button>
+                    {% else %}
+                    <span class="text-muted">Already claimed</span>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>

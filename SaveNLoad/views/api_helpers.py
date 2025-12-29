@@ -5,8 +5,11 @@ from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from SaveNLoad.models import Game
-from SaveNLoad.models.client_worker import ClientWorker
-from SaveNLoad.models.operation_queue import OperationQueue, OperationType
+from SaveNLoad.services.redis_worker_service import (
+    get_user_workers,
+    is_worker_online,
+    get_worker_info
+)
 from SaveNLoad.views.custom_decorators import get_current_user
 from SaveNLoad.utils.image_utils import get_image_url_or_fallback
 from django.utils import timezone
@@ -79,34 +82,31 @@ def get_game_or_error(game_id):
 def get_client_worker_or_error(user, request=None):
     """
     Get client worker for a user or return error response
-    Uses DB ownership - checks if user owns an active worker
-    Returns: (client_worker_object, error_response_or_none)
+    Uses Redis to check if user owns an active worker
+    Returns: (client_id_string, error_response_or_none)
     """
     if not user:
         return None, json_response_error('User is required', status=400)
     
-    # Auto-unclaim offline workers and cookie-cleared workers before checking
-    ClientWorker.check_claimed_workers()
+    # Get online workers for this user
+    worker_ids = get_user_workers(user.id)
     
-    # Get worker owned by this user - rely on relationship and is_online() check
-    # No need for is_active check - is_online() is the source of truth
-    client_worker = ClientWorker.objects.filter(
-        user=user
-    ).order_by('-last_ping_response').first()
-    
-    if not client_worker:
+    if not worker_ids:
         return None, JsonResponse({
             'error': 'No client worker paired. Please claim a worker in settings.',
             'requires_worker': True
         }, status=503)
     
-    if not client_worker.is_online():
+    # Return first worker (most recent)
+    client_id = worker_ids[0]
+    
+    if not is_worker_online(client_id):
         return None, JsonResponse({
-            'error': f'Client worker ({client_worker.client_id}) is offline. Please ensure it is running.',
+            'error': f'Client worker ({client_id}) is offline. Please ensure it is running.',
             'requires_worker': True
         }, status=503)
         
-    return client_worker, None
+    return client_id, None
 
 
 def check_admin_or_error(user):
@@ -160,16 +160,15 @@ def json_response_field_errors(field_errors, general_errors=None, message=None):
 def get_client_worker_by_id_or_error(client_id):
     """
     Get client worker by client_id or return error response
-    Returns: (client_worker_object, error_response_or_none)
+    Returns: (client_id_string, error_response_or_none)
     """
     if not client_id:
         return None, json_response_error('client_id is required', status=400)
     
-    try:
-        worker = ClientWorker.objects.get(client_id=client_id)
-        return worker, None
-    except ClientWorker.DoesNotExist:
-        return None, json_response_error('Client not registered', status=404)
+    if not is_worker_online(client_id):
+        return None, json_response_error('Client not registered or offline', status=404)
+    
+    return client_id, None
 
 
 def get_save_folder_or_error(user, game, folder_number):
@@ -301,25 +300,21 @@ def get_latest_save_folder_or_error(user, game):
     return save_folder, None
 
 
-def create_operation_response(operation, client_worker, message=None, extra_data=None):
+def create_operation_response(operation_id, client_id, message=None, extra_data=None):
     """
     Create standardized operation response with operation_id and client_id
     Returns: JsonResponse with operation data
     
     Args:
-        operation: OperationQueue instance
-        client_worker: ClientWorker instance
+        operation_id: Operation ID string
+        client_id: Client ID string
         message: Optional success message
         extra_data: Optional dict of additional data to include
     """
     data = {
-        'operation_id': operation.id,
-        'client_id': client_worker.client_id
+        'operation_id': operation_id,
+        'client_id': client_id
     }
-    
-    # Add save_folder_number if present
-    if operation.save_folder_number:
-        data['save_folder_number'] = operation.save_folder_number
     
     # Merge any extra data
     if extra_data:
@@ -333,20 +328,20 @@ def get_operation_or_error(operation_id, user=None):
     Get operation by ID or return error response
     Optionally verify operation belongs to user
     
-    Returns: (operation_object, error_response_or_none)
+    Returns: (operation_dict, error_response_or_none)
     """
-    from SaveNLoad.models.operation_queue import OperationQueue
+    from SaveNLoad.services.redis_operation_service import get_operation
     
-    try:
-        operation = OperationQueue.objects.get(pk=operation_id)
-        
-        # If user provided, verify operation belongs to user
-        if user and operation.user != user:
-            return None, json_response_error('Operation not found', status=404)
-        
-        return operation, None
-    except OperationQueue.DoesNotExist:
+    operation = get_operation(operation_id)
+    
+    if not operation:
         return None, json_response_error('Operation not found', status=404)
+    
+    # If user provided, verify operation belongs to user
+    if user and operation.get('user_id') != user.id:
+        return None, json_response_error('Operation not found', status=404)
+    
+    return operation, None
 
 
 def get_user_game_last_played(user, limit=None):
@@ -434,20 +429,31 @@ def cleanup_operations_by_status(status, no_items_message, success_message_templ
         no_items_message: Message when no items to delete
         success_message_template: Template for success message (e.g., "Deleted {count} completed operation(s)")
     """
-    from SaveNLoad.models.operation_queue import OperationQueue, OperationStatus
+    from SaveNLoad.utils.redis_client import get_redis_client
+    from SaveNLoad.services.redis_operation_service import OperationStatus
     
-    # Check if there are any operations first
-    count = OperationQueue.objects.filter(status=status).count()
+    redis_client = get_redis_client()
+    
+    # Get all operations with the specified status
+    operation_keys = redis_client.keys('operation:*')
+    matching_keys = []
+    for key in operation_keys:
+        op_status = redis_client.hget(key, 'status')
+        if op_status == status:
+            matching_keys.append(key)
+    
+    count = len(matching_keys)
     if count == 0:
         return json_response_success(
             message=no_items_message,
             data={'deleted_count': 0}
         )
     
-    # Delete operations safely
-    deleted_count, is_safe = safe_delete_operations(
-        OperationQueue.objects.filter(status=status)
-    )
+    # Delete operations
+    deleted_count = 0
+    for key in matching_keys:
+        redis_client.delete(key)
+        deleted_count += 1
     
     return json_response_success(
         message=success_message_template.format(count=deleted_count),
@@ -465,23 +471,40 @@ def cleanup_operations_by_age(days, no_items_message, success_message_template):
         no_items_message: Message when no items to delete
         success_message_template: Template for success message
     """
-    from SaveNLoad.models.operation_queue import OperationQueue
+    from SaveNLoad.utils.redis_client import get_redis_client
     from datetime import timedelta
     
     threshold = timezone.now() - timedelta(days=days)
+    redis_client = get_redis_client()
     
-    # Check if there are any old operations first
-    old_count = OperationQueue.objects.filter(created_at__lt=threshold).count()
+    # Get all operations older than threshold
+    operation_keys = redis_client.keys('operation:*')
+    old_keys = []
+    for key in operation_keys:
+        created_at_str = redis_client.hget(key, 'created_at')
+        if created_at_str:
+            try:
+                from datetime import datetime
+                created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                if timezone.is_aware(created_at):
+                    created_at = timezone.make_naive(created_at)
+                if created_at < timezone.make_naive(threshold):
+                    old_keys.append(key)
+            except:
+                pass
+    
+    old_count = len(old_keys)
     if old_count == 0:
         return json_response_success(
             message=no_items_message,
             data={'deleted_count': 0}
         )
     
-    # Delete old operations safely
-    deleted_count, is_safe = safe_delete_operations(
-        OperationQueue.objects.filter(created_at__lt=threshold)
-    )
+    # Delete old operations
+    deleted_count = 0
+    for key in old_keys:
+        redis_client.delete(key)
+        deleted_count += 1
     
     return json_response_success(
         message=success_message_template.format(count=deleted_count),

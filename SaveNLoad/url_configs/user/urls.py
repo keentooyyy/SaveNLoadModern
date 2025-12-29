@@ -17,6 +17,6 @@ urlpatterns = [
     path('games/<int:game_id>/saves/', save_load_api.list_saves, name='list_saves'),
     path('games/<int:game_id>/load/', save_load_api.load_game, name='load_game'),
     path('games/<int:game_id>/save/', save_load_api.save_game, name='save_game'),
-    path('operations/<int:operation_id>/status/', save_load_api.check_operation_status, name='check_operation_status'),
+    path('operations/<str:operation_id>/status/', save_load_api.check_operation_status, name='check_operation_status'),
 ]
 

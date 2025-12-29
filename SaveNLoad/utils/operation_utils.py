@@ -2,7 +2,8 @@
 Operation-related utilities
 Common patterns for operation status checking and processing
 """
-from SaveNLoad.models.operation_queue import OperationStatus, OperationType
+from SaveNLoad.models.operation_constants import OperationType
+from SaveNLoad.services.redis_operation_service import OperationStatus
 
 
 def is_operation_type(operation, operation_type: str) -> bool:
@@ -105,7 +106,7 @@ def is_user_deletion_operation(operation) -> bool:
     return False
 
 
-def get_operations_by_status(queryset, status: str):
+def get_operations_by_status(operations_list, status: str):
     """
     Filter operations by status
     
@@ -114,16 +115,16 @@ def get_operations_by_status(queryset, status: str):
     - Status-based queries
     
     Args:
-        queryset: OperationQueue QuerySet
+        operations_list: List of operation dicts
         status: Status to filter by
         
     Returns:
-        Filtered QuerySet
+        Filtered list of operations
     """
-    return queryset.filter(status=status)
+    return [op for op in operations_list if op.get('status') == status]
 
 
-def get_pending_or_in_progress_operations(queryset):
+def get_pending_or_in_progress_operations(operations_list):
     """
     Get operations that are pending or in progress
     
@@ -132,26 +133,26 @@ def get_pending_or_in_progress_operations(queryset):
     - Operation status queries
     
     Args:
-        queryset: OperationQueue QuerySet
+        operations_list: List of operation dicts
         
     Returns:
-        Filtered QuerySet
+        Filtered list of operations
     """
-    return queryset.filter(status__in=[OperationStatus.PENDING, OperationStatus.IN_PROGRESS])
+    return [op for op in operations_list if op.get('status') in [OperationStatus.PENDING, OperationStatus.IN_PROGRESS]]
 
 
-def check_all_operations_succeeded(operations_queryset) -> bool:
+def check_all_operations_succeeded(operations_list) -> bool:
     """
-    Check if all operations in queryset succeeded (status=COMPLETED)
+    Check if all operations in list succeeded (status=COMPLETED)
     
     Used in:
     - Game deletion completion check
     
     Args:
-        operations_queryset: OperationQueue QuerySet
+        operations_list: List of operation dicts
         
     Returns:
         True if all operations are COMPLETED
     """
-    return operations_queryset.exclude(status=OperationStatus.COMPLETED).count() == 0
+    return all(op.get('status') == OperationStatus.COMPLETED for op in operations_list)
 

@@ -3,7 +3,7 @@ from django.urls import reverse
 from django.http import JsonResponse
 from functools import wraps
 from SaveNLoad.models import SimpleUsers
-from SaveNLoad.models.client_worker import ClientWorker
+from SaveNLoad.services.redis_worker_service import get_user_workers, get_unclaimed_workers, is_worker_online
 
 
 def login_required(view_func):
@@ -67,34 +67,53 @@ def client_worker_required(view_func):
         # Check for active worker owned by this user
         # 6-second timeout matches is_online default
         from django.utils import timezone
-        from datetime import timedelta
-        
-        from SaveNLoad.models.client_worker import SERVER_PING_INTERVAL_SECONDS, MAX_MISSED_PINGS
-        ping_threshold = timezone.now() - timedelta(seconds=SERVER_PING_INTERVAL_SECONDS * 2)
-        
-        # Efficient DB check: Is there any worker owned by user that is online?
-        # Rely on ping data - is_online() is the source of truth
-        has_worker = ClientWorker.objects.filter(
-            user=user,
-            is_offline=False,
-            missed_ping_count__lt=MAX_MISSED_PINGS,
-            last_ping_response__gte=ping_threshold
-        ).exists()
+        # Check if user has any online workers
+        worker_ids = get_user_workers(user.id)
+        has_worker = len(worker_ids) > 0
         
         if not has_worker:
-            if is_ajax:
-                return JsonResponse({
-                    'error': 'Client worker not connected. Please ensure the client worker is running and claimed.',
-                    'requires_worker': True
-                }, status=503)
+            # Auto-claim first available unclaimed worker
+            unpaired_worker_ids = get_unclaimed_workers()
+            if unpaired_worker_ids:
+                # Auto-claim the first available worker
+                from SaveNLoad.services.redis_worker_service import claim_worker
+                client_id = unpaired_worker_ids[0]
+                if claim_worker(client_id, user.id):
+                    print(f"Auto-claimed worker {client_id} to user {user.username}")
+                    # Re-check for workers after auto-claim
+                    worker_ids = get_user_workers(user.id)
+                    has_worker = len(worker_ids) > 0
             
-            # Fetch active unpaired workers to show in the UI
-            unpaired_workers = ClientWorker.get_active_workers(timeout_seconds=ClientWorker.WORKER_TIMEOUT_SECONDS)
-            unpaired_workers = [w for w in unpaired_workers if w.user is None]
-            
-            return render(request, 'SaveNLoad/worker_required.html', {
-                'unpaired_workers': unpaired_workers
-            })
+            if not has_worker:
+                if is_ajax:
+                    return JsonResponse({
+                        'error': 'Client worker not connected. Please ensure the client worker is running and claimed.',
+                        'requires_worker': True
+                    }, status=503)
+                
+                # Fetch all online workers to show in the UI
+                from SaveNLoad.services.redis_worker_service import get_online_workers, get_worker_info
+                online_worker_ids = get_online_workers()
+                online_workers = []
+                for wid in online_worker_ids:
+                    worker_info = get_worker_info(wid)
+                    user_id = worker_info.get('user_id') if worker_info else None
+                    linked_username = None
+                    if user_id:
+                        try:
+                            linked_user = SimpleUsers.objects.get(pk=user_id)
+                            linked_username = linked_user.username
+                        except SimpleUsers.DoesNotExist:
+                            pass
+                    online_workers.append({
+                        'client_id': wid,
+                        'linked_user': linked_username,
+                        'claimed': user_id is not None
+                    })
+                
+                return render(request, 'SaveNLoad/worker_required.html', {
+                    'unpaired_workers': online_workers
+                })
         
         return view_func(request, *args, **kwargs)
     return wrapper

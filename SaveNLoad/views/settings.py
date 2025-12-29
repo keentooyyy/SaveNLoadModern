@@ -217,8 +217,8 @@ def _queue_game_deletion_operations(game: Game, admin_user, request=None):
         - (False, error_message) if FTP cleanup failed (no worker available, etc.)
     """
     from SaveNLoad.models.save_folder import SaveFolder
-    from SaveNLoad.models.client_worker import ClientWorker
-    from SaveNLoad.models.operation_queue import OperationQueue, OperationType
+    from SaveNLoad.models.operation_constants import OperationType
+    from SaveNLoad.services.redis_operation_service import create_operation
     
     try:
         # Get all save folders for this game (across all users)
@@ -257,17 +257,20 @@ def _queue_game_deletion_operations(game: Game, admin_user, request=None):
                 
                 # Create DELETE operation for the entire game directory
                 # Note: user field is the save owner, but operation is handled by admin's worker
-                OperationQueue.create_operation(
-                    operation_type=OperationType.DELETE,
-                    user=user,  # Save owner (for tracking)
-                    game=game,
-                    local_save_path='',  # Not needed for delete
-                    save_folder_number=None,  # Deleting entire game directory
-                    smb_path=game_directory_path,  # Full path to game directory
-                    client_worker=client_worker  # Admin's worker handles all deletions
+                create_operation(
+                    {
+                        'operation_type': OperationType.DELETE,
+                        'user_id': user.id,  # Save owner (for tracking)
+                        'game_id': game.id,
+                        'local_save_path': '',
+                        'save_folder_number': None,  # Deleting entire game directory
+                        'smb_path': game_directory_path,  # Full path to game directory
+                        'path_index': None
+                    },
+                    client_worker  # Admin's worker handles all deletions
                 )
                 operations_created += 1
-                print(f"Queued delete operation for game directory: {game_directory_path} (assigned to admin's worker: {client_worker.client_id})")
+                print(f"Queued delete operation for game directory: {game_directory_path} (assigned to admin's worker: {client_worker})")
             except Exception as e:
                 print(f"ERROR: Failed to create delete operation for user {user_id}: {e}")
                 return (False, f"Failed to queue FTP cleanup operation: {str(e)}")
@@ -313,167 +316,172 @@ def _handle_game_deletion(request, game, user):
 @require_http_methods(["GET", "POST", "DELETE"])
 def game_detail(request, game_id):
     """Get, update, or delete a single Game (admin only, AJAX)."""
-    user = get_current_user(request)
-    error_response = check_admin_or_error(user)
-    if error_response:
-        return error_response
+    try:
+        user = get_current_user(request)
+        error_response = check_admin_or_error(user)
+        if error_response:
+            return error_response
 
-    # Get game or return error
-    game, error_response = get_game_or_error(game_id)
-    if error_response:
-        return error_response
+        # Get game or return error
+        game, error_response = get_game_or_error(game_id)
+        if error_response:
+            return error_response
 
-    if request.method == "GET":
-        from SaveNLoad.models.operation_queue import OperationQueue, OperationStatus, OperationType
-        from SaveNLoad.utils.operation_utils import get_pending_or_in_progress_operations, is_game_deletion_operation
-        
-        # Get deletion operations for this game (operations without save_folder_number)
-        deletion_operations = OperationQueue.objects.filter(
-            game=game,
-            operation_type=OperationType.DELETE,
-            save_folder_number__isnull=True
-        )
-        
-        # Get pending/in-progress operations
-        pending_ops = get_pending_or_in_progress_operations(deletion_operations)
-        total_deletion_ops = deletion_operations.count()
-        pending_count = pending_ops.count()
-        completed_count = deletion_operations.filter(status=OperationStatus.COMPLETED).count()
-        failed_count = deletion_operations.filter(status=OperationStatus.FAILED).count()
-        
-        # Calculate progress percentage
-        progress_percentage = 0
-        if total_deletion_ops > 0:
-            progress_percentage = int((completed_count / total_deletion_ops) * 100)
-        
-        return JsonResponse({
-            'id': game.id,
-            'name': game.name,
-            'banner': get_image_url_or_fallback(game, request),  # Display URL for preview
-            'banner_url': game.banner_url or '',  # Original URL for input field
-            'save_file_locations': game.save_file_locations,
-            'last_played': game.last_played.isoformat() if getattr(game, "last_played", None) else None,
-            'pending_deletion': getattr(game, 'pending_deletion', False),
-            'deletion_operations': {
-                'total': total_deletion_ops,
-                'pending': pending_count,
-                'completed': completed_count,
-                'failed': failed_count,
-                'progress_percentage': progress_percentage,
-            }
-        })
-
-    if request.method == "DELETE":
-        return _handle_game_deletion(request, game, user)
-
-    # POST - update
-    data, error_response = parse_json_body(request)
-    if error_response:
-        return error_response
-
-    name = (data.get('name') or '').strip()
-    # Support both single and multiple save locations
-    save_file_locations = data.get('save_file_locations', [])
-    if not save_file_locations:
-        # Fallback to single location for backward compatibility
-        single_location = (data.get('save_file_location') or '').strip()
-        if single_location:
-            save_file_locations = [single_location]
-    
-    banner = (data.get('banner') or '').strip()
-
-    if not name or not save_file_locations:
-        return json_response_error('Game name and at least one save file location are required.', status=400)
-    
-    # Filter out empty locations
-    save_file_locations = [loc.strip() for loc in save_file_locations if loc.strip()]
-    if not save_file_locations:
-        return json_response_error('At least one valid save file location is required.', status=400)
-
-    # Ensure unique name (excluding this game)
-    if Game.objects.exclude(pk=game.id).filter(name=name).exists():
-        return json_response_error('A game with this name already exists.', status=400)
-
-    game.name = name
-    game.save_file_locations = save_file_locations
-    
-    # Clean up old mappings and generate new ones
-    game.cleanup_path_mappings()  # Remove mappings for deleted paths
-    game.generate_path_mappings()  # Generate mappings for current paths
-    
-    # Handle banner update
-    if banner:
-        game.banner_url = banner  # Store original URL immediately
-        
-        # Skip download if banner URL is from same server (localhost/local IP)
-        from SaveNLoad.utils.image_utils import is_local_url
-        if is_local_url(banner, request):
-            # Local URL - skip download, just store the URL
-            print(f"Banner URL is local ({banner}) - skipping download")
-        else:
-            # Download and cache banner (increased timeout for external URLs)
-            try:
-                success, message, file_obj = download_image_from_url(banner, timeout=10)
-                if success and file_obj:
-                    try:
-                        # Delete old banner if exists
-                        if game.banner:
-                            try:
-                                old_path = game.banner.path
-                                if os.path.exists(old_path):
-                                    os.remove(old_path)
-                            except Exception as e:
-                                print(f"WARNING: Failed to delete old banner: {e}")
-                        
-                        # Determine file extension
-                        parsed = urlparse(banner)
-                        ext = os.path.splitext(parsed.path)[1] or '.jpg'
-                        game.banner.save(f"banner_{game.id}{ext}", File(file_obj), save=False)
-                        # Refresh game object to ensure banner field is updated
-                        game.refresh_from_db()
-                        # Update banner_url to local URL after successful download
-                        if game.banner:
-                            local_url = request.build_absolute_uri(game.banner.url) if request else game.banner.url
-                            game.banner_url = local_url
-                            game.save(update_fields=['banner_url'])
-                        # Clean up temp file
-                        if hasattr(file_obj, 'name'):
-                            os.unlink(file_obj.name)
-                        print(f"Successfully downloaded and cached banner for game {game.id}: {game.banner.name if game.banner else 'NOT SET'}")
-                    except Exception as e:
-                        print(f"ERROR: Failed to save cached banner for game {game.id}: {e}")
-                        # Continue - banner_url is already stored as fallback
-                else:
-                    print(f"WARNING: Failed to download banner for game {game.id}: {message}")
-                    # Continue - banner_url is already stored as fallback
-            except Exception as e:
-                print(f"ERROR: Banner download failed for game {game.id}: {e}")
-                # Don't block the save operation - banner will load from URL
-    else:
-        # If banner is cleared, also clear cached file
-        if game.banner:
-            try:
-                old_path = game.banner.path
-                if os.path.exists(old_path):
-                    os.remove(old_path)
-            except Exception as e:
-                print(f"WARNING: Failed to delete banner: {e}")
-        game.banner = None
-        game.banner_url = None
-    
-    game.save()
-
-    return json_response_success(
-        data={
-            'game': {
+        if request.method == "GET":
+            from SaveNLoad.services.redis_operation_service import get_operations_by_game, OperationStatus
+            from SaveNLoad.models.operation_constants import OperationType
+            
+            # Get deletion operations for this game (operations without save_folder_number)
+            all_operations = get_operations_by_game(game.id)
+            deletion_operations = [op for op in all_operations 
+                                  if op.get('type') == OperationType.DELETE and not op.get('save_folder_number')]
+            
+            # Get pending/in-progress operations
+            from SaveNLoad.utils.operation_utils import get_pending_or_in_progress_operations
+            pending_ops = get_pending_or_in_progress_operations(deletion_operations)
+            total_deletion_ops = len(deletion_operations)
+            pending_count = len(pending_ops)
+            completed_count = len([op for op in deletion_operations if op.get('status') == OperationStatus.COMPLETED])
+            failed_count = len([op for op in deletion_operations if op.get('status') == OperationStatus.FAILED])
+            
+            # Calculate progress percentage
+            progress_percentage = 0
+            if total_deletion_ops > 0:
+                progress_percentage = int((completed_count / total_deletion_ops) * 100)
+            
+            return JsonResponse({
                 'id': game.id,
                 'name': game.name,
                 'banner': get_image_url_or_fallback(game, request),  # Display URL for preview
                 'banner_url': game.banner_url or '',  # Original URL for input field
                 'save_file_locations': game.save_file_locations,
+                'last_played': game.last_played.isoformat() if getattr(game, "last_played", None) else None,
+                'pending_deletion': getattr(game, 'pending_deletion', False),
+                'deletion_operations': {
+                    'total': total_deletion_ops,
+                    'pending': pending_count,
+                    'completed': completed_count,
+                    'failed': failed_count,
+                    'progress_percentage': progress_percentage,
+                }
+            })
+
+        if request.method == "DELETE":
+            return _handle_game_deletion(request, game, user)
+
+        # POST - update
+        data, error_response = parse_json_body(request)
+        if error_response:
+            return error_response
+
+        name = (data.get('name') or '').strip()
+        # Support both single and multiple save locations
+        save_file_locations = data.get('save_file_locations', [])
+        if not save_file_locations:
+            # Fallback to single location for backward compatibility
+            single_location = (data.get('save_file_location') or '').strip()
+            if single_location:
+                save_file_locations = [single_location]
+        
+        banner = (data.get('banner') or '').strip()
+
+        if not name or not save_file_locations:
+            return json_response_error('Game name and at least one save file location are required.', status=400)
+        
+        # Filter out empty locations
+        save_file_locations = [loc.strip() for loc in save_file_locations if loc.strip()]
+        if not save_file_locations:
+            return json_response_error('At least one valid save file location is required.', status=400)
+
+        # Ensure unique name (excluding this game)
+        if Game.objects.exclude(pk=game.id).filter(name=name).exists():
+            return json_response_error('A game with this name already exists.', status=400)
+
+        game.name = name
+        game.save_file_locations = save_file_locations
+        
+        # Clean up old mappings and generate new ones
+        game.cleanup_path_mappings()  # Remove mappings for deleted paths
+        game.generate_path_mappings()  # Generate mappings for current paths
+        
+        # Handle banner update
+        if banner:
+            game.banner_url = banner  # Store original URL immediately
+            
+            # Skip download if banner URL is from same server (localhost/local IP)
+            from SaveNLoad.utils.image_utils import is_local_url
+            if is_local_url(banner, request):
+                # Local URL - skip download, just store the URL
+                print(f"Banner URL is local ({banner}) - skipping download")
+            else:
+                # Download and cache banner (increased timeout for external URLs)
+                try:
+                    success, message, file_obj = download_image_from_url(banner, timeout=10)
+                    if success and file_obj:
+                        try:
+                            # Delete old banner if exists
+                            if game.banner:
+                                try:
+                                    old_path = game.banner.path
+                                    if os.path.exists(old_path):
+                                        os.remove(old_path)
+                                except Exception as e:
+                                    print(f"WARNING: Failed to delete old banner: {e}")
+                            
+                            # Determine file extension
+                            parsed = urlparse(banner)
+                            ext = os.path.splitext(parsed.path)[1] or '.jpg'
+                            game.banner.save(f"banner_{game.id}{ext}", File(file_obj), save=False)
+                            # Refresh game object to ensure banner field is updated
+                            game.refresh_from_db()
+                            # Update banner_url to local URL after successful download
+                            if game.banner:
+                                local_url = request.build_absolute_uri(game.banner.url) if request else game.banner.url
+                                game.banner_url = local_url
+                                game.save(update_fields=['banner_url'])
+                            # Clean up temp file
+                            if hasattr(file_obj, 'name'):
+                                os.unlink(file_obj.name)
+                            print(f"Successfully downloaded and cached banner for game {game.id}: {game.banner.name if game.banner else 'NOT SET'}")
+                        except Exception as e:
+                            print(f"ERROR: Failed to save cached banner for game {game.id}: {e}")
+                            # Continue - banner_url is already stored as fallback
+                    else:
+                        print(f"WARNING: Failed to download banner for game {game.id}: {message}")
+                        # Continue - banner_url is already stored as fallback
+                except Exception as e:
+                    print(f"ERROR: Banner download failed for game {game.id}: {e}")
+                    # Don't block the save operation - banner will load from URL
+        else:
+            # If banner is cleared, also clear cached file
+            if game.banner:
+                try:
+                    old_path = game.banner.path
+                    if os.path.exists(old_path):
+                        os.remove(old_path)
+                except Exception as e:
+                    print(f"WARNING: Failed to delete banner: {e}")
+            game.banner = None
+            game.banner_url = None
+        
+        game.save()
+
+        return json_response_success(
+            data={
+                'game': {
+                    'id': game.id,
+                    'name': game.name,
+                    'banner': get_image_url_or_fallback(game, request),  # Display URL for preview
+                    'banner_url': game.banner_url or '',  # Original URL for input field
+                    'save_file_locations': game.save_file_locations,
+                }
             }
-        }
-    )
+        )
+    except Exception as e:
+        import traceback
+        print(f"ERROR in game_detail: {e}")
+        print(traceback.format_exc())
+        return json_response_error(f'Failed to process game: {str(e)}', status=500)
 
 
 @login_required
@@ -609,42 +617,113 @@ def operation_queue_stats(request):
     if error_response:
         return error_response
     
-    from SaveNLoad.models.operation_queue import OperationQueue, OperationStatus, OperationType
+    from SaveNLoad.utils.redis_client import get_redis_client
+    from SaveNLoad.services.redis_operation_service import OperationStatus
+    from SaveNLoad.models.operation_constants import OperationType
     from django.utils import timezone
     from datetime import timedelta
     
+    redis_client = get_redis_client()
+    
+    # Get all operation keys
+    operation_keys = redis_client.keys('operation:*')
+    
     # Get all operations
-    all_operations = OperationQueue.objects.all()
-    total_count = all_operations.count()
+    all_operations = []
+    for key in operation_keys:
+        operation_hash = redis_client.hgetall(key)
+        if operation_hash:
+            all_operations.append({
+                'status': operation_hash.get('status', ''),
+                'type': operation_hash.get('type', ''),
+                'created_at': operation_hash.get('created_at', ''),
+                'started_at': operation_hash.get('started_at', '')
+            })
+    
+    total_count = len(all_operations)
     
     # Count by status
-    status_counts = {}
-    for status_code, status_label in OperationStatus.CHOICES:
-        status_counts[status_code] = all_operations.filter(status=status_code).count()
+    status_counts = {
+        OperationStatus.PENDING: 0,
+        OperationStatus.IN_PROGRESS: 0,
+        OperationStatus.COMPLETED: 0,
+        OperationStatus.FAILED: 0,
+    }
+    for op in all_operations:
+        status = op.get('status', '')
+        if status in status_counts:
+            status_counts[status] += 1
     
     # Count by type
-    type_counts = {}
-    for type_code, type_label in OperationType.CHOICES:
-        type_counts[type_code] = all_operations.filter(operation_type=type_code).count()
+    type_counts = {
+        OperationType.SAVE: 0,
+        OperationType.LOAD: 0,
+        OperationType.LIST: 0,
+        OperationType.DELETE: 0,
+        OperationType.BACKUP: 0,
+        OperationType.OPEN_FOLDER: 0,
+    }
+    for op in all_operations:
+        op_type = op.get('type', '')
+        if op_type in type_counts:
+            type_counts[op_type] += 1
     
     # Get oldest and newest operations
-    oldest = all_operations.order_by('created_at').first()
-    newest = all_operations.order_by('-created_at').first()
+    oldest = None
+    newest = None
+    if all_operations:
+        sorted_ops = sorted(all_operations, key=lambda x: x.get('created_at', ''))
+        oldest = sorted_ops[0] if sorted_ops else None
+        newest = sorted_ops[-1] if sorted_ops else None
     
     # Count operations older than 30 days
     thirty_days_ago = timezone.now() - timedelta(days=30)
-    old_count = all_operations.filter(created_at__lt=thirty_days_ago).count()
+    old_count = 0
+    for op in all_operations:
+        created_at_str = op.get('created_at')
+        if created_at_str:
+            try:
+                from datetime import datetime
+                created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                if timezone.is_aware(created_at):
+                    created_at = timezone.make_naive(created_at)
+                if created_at < timezone.make_naive(thirty_days_ago):
+                    old_count += 1
+            except:
+                pass
     
     # Count operations older than 7 days
     seven_days_ago = timezone.now() - timedelta(days=7)
-    week_old_count = all_operations.filter(created_at__lt=seven_days_ago).count()
+    week_old_count = 0
+    for op in all_operations:
+        created_at_str = op.get('created_at')
+        if created_at_str:
+            try:
+                from datetime import datetime
+                created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                if timezone.is_aware(created_at):
+                    created_at = timezone.make_naive(created_at)
+                if created_at < timezone.make_naive(seven_days_ago):
+                    week_old_count += 1
+            except:
+                pass
     
     # Count stuck operations (in progress for more than 1 hour)
     one_hour_ago = timezone.now() - timedelta(hours=1)
-    stuck_count = all_operations.filter(
-        status=OperationStatus.IN_PROGRESS,
-        started_at__lt=one_hour_ago
-    ).count()
+    stuck_count = 0
+    for op in all_operations:
+        if op.get('status') == OperationStatus.IN_PROGRESS:
+            started_at_str = op.get('started_at')
+            if started_at_str:
+                try:
+                    from datetime import datetime
+                    started_at = datetime.fromisoformat(started_at_str.replace('Z', '+00:00'))
+                    if timezone.is_aware(started_at):
+                        started_at = timezone.make_naive(started_at)
+                    if started_at < timezone.make_naive(one_hour_ago):
+                        stuck_count += 1
+                except:
+                    pass
     
     stats = {
         'total': total_count,
@@ -660,8 +739,8 @@ def operation_queue_stats(request):
             'list': type_counts.get(OperationType.LIST, 0),
             'delete': type_counts.get(OperationType.DELETE, 0),
         },
-        'oldest_operation': oldest.created_at.isoformat() if oldest else None,
-        'newest_operation': newest.created_at.isoformat() if newest else None,
+        'oldest_operation': oldest.get('created_at') if oldest else None,
+        'newest_operation': newest.get('created_at') if newest else None,
         'old_count_30_days': old_count,
         'old_count_7_days': week_old_count,
         'stuck_count': stuck_count,
@@ -679,7 +758,8 @@ def operation_queue_cleanup(request):
     if error_response:
         return error_response
     
-    from SaveNLoad.models.operation_queue import OperationQueue, OperationStatus
+    from SaveNLoad.utils.redis_client import get_redis_client
+    from SaveNLoad.services.redis_operation_service import OperationStatus
     from django.utils import timezone
     from datetime import timedelta
     
@@ -688,93 +768,107 @@ def operation_queue_cleanup(request):
         return error_response
     
     cleanup_type = data.get('type', '').strip()
-    
-    # CRITICAL SAFETY: Only delete OperationQueue records - this does NOT affect:
-    # - SaveFolder records (completely independent model, no relationship)
-    # - Game.last_played (separate field on Game model)
-    # - SMB files (operations are just queue records, not the actual saves)
-    # - Any other models
-    # The ForeignKey CASCADE only works one way: deleting a Game/User deletes operations, NOT the reverse
-    # OperationQueue and SaveFolder are completely independent - no ForeignKey between them
+    redis_client = get_redis_client()
     
     if cleanup_type == 'completed':
-        # Check if there are any completed operations first
-        completed_count = OperationQueue.objects.filter(status=OperationStatus.COMPLETED).count()
-        if completed_count == 0:
+        # Get all completed operations
+        operation_keys = redis_client.keys('operation:*')
+        completed_keys = []
+        for key in operation_keys:
+            status = redis_client.hget(key, 'status')
+            if status == OperationStatus.COMPLETED:
+                completed_keys.append(key)
+        
+        deleted_count = 0
+        for key in completed_keys:
+            redis_client.delete(key)
+            deleted_count += 1
+        
+        if deleted_count == 0:
             return json_response_success(
                 message='No completed operations to delete',
                 data={'deleted_count': 0}
             )
         
-        # Delete all completed operations - ONLY OperationQueue records
-        deleted_count, deleted_objects = OperationQueue.objects.filter(status=OperationStatus.COMPLETED).delete()
-        # Verify only OperationQueue was deleted (safety check)
-        # Allow empty dict (nothing to delete) or exactly one key that is OperationQueue
-        if deleted_objects and ('SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1):
-            print(f"WARNING: Unexpected objects deleted: {deleted_objects}")
         return json_response_success(
             message=f'Deleted {deleted_count} completed operation(s)',
             data={'deleted_count': deleted_count}
         )
     
     elif cleanup_type == 'failed':
-        # Check if there are any failed operations first
-        failed_count = OperationQueue.objects.filter(status=OperationStatus.FAILED).count()
-        if failed_count == 0:
+        # Get all failed operations
+        operation_keys = redis_client.keys('operation:*')
+        failed_keys = []
+        for key in operation_keys:
+            status = redis_client.hget(key, 'status')
+            if status == OperationStatus.FAILED:
+                failed_keys.append(key)
+        
+        deleted_count = 0
+        for key in failed_keys:
+            redis_client.delete(key)
+            deleted_count += 1
+        
+        if deleted_count == 0:
             return json_response_success(
                 message='No failed operations to delete',
                 data={'deleted_count': 0}
             )
         
-        # Delete all failed operations - ONLY OperationQueue records
-        deleted_count, deleted_objects = OperationQueue.objects.filter(status=OperationStatus.FAILED).delete()
-        # Allow empty dict (nothing to delete) or exactly one key that is OperationQueue
-        if deleted_objects and ('SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1):
-            print(f"WARNING: Unexpected objects deleted: {deleted_objects}")
         return json_response_success(
             message=f'Deleted {deleted_count} failed operation(s)',
             data={'deleted_count': deleted_count}
         )
     
     elif cleanup_type == 'old':
-        # Check if there are any old operations first
+        # Get operations older than 30 days
         thirty_days_ago = timezone.now() - timedelta(days=30)
-        old_count = OperationQueue.objects.filter(created_at__lt=thirty_days_ago).count()
-        if old_count == 0:
+        operation_keys = redis_client.keys('operation:*')
+        old_keys = []
+        
+        for key in operation_keys:
+            created_at_str = redis_client.hget(key, 'created_at')
+            if created_at_str:
+                try:
+                    from datetime import datetime
+                    created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                    if timezone.is_aware(created_at):
+                        created_at = timezone.make_naive(created_at)
+                    if created_at < timezone.make_naive(thirty_days_ago):
+                        old_keys.append(key)
+                except:
+                    pass
+        
+        deleted_count = 0
+        for key in old_keys:
+            redis_client.delete(key)
+            deleted_count += 1
+        
+        if deleted_count == 0:
             return json_response_success(
                 message='No old operations (30+ days) to delete',
                 data={'deleted_count': 0}
             )
         
-        # Delete operations older than 30 days - ONLY OperationQueue records
-        deleted_count, deleted_objects = OperationQueue.objects.filter(created_at__lt=thirty_days_ago).delete()
-        # Allow empty dict (nothing to delete) or exactly one key that is OperationQueue
-        if deleted_objects and ('SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1):
-            print(f"WARNING: Unexpected objects deleted: {deleted_objects}")
         return json_response_success(
             message=f'Deleted {deleted_count} old operation(s) (30+ days)',
             data={'deleted_count': deleted_count}
         )
     
     elif cleanup_type == 'all':
-        # Check if there are any operations first
-        total_count = OperationQueue.objects.count()
-        if total_count == 0:
+        # Delete all operations
+        operation_keys = redis_client.keys('operation:*')
+        deleted_count = len(operation_keys)
+        
+        for key in operation_keys:
+            redis_client.delete(key)
+        
+        if deleted_count == 0:
             return json_response_success(
                 message='No operations to delete - queue is empty',
                 data={'deleted_count': 0}
             )
         
-        # Delete all operations - ONLY OperationQueue records
-        deleted_count, deleted_objects = OperationQueue.objects.all().delete()
-        # Safety check: verify only OperationQueue was deleted (or nothing if empty)
-        # Allow empty dict (nothing to delete) or exactly one key that is OperationQueue
-        if deleted_objects and ('SaveNLoad.OperationQueue' not in deleted_objects or len(deleted_objects) > 1):
-            print(f"CRITICAL ERROR: Unexpected objects deleted during cleanup: {deleted_objects}")
-            return json_response_error(
-                f'Cleanup deleted unexpected objects: {deleted_objects}. Aborted to prevent data loss.',
-                status=500
-            )
         return json_response_success(
             message=f'Deleted all {deleted_count} operation(s)',
             data={'deleted_count': deleted_count}
@@ -879,7 +973,8 @@ def _queue_user_deletion_operations(user: 'SimpleUsers', admin_user, request=Non
         - (False, error_message, None) if FTP cleanup failed (no worker available, etc.)
     """
     from SaveNLoad.models.save_folder import SaveFolder
-    from SaveNLoad.models.operation_queue import OperationQueue, OperationType
+    from SaveNLoad.models.operation_constants import OperationType
+    from SaveNLoad.services.redis_operation_service import create_operation
     
     try:
         # Get all save folders for this user
@@ -901,18 +996,21 @@ def _queue_user_deletion_operations(user: 'SimpleUsers', admin_user, request=Non
         # Create DELETE operation for the entire user directory (username/)
         # This will delete all saves for the user across all games
         # Operation is assigned to the admin's worker
-        operation = OperationQueue.create_operation(
-            operation_type=OperationType.DELETE,
-            user=user,  # User being deleted (for tracking)
-            game=None,  # No game association for user deletion
-            local_save_path='',  # Not needed for delete
-            save_folder_number=None,  # Deleting entire user directory
-            smb_path=user.username,  # Full path to user directory (just username/)
-            client_worker=client_worker  # Admin's worker handles the deletion
+        operation_id = create_operation(
+            {
+                'operation_type': OperationType.DELETE,
+                'user_id': user.id,  # User being deleted (for tracking)
+                'game_id': None,  # No game association for user deletion
+                'local_save_path': '',
+                'save_folder_number': None,  # Deleting entire user directory
+                'smb_path': user.username,  # Full path to user directory (just username/)
+                'path_index': None
+            },
+            client_worker  # Admin's worker handles the deletion
         )
         
-        print(f"Queued delete operation for user directory: {user.username}/ (assigned to admin's worker: {client_worker.client_id})")
-        return (True, None, operation.id)  # Return operation_id for progress tracking
+        print(f"Queued delete operation for user directory: {user.username}/ (assigned to admin's worker: {client_worker})")
+        return (True, None, operation_id)  # Return operation_id for progress tracking
     except Exception as e:
         error_msg = f"Error queueing user deletion operations: {str(e)}"
         print(f"ERROR: Error queueing user deletion operations for user {user.id}: {e}")

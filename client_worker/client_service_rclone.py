@@ -24,6 +24,7 @@ from rich.panel import Panel
 from rich.align import Align
 from rich.text import Text
 from rclone_client import RcloneClient, RCLONE_TRANSFERS
+import redis
 
 # Load environment variables
 if getattr(sys, 'frozen', False):
@@ -38,19 +39,18 @@ else:
 
 
 # Client worker configuration constants
-PING_INTERVAL = 5  # Ping interval in seconds (how often to poll ping endpoint)
-DEFAULT_POLL_INTERVAL = 1  # Default polling interval in seconds
+HEARTBEAT_INTERVAL = 5  # Heartbeat interval in seconds (how often to update Redis heartbeat)
+WORKER_HEARTBEAT_TTL = 10  # Worker heartbeat TTL in seconds (must match server's WORKER_HEARTBEAT_TTL)
 
 class ClientWorkerServiceRclone:
     """Service that runs on client PC - rclone handles all file operations"""
     
-    def __init__(self, server_url: str, poll_interval: int = DEFAULT_POLL_INTERVAL, remote_name: str = 'ftp'):
+    def __init__(self, server_url: str, remote_name: str = 'ftp'):
         """
         Initialize client worker service with rclone
         
         Args:
             server_url: Base URL of the Django server
-            poll_interval: How often to poll for pending operations (seconds)
             remote_name: Name of rclone remote (default: 'ftp')
         """
         # Add http:// scheme if missing
@@ -64,10 +64,10 @@ class ClientWorkerServiceRclone:
                 path = rest[len(host):] if len(rest) > len(host) else ''
                 server_url = f'{scheme}://{host}:8000{path}'
         self.server_url = server_url.rstrip('/')
-        self.poll_interval = poll_interval
         self.session = requests.Session()
         self.running = False
-        self._ping_thread = None
+        self._heartbeat_thread = None
+        self._redis_thread = None
         self._current_client_id = None
         self.linked_user = None  # Track ownership status
         
@@ -76,6 +76,53 @@ class ClientWorkerServiceRclone:
         
         # Setup rclone client - it handles everything
         self.rclone_client = RcloneClient(remote_name=remote_name)
+        
+        # Setup Redis connection (REQUIRED - no fallbacks)
+        redis_host = os.getenv('REDIS_HOST', 'localhost')
+        redis_port = int(os.getenv('REDIS_PORT', 6379))
+        redis_password = os.getenv('REDIS_PASSWORD', None)
+        
+        # Try to extract host from server_url if Redis host not set
+        if redis_host == 'localhost' and '://' in server_url:
+            from urllib.parse import urlparse
+            parsed = urlparse(server_url)
+            redis_host = parsed.hostname or 'localhost'
+        
+        try:
+            if redis_password:
+                self.redis_client = redis.Redis(
+                    host=redis_host,
+                    port=redis_port,
+                    password=redis_password,
+                    decode_responses=True,
+                    socket_connect_timeout=5,
+                    socket_timeout=5
+                )
+            else:
+                self.redis_client = redis.Redis(
+                    host=redis_host,
+                    port=redis_port,
+                    decode_responses=True,
+                    socket_connect_timeout=5,
+                    socket_timeout=5
+                )
+            # Test connection - fail if Redis is not available
+            self.redis_client.ping()
+        except Exception as e:
+            error_msg = f"""
+[red][ERROR][/red] Redis connection failed - Redis is REQUIRED for this worker.
+
+Attempted to connect to Redis at {redis_host}:{redis_port}
+Error: {e}
+
+Please ensure:
+1. Redis is running and accessible from your client PC
+2. REDIS_HOST environment variable is set correctly (or matches your server URL hostname)
+3. Redis port {redis_port} is not blocked by firewall
+4. If using Docker, ensure Redis port is exposed: docker-compose.yml should have 'ports: ["6379:6379"]'
+"""
+            self.console.print(error_msg)
+            raise ConnectionError(f"Redis connection failed: {e}. Redis is required - no fallback available.")
     
     def _update_progress(self, operation_id: int, current: int, total: int, message: str = ''):
         """Send progress update to server"""
@@ -669,41 +716,60 @@ class ClientWorkerServiceRclone:
         except Exception:
             return False
     
-    def send_ping(self, client_id: str) -> bool:
-        """Send ping to Django server to confirm worker is alive"""
-        try:
-            response = self.session.get(
-                f"{self.server_url}/api/client/ping/{client_id}/",
-                timeout=5
-            )
-            if response.status_code == 200:
-                data = response.json()
-                # API returns {data: {linked_user}}
-                response_data = data.get('data', {}) if 'data' in data else data
-                new_user = response_data.get('linked_user')
-                
-                # Check for status change
-                if new_user != self.linked_user:
-                    if new_user:
-                        self._safe_console_print(f"\n[green][OK] Device claimed by user: {new_user}[/green]")
-                    else:
-                        self._safe_console_print(f"\n[yellow][!] Device unclaimed (waiting for owner)[/yellow]")
-                    self.linked_user = new_user
-                    
-                return True
-            return False
-        except Exception:
-            return False
-    
-    def _ping_loop(self, client_id: str):
-        """Background thread that continuously sends pings"""
-        ping_interval = PING_INTERVAL
+    def _heartbeat_loop(self, client_id: str):
+        """Background thread that continuously updates heartbeat in Redis and checks ownership"""
+        heartbeat_interval = HEARTBEAT_INTERVAL
+        
+        # Validate TTL matches expected range (safety check)
+        if WORKER_HEARTBEAT_TTL < 3 or WORKER_HEARTBEAT_TTL > 30:
+            print(f"WARNING: WORKER_HEARTBEAT_TTL ({WORKER_HEARTBEAT_TTL}) is outside recommended range (3-30 seconds)")
+        
         while self.running:
             try:
-                self.send_ping(client_id)
-            except Exception:
-                pass
-            for _ in range(ping_interval * 10):
+                import datetime
+                # Refresh heartbeat TTL directly in Redis (must match server's WORKER_HEARTBEAT_TTL)
+                # IMPORTANT: This value must match SaveNLoad/services/redis_worker_service.py WORKER_HEARTBEAT_TTL
+                self.redis_client.setex(f'worker:{client_id}', WORKER_HEARTBEAT_TTL, '1')
+                # Update last_ping in info hash
+                self.redis_client.hset(f'worker:{client_id}:info', 'last_ping', datetime.datetime.now().isoformat())
+                
+                # Check for ownership changes by reading from Redis
+                user_id = self.redis_client.hget(f'worker:{client_id}:info', 'user_id')
+                if user_id and user_id != '':
+                    # Worker is claimed - fetch username from server to update display
+                    try:
+                        response = self.session.get(
+                            f"{self.server_url}/api/client/pending/{client_id}/",
+                            timeout=2
+                        )
+                        if response.status_code == 200:
+                            data = response.json()
+                            new_user = data.get('linked_user')
+                            if new_user != self.linked_user:
+                                if new_user:
+                                    self._safe_console_print(f"\n[green][OK] Device claimed by user: {new_user}[/green]")
+                                else:
+                                    self._safe_console_print(f"\n[yellow][!] Device unclaimed (waiting for owner)[/yellow]")
+                                self.linked_user = new_user
+                    except Exception:
+                        # If we can't fetch, just continue - will check again next heartbeat
+                        pass
+                else:
+                    # Worker is unclaimed
+                    if self.linked_user:
+                        self._safe_console_print(f"\n[yellow][!] Device unclaimed (waiting for owner)[/yellow]")
+                        self.linked_user = None
+                        
+            except redis.ConnectionError:
+                # Redis connection lost - this is fatal, worker should exit
+                self._safe_console_print("[red][ERROR] Redis connection lost - worker cannot continue without Redis[/red]")
+                self.running = False
+                break
+            except Exception as e:
+                # Other errors - log but continue
+                self._safe_console_print(f"[yellow][WARNING] Heartbeat update failed: {e}[/yellow]")
+            
+            for _ in range(heartbeat_interval * 10):
                 if not self.running:
                     break
                 time.sleep(0.1)
@@ -728,10 +794,10 @@ class ClientWorkerServiceRclone:
         
         self.running = False
         
-        # Wait for ping thread to finish
-        if self._ping_thread and self._ping_thread.is_alive():
-            self._safe_console_print("[dim]Waiting for ping thread...[/dim]")
-            self._ping_thread.join(timeout=2)
+        # Wait for heartbeat thread to finish
+        if self._heartbeat_thread and self._heartbeat_thread.is_alive():
+            self._safe_console_print("[dim]Waiting for heartbeat thread...[/dim]")
+            self._heartbeat_thread.join(timeout=2)
         
         # Unregister from server
         if client_id:
@@ -745,7 +811,7 @@ class ClientWorkerServiceRclone:
         time.sleep(0.5)  # Brief pause to ensure message is visible
     
     def run(self):
-        """Run the service (polling mode)"""
+        """Run the service (Redis-only mode)"""
         # ASCII art banner using rich
         ascii_art = """  $$$$$$\\  $$\\       $$$$$$\\ $$$$$$$$\\ $$\\   $$\\ $$$$$$$$\\
   $$  __$$\\ $$ |      \\_$$  _|$$  _____|$$$\\  $$ |\\__$$  __|
@@ -810,18 +876,24 @@ class ClientWorkerServiceRclone:
         rclone_status = "[green][OK][/green]" if rclone_success else "[red][FAIL][/red]"
         
         # Status output using rich Panel with ASCII-safe indicators
-        # Status output using rich Panel with ASCII-safe indicators
-        owner_status = f"[green][OK][/green] Owned by: {self.linked_user}" if self.linked_user else "[yellow][!][/yellow] Waiting for Claim"
+        redis_channel = f'worker:{client_id}:notify'
         
         status_content = f"""[green][OK][/green] Connected to server
-[green][OK][/green] Service running (polling every {self.poll_interval}s)
 [green][OK][/green] Client ID: {client_id}
 {rclone_status} {rclone_message}
-{owner_status}"""
+[green][OK][/green] Subscribed to Redis channel: {redis_channel}
+[green][OK][/green] Heartbeat active (Redis, every {HEARTBEAT_INTERVAL}s)"""
         
-        self._ping_thread = threading.Thread(target=self._ping_loop, args=(client_id,), daemon=True)
-        self._ping_thread.start()
-        status_content += f"\n[green][OK][/green] Ping active (every {PING_INTERVAL}s)"
+        # Add owner status at the bottom
+        owner_status = f"[green][OK][/green] Owned by: {self.linked_user}" if self.linked_user else "[yellow][!][/yellow] Waiting for Claim"
+        status_content += f"\n{owner_status}"
+        
+        self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, args=(client_id,), daemon=True)
+        self._heartbeat_thread.start()
+        
+        # Start Redis Pub/Sub thread
+        self._redis_thread = threading.Thread(target=self._redis_subscribe_loop, args=(client_id,), daemon=True)
+        self._redis_thread.start()
         
         status_panel = Panel(
             status_content,
@@ -896,33 +968,12 @@ class ClientWorkerServiceRclone:
             except Exception:
                 pass  # Fallback to signal handlers if this fails
         
+        # Redis Pub/Sub thread handles all operations - just wait for shutdown
         try:
             while self.running:
-                try:
-                    response = self.session.get(
-                        f"{self.server_url}/api/client/pending/{client_id}/",
-                        timeout=5
-                    )
-                    if response.status_code == 200:
-                        data = response.json()
-                        
-                        # Update linked user status if changed (faster than ping)
-                        # This fixes the delay issue where unclaim took 10s+ to reflect
-                        new_user = data.get('linked_user')
-                        if new_user != self.linked_user:
-                            if new_user:
-                                self._safe_console_print(f"\n[green][OK] Device claimed by user: {new_user}[/green]")
-                            else:
-                                self._safe_console_print(f"\n[yellow][!] Device unclaimed (waiting for owner)[/yellow]")
-                            self.linked_user = new_user
-                            
-                        operations = data.get('operations', [])
-                        for op in operations:
-                            self._process_operation(op)
-                except Exception:
-                    pass
-                
-                time.sleep(self.poll_interval)
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
         except KeyboardInterrupt:
             # This will be caught by signal handler, but handle it here too
             self._shutdown(client_id)
@@ -930,6 +981,67 @@ class ClientWorkerServiceRclone:
             # Final cleanup (in case signal handler didn't run)
             if self.running:
                 self._shutdown(client_id)
+    
+    def _redis_subscribe_loop(self, client_id: str):
+        """Subscribe to Redis Pub/Sub channel for real-time operation notifications"""
+        pubsub = self.redis_client.pubsub()
+        channel = f'worker:{client_id}:notify'
+        
+        try:
+            pubsub.subscribe(channel)
+            
+            # Fetch any pending operations immediately
+            self._fetch_and_process_operations(client_id)
+            
+            while self.running:
+                try:
+                    message = pubsub.get_message(timeout=1.0, ignore_subscribe_messages=True)
+                    if message and message['type'] == 'message':
+                        # New operation notification - fetch operations
+                        self._safe_console_print(f"[cyan][*] Received operation notification via Redis Pub/Sub[/cyan]")
+                        self._fetch_and_process_operations(client_id)
+                except redis.ConnectionError:
+                    # Redis connection lost - this is fatal
+                    self._safe_console_print("[red][ERROR] Redis connection lost - worker cannot continue without Redis[/red]")
+                    self.running = False
+                    break
+                except Exception as e:
+                    # Continue on other errors
+                    pass
+        except Exception as e:
+            self._safe_console_print(f"[red][ERROR] Redis Pub/Sub error: {e} - worker cannot continue[/red]")
+            self.running = False
+        finally:
+            try:
+                pubsub.close()
+            except:
+                pass
+    
+    def _fetch_and_process_operations(self, client_id: str):
+        """Fetch pending operations from server and process them"""
+        try:
+            response = self.session.get(
+                f"{self.server_url}/api/client/pending/{client_id}/",
+                timeout=5
+            )
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Update linked user status if changed
+                new_user = data.get('linked_user')
+                if new_user != self.linked_user:
+                    if new_user:
+                        self._safe_console_print(f"\n[green][OK] Device claimed by user: {new_user}[/green]")
+                    else:
+                        self._safe_console_print(f"\n[yellow][!] Device unclaimed (waiting for owner)[/yellow]")
+                    self.linked_user = new_user
+                    
+                operations = data.get('operations', [])
+                for op in operations:
+                    self._process_operation(op)
+        except Exception as e:
+            # Silently handle errors
+            pass
     
     def _process_operation(self, operation: Dict[str, Any]):
         """Process a pending operation from the server"""
@@ -989,12 +1101,14 @@ class ClientWorkerServiceRclone:
             print(f"Error: {error}")
         
         try:
-            self.session.post(
+            response = self.session.post(
                 f"{self.server_url}/api/client/complete/{operation_id}/",
                 json=result
             )
-        except Exception:
-            pass
+            if response.status_code != 200:
+                print(f"Warning: Complete operation returned status {response.status_code}: {response.text}")
+        except Exception as e:
+            print(f"Error: Failed to mark operation as complete: {e}")
 
 
 def main():
@@ -1007,7 +1121,6 @@ def main():
     parser.add_argument('--server', 
                        default=os.getenv('SAVENLOAD_SERVER_URL'),
                        help='Django server URL (defaults to SAVENLOAD_SERVER_URL env var)')
-    parser.add_argument('--poll-interval', type=int, default=DEFAULT_POLL_INTERVAL, help='Poll interval in seconds')
     parser.add_argument('--remote', default='ftp', help='Rclone remote name (default: ftp)')
     
     args = parser.parse_args()
@@ -1018,7 +1131,7 @@ def main():
         sys.exit(1)
     
     try:
-        service = ClientWorkerServiceRclone(args.server, args.poll_interval, args.remote)
+        service = ClientWorkerServiceRclone(args.server, args.remote)
         service.run()
     except Exception as e:
         print(f"Error: Service failed - {str(e)}")

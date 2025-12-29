@@ -11,7 +11,8 @@ from SaveNLoad.views.custom_decorators import login_required, get_current_user, 
 from SaveNLoad.views.api_helpers import check_admin_or_error, json_response_success
 from SaveNLoad.views.rawg_api import get_popular_games
 from SaveNLoad.models import SimpleUsers, Game
-from SaveNLoad.models.operation_queue import OperationQueue, OperationType, OperationStatus
+from SaveNLoad.models.operation_constants import OperationType
+from SaveNLoad.services.redis_operation_service import OperationStatus
 from SaveNLoad.models.save_folder import SaveFolder
 from SaveNLoad.utils.image_utils import get_image_url_or_fallback
 

@@ -81,6 +81,17 @@ def login(request):
                 # Store user ID in session
                 request.session['user_id'] = user.id
                 
+                # Auto-claim first available unclaimed worker if user doesn't have one
+                from SaveNLoad.services.redis_worker_service import get_user_workers, get_unclaimed_workers, claim_worker
+                user_workers = get_user_workers(user.id)
+                if not user_workers:
+                    unclaimed_workers = get_unclaimed_workers()
+                    if unclaimed_workers:
+                        # Auto-claim the first available worker
+                        client_id = unclaimed_workers[0]
+                        if claim_worker(client_id, user.id):
+                            print(f"Auto-claimed worker {client_id} to user {user.username} on login")
+                
                 # Handle "Remember Me" functionality
                 if not remember_me:
                     # Session expires in 1 day (86400 seconds) - standard practice
@@ -447,21 +458,22 @@ def reset_password(request):
 @login_required
 def logout(request):
     """Logout and clear session"""
-    # Unclaim any client workers associated with this user before logging out
-    # Unclaim specific client worker if client_id is provided in the request
-    # This allows unclaiming ONLY the worker associated with the current device
+    # Unclaim all client workers associated with this user before logging out
     try:
-        client_id = request.GET.get('client_id')
-        if client_id:
-            user = get_current_user(request)
-            if user:
-                from SaveNLoad.models.client_worker import ClientWorker
-                # Only unclaim the specific worker for this session
-                updated_count = ClientWorker.objects.filter(user=user, client_id=client_id).update(user=None)
-                if updated_count > 0:
+        user = get_current_user(request)
+        if user:
+            from SaveNLoad.services.redis_worker_service import unclaim_worker, get_user_workers
+            # Get all workers owned by this user
+            worker_ids = get_user_workers(user.id)
+            # Unclaim all of them
+            for client_id in worker_ids:
+                try:
+                    unclaim_worker(client_id)
                     print(f"Unclaimed worker {client_id} for user {user.username} on logout")
+                except Exception as e:
+                    print(f"Error unclaiming worker {client_id}: {e}")
     except Exception as e:
-        print(f"Error unclaiming worker on logout: {e}")
+        print(f"Error unclaiming workers on logout: {e}")
         
     request.session.flush()
     return redirect(reverse('SaveNLoad:login'))
