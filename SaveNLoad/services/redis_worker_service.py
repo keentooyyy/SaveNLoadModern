@@ -75,7 +75,12 @@ def ping_worker(client_id):
         except SimpleUsers.DoesNotExist:
             # User doesn't exist, clear the user_id
             redis_client.hset(f'worker:{client_id}:info', 'user_id', '')
+            redis_client.hset(f'worker:{client_id}:info', 'username', '')
             redis_client.srem(f'user:{user_id}:workers', client_id)
+            try:
+                redis_client.publish(f'worker:{client_id}:notify', 'claim_status_changed')
+            except Exception:
+                pass
             return {'linked_user': None}
     
     return {'linked_user': None}
@@ -211,6 +216,11 @@ def get_user_workers(user_id):
             redis_client.srem(f'user:{user_id}:workers', worker_id)
             # Clear user_id from worker info (auto-unclaim)
             redis_client.hset(f'worker:{worker_id}:info', 'user_id', '')
+            redis_client.hset(f'worker:{worker_id}:info', 'username', '')
+            try:
+                redis_client.publish(f'worker:{worker_id}:notify', 'claim_status_changed')
+            except Exception:
+                pass
             print(f"Auto-unclaimed offline worker {worker_id} for user {user_id}")
     
     return list(online_workers)
@@ -297,6 +307,11 @@ def get_unclaimed_workers():
             if not redis_client.sismember(f'user:{user_id}:workers', client_id):
                 # Orphaned claim - clean it up
                 redis_client.hset(f'worker:{client_id}:info', 'user_id', '')
+                redis_client.hset(f'worker:{client_id}:info', 'username', '')
+                try:
+                    redis_client.publish(f'worker:{client_id}:notify', 'claim_status_changed')
+                except Exception:
+                    pass
                 unclaimed.append(client_id)
                 print(f"Auto-unclaimed orphaned worker {client_id}")
     
