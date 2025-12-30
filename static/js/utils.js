@@ -43,8 +43,51 @@ function getNextModalZIndex() {
         }
     });
 
-    // Return next z-index (increment by 10 for proper stacking)
-    return maxZIndex + 10;
+    // Return next z-index (increment by 20 for proper stacking with backdrop gap)
+    return maxZIndex + 20;
+}
+
+/**
+ * Apply modal stacking (z-index + backdrop) for modal-on-modal scenarios
+ * @param {HTMLElement} modalElement - The modal root element
+ * @param {object} options - Optional settings
+ * @param {number} options.zIndex - Explicit z-index override
+ * @returns {{zIndex: number|null}} Applied z-index
+ */
+function applyModalStacking(modalElement, options = {}) {
+    if (!modalElement) {
+        return { zIndex: null };
+    }
+
+    const fallbackZIndex = 1050;
+    const nextZIndex = typeof options.zIndex === 'number'
+        ? options.zIndex
+        : (typeof getNextModalZIndex === 'function' ? getNextModalZIndex() : fallbackZIndex);
+    modalElement.style.zIndex = nextZIndex;
+
+    let ownedBackdrop = null;
+
+    const handleShown = () => {
+        let backdrop = document.querySelector('.modal-backdrop:last-of-type');
+        if (!backdrop) {
+            ownedBackdrop = document.createElement('div');
+            ownedBackdrop.className = 'modal-backdrop fade show';
+            document.body.appendChild(ownedBackdrop);
+            backdrop = ownedBackdrop;
+        }
+        backdrop.style.zIndex = (nextZIndex - 10).toString();
+    };
+
+    const handleHidden = () => {
+        if (ownedBackdrop && ownedBackdrop.parentNode) {
+            ownedBackdrop.remove();
+        }
+    };
+
+    modalElement.addEventListener('shown.bs.modal', handleShown, { once: true });
+    modalElement.addEventListener('hidden.bs.modal', handleHidden, { once: true });
+
+    return { zIndex: nextZIndex };
 }
 
 /**
@@ -209,6 +252,7 @@ function customConfirm(message) {
 
 // Expose to global scope
 window.customConfirm = customConfirm;
+window.applyModalStacking = applyModalStacking;
 
 // Override native confirm() globally
 window.confirm = customConfirm;
@@ -407,6 +451,7 @@ function clearElement(element) {
     }
 }
 
+
 // Expose all utility functions to global scope
 window.showToast = showToast;
 window.getCsrfToken = getCsrfToken;
@@ -417,4 +462,5 @@ window.showError = showError;
 window.clearError = clearError;
 window.setupPasswordToggle = setupPasswordToggle;
 window.clearElement = clearElement;
+window.getNextModalZIndex = getNextModalZIndex;
 

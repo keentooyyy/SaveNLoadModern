@@ -47,8 +47,7 @@ def create_operation(operation_data, client_id):
         'game_id': str(operation_data.get('game_id', '')) if operation_data.get('game_id') else '',
         'local_save_path': operation_data.get('local_save_path', ''),
         'save_folder_number': str(operation_data.get('save_folder_number', '')) if operation_data.get('save_folder_number') else '',
-        'smb_path': operation_data.get('smb_path', '') or '',
-        'path_index': str(operation_data.get('path_index', '')) if operation_data.get('path_index') else '',
+        'remote_ftp_path': operation_data.get('remote_ftp_path', '') or '',  # NEW: Pre-built FTP path from server
         'created_at': timezone.now().isoformat(),
         'started_at': '',
         'completed_at': '',
@@ -112,35 +111,9 @@ def get_pending_operations(client_id):
                 'type': operation_hash.get('type', ''),
                 'local_save_path': operation_hash.get('local_save_path', ''),
                 'save_folder_number': int(operation_hash['save_folder_number']) if operation_hash.get('save_folder_number') else None,
-                'remote_path': operation_hash.get('smb_path', ''),
-                'smb_path': operation_hash.get('smb_path', ''),  # Backward compatibility
-                'path_index': int(operation_hash['path_index']) if operation_hash.get('path_index') else None,
+                'remote_ftp_path': operation_hash.get('remote_ftp_path', ''),  # Pre-built FTP path from server
             }
             
-            # Get user info
-            user_id = operation_hash.get('user_id')
-            if user_id:
-                from SaveNLoad.models import SimpleUsers
-                try:
-                    user = SimpleUsers.objects.get(pk=int(user_id))
-                    operation_dict['username'] = user.username
-                except SimpleUsers.DoesNotExist:
-                    operation_dict['username'] = ''
-            
-            # Get game info if present
-            game_id = operation_hash.get('game_id')
-            if game_id:
-                from SaveNLoad.models import Game
-                try:
-                    game = Game.objects.get(pk=int(game_id))
-                    operation_dict['game_id'] = game.id
-                    operation_dict['game_name'] = game.name
-                except Game.DoesNotExist:
-                    operation_dict['game_id'] = None
-                    operation_dict['game_name'] = None
-            else:
-                operation_dict['game_id'] = None
-                operation_dict['game_name'] = None
             
             pending_operations.append(operation_dict)
     

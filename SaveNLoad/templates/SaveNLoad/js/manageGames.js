@@ -798,10 +798,6 @@ document.addEventListener('DOMContentLoaded', function () {
         modalDialog.appendChild(modalContent);
         modalBackdrop.appendChild(modalDialog);
 
-        // Get next z-index for proper stacking
-        const nextZIndex = getNextModalZIndex();
-        modalBackdrop.style.zIndex = nextZIndex;
-
         // Add modal to body
         document.body.appendChild(modalBackdrop);
 
@@ -811,13 +807,9 @@ document.addEventListener('DOMContentLoaded', function () {
             keyboard: false
         });
 
-        // Set backdrop z-index after modal is shown (Bootstrap creates backdrop dynamically)
-        modal._element.addEventListener('shown.bs.modal', function () {
-            const backdrop = document.querySelector('.modal-backdrop:last-of-type');
-            if (backdrop) {
-                backdrop.style.zIndex = (nextZIndex - 10).toString();
-            }
-        }, { once: true });
+        if (window.applyModalStacking) {
+            window.applyModalStacking(modalBackdrop);
+        }
 
         modal.show();
 
@@ -879,11 +871,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     progressBar.setAttribute('aria-valuenow', '100');
                     progressText.textContent = 'Operation Complete!';
                     progressDetails.textContent = 'Successfully completed';
+                    const handleHidden = () => {
+                        modalBackdrop.remove();
+                        if (onComplete) onComplete();
+                    };
+                    modal._element.addEventListener('hidden.bs.modal', handleHidden, { once: true });
                     setTimeout(() => {
                         modal.hide();
-                        modalBackdrop.remove();
                     }, 1500);
-                    if (onComplete) onComplete();
                     return true;
                 } else if (data.failed) {
                     progressBar.classList.remove('progress-bar-animated');
@@ -1616,7 +1611,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Helper function to check backup result and show download info
+    // Helper function to check backup result and show modal with folder location
     async function checkBackupResult(operationId) {
         try {
             const urlPattern = window.CHECK_OPERATION_STATUS_URL_PATTERN;
@@ -1628,35 +1623,123 @@ document.addEventListener('DOMContentLoaded', function () {
             if (response.ok) {
                 const data = await response.json();
                 if (data.result_data && data.result_data.zip_path) {
-                    function showToast(message, type = 'info') {
-                        const toast = document.createElement('div');
-                        const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-                        toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
+                    const zipPath = data.result_data.zip_path;
+                    // Show modal using safe DOM manipulation
+                    showBackupCompleteModal(zipPath);
 
-                        const messageText = document.createTextNode(message);
-                        toast.appendChild(messageText);
-
-                        const closeBtn = document.createElement('button');
-                        closeBtn.type = 'button';
-                        closeBtn.className = 'btn-close';
-                        closeBtn.setAttribute('data-bs-dismiss', 'alert');
-                        closeBtn.setAttribute('aria-label', 'Close');
-                        toast.appendChild(closeBtn);
-
-                        document.body.appendChild(toast);
-
-                        setTimeout(() => {
-                            if (toast.parentNode) {
-                                toast.remove();
-                            }
-                        }, 5000);
-                    }
-                    window.showToast(`Backup complete! Saved to: ${data.result_data.zip_path}`, 'success');
+                    // Also show toast for quick notification
+                    window.showToast('Backup complete!', 'success');
                 }
             }
         } catch (error) {
             console.error('Error checking backup result:', error);
         }
+    }
+
+    // Show backup complete modal using safe DOM manipulation
+    function showBackupCompleteModal(zipPath) {
+        // Remove existing modal if present
+        const existingModal = document.getElementById('backupCompleteModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Create modal container
+        const modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'backupCompleteModal';
+        modal.setAttribute('tabindex', '-1');
+        modal.setAttribute('aria-hidden', 'true');
+
+        const dialog = document.createElement('div');
+        dialog.className = 'modal-dialog modal-dialog-centered';
+
+        const content = document.createElement('div');
+        content.className = 'modal-content bg-primary border-secondary';
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'modal-header border-secondary';
+
+        const title = document.createElement('h5');
+        title.className = 'modal-title text-white';
+        title.id = 'backupCompleteModalLabel';
+
+        title.appendChild(document.createTextNode('Backup Complete!'));
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'btn-close btn-close-white';
+        closeBtn.setAttribute('data-bs-dismiss', 'modal');
+        closeBtn.setAttribute('aria-label', 'Close');
+
+        header.appendChild(title);
+        header.appendChild(closeBtn);
+
+        // Body
+        const body = document.createElement('div');
+        body.className = 'modal-body';
+
+        const message = document.createElement('p');
+        message.className = 'text-white mb-3';
+        message.textContent = 'Your backup has been saved successfully!';
+
+        const card = document.createElement('div');
+        // Match the theme: darker card on primary background
+        card.className = 'card bg-dark border-secondary mb-3';
+
+        const cardBody = document.createElement('div');
+        cardBody.className = 'card-body py-2';
+
+        const locationLabel = document.createElement('small');
+        locationLabel.className = 'text-white-50 d-block mb-1';
+        locationLabel.textContent = 'File Location:';
+
+        const codePath = document.createElement('code');
+        codePath.className = 'text-info d-block';
+        codePath.style.wordBreak = 'break-all';
+        codePath.textContent = zipPath;
+
+        cardBody.appendChild(locationLabel);
+        cardBody.appendChild(codePath);
+        card.appendChild(cardBody);
+
+        body.appendChild(message);
+        body.appendChild(card);
+
+        // Footer
+        const footer = document.createElement('div');
+        footer.className = 'modal-footer border-secondary';
+
+        const closeFooterBtn = document.createElement('button');
+        closeFooterBtn.type = 'button';
+        closeFooterBtn.className = 'btn btn-secondary text-white';
+        closeFooterBtn.setAttribute('data-bs-dismiss', 'modal');
+        closeFooterBtn.textContent = 'Close';
+
+        footer.appendChild(closeFooterBtn);
+
+        // Assemble modal
+        content.appendChild(header);
+        content.appendChild(body);
+        content.appendChild(footer);
+        dialog.appendChild(content);
+        modal.appendChild(dialog);
+
+        document.body.appendChild(modal);
+
+        if (window.applyModalStacking) {
+            window.applyModalStacking(modal);
+        }
+
+        // Show modal
+        const backupModal = new bootstrap.Modal(modal);
+        backupModal.show();
+
+        // Clean up on hide
+        modal.addEventListener('hidden.bs.modal', function () {
+            modal.remove();
+        });
     }
 
     /**

@@ -480,9 +480,6 @@
         modalDialog.appendChild(modalContent);
         modalBackdrop.appendChild(modalDialog);
 
-        const nextZIndex = getNextModalZIndex();
-        modalBackdrop.style.zIndex = nextZIndex;
-
         document.body.appendChild(modalBackdrop);
 
         const modal = new bootstrap.Modal(modalBackdrop, {
@@ -490,12 +487,9 @@
             keyboard: false
         });
 
-        modal._element.addEventListener('shown.bs.modal', function () {
-            const backdrop = document.querySelector('.modal-backdrop:last-of-type');
-            if (backdrop) {
-                backdrop.style.zIndex = (nextZIndex - 10).toString();
-            }
-        }, { once: true });
+        if (window.applyModalStacking) {
+            window.applyModalStacking(modalBackdrop);
+        }
 
         modal.show();
 

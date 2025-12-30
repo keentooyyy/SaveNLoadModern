@@ -35,6 +35,35 @@ from pathlib import Path
 from django.conf import settings
 
 
+def _build_full_remote_path(username: str, game_name: str, save_folder_number: int, 
+                           path_index: int = None) -> str:
+    """
+    Build complete remote FTP path for the client worker.
+    This is the ONLY place path construction should happen.
+    
+    Args:
+        username: User's username
+        game_name: Game name (will be sanitized)
+        save_folder_number: Save folder number
+        path_index: Optional path index for multi-path games (1, 2, 3, etc.)
+    
+    Returns:
+        Complete remote path like "username/GameName/save_1" or "username/GameName/save_1/path_2"
+    """
+    # Sanitize game name - keep only alphanumeric, spaces, hyphens, and underscores
+    safe_game_name = "".join(c for c in game_name if c.isalnum() or c in (' ', '-', '_')).strip()
+    safe_game_name = safe_game_name.replace(' ', '_')
+    
+    # Build base path
+    remote_path = f"{username}/{safe_game_name}/save_{save_folder_number}"
+    
+    # Add path_index if provided (for multi-path games)
+    if path_index is not None:
+        remote_path = f"{remote_path}/path_{path_index}"
+    
+    return remote_path
+
+
 @login_required
 @require_http_methods(["POST"])
 def save_game(request, game_id):
@@ -96,15 +125,22 @@ def save_game(request, game_id):
             if error_response:
                 return error_response
             
+            # Build complete remote FTP path on server
+            remote_ftp_path = _build_full_remote_path(
+                username=user.username,
+                game_name=game.name,
+                save_folder_number=save_folder.folder_number,
+                path_index=None
+            )
+            
             operation_id = create_operation(
                 {
                     'operation_type': OperationType.SAVE,
                     'user_id': user.id,
                     'game_id': game.id,
                     'local_save_path': local_save_path,
+                    'remote_ftp_path': remote_ftp_path,  # Complete path ready for client
                     'save_folder_number': save_folder.folder_number,
-                    'smb_path': save_folder.smb_path,
-                    'path_index': None
                 },
                 client_worker
             )
@@ -156,15 +192,22 @@ def save_game(request, game_id):
             else:
                 path_index = None
             
+            # Build complete remote FTP path on server
+            remote_ftp_path = _build_full_remote_path(
+                username=user.username,
+                game_name=game.name,
+                save_folder_number=save_folder.folder_number,
+                path_index=path_index
+            )
+            
             operation_id = create_operation(
                 {
                     'operation_type': OperationType.SAVE,
                     'user_id': user.id,
                     'game_id': game.id,
                     'local_save_path': path,
+                    'remote_ftp_path': remote_ftp_path,  # Complete path ready for client
                     'save_folder_number': save_folder.folder_number,
-                    'smb_path': save_folder.smb_path,
-                    'path_index': path_index
                 },
                 client_worker
             )
@@ -246,15 +289,22 @@ def load_game(request, game_id):
         if error_response:
             return error_response
         
+        # Build complete remote FTP path on server
+        remote_ftp_path = _build_full_remote_path(
+            username=user.username,
+            game_name=game.name,
+            save_folder_number=save_folder_number,
+            path_index=None
+        )
+        
         operation_id = create_operation(
             {
                 'operation_type': OperationType.LOAD,
                 'user_id': user.id,
                 'game_id': game.id,
                 'local_save_path': local_save_path,
+                'remote_ftp_path': remote_ftp_path,
                 'save_folder_number': save_folder_number,
-                'smb_path': save_folder.smb_path,
-                'path_index': None
             },
             client_worker
         )
@@ -295,15 +345,22 @@ def load_game(request, game_id):
         else:
             path_index = None
         
+        # Build complete remote FTP path on server
+        remote_ftp_path = _build_full_remote_path(
+            username=user.username,
+            game_name=game.name,
+            save_folder_number=save_folder_number,
+            path_index=path_index
+        )
+        
         operation_id = create_operation(
             {
                 'operation_type': OperationType.LOAD,
                 'user_id': user.id,
                 'game_id': game.id,
                 'local_save_path': path,
+                'remote_ftp_path': remote_ftp_path,
                 'save_folder_number': save_folder_number,
-                'smb_path': save_folder.smb_path,
-                'path_index': path_index
             },
             client_worker
         )
@@ -478,15 +535,22 @@ def delete_save_folder(request, game_id, folder_number):
             return error_response
         
         # All validations passed - create DELETE operation
+        # Build complete remote FTP path on server
+        remote_ftp_path = _build_full_remote_path(
+            username=user.username,
+            game_name=game.name,
+            save_folder_number=folder_number,
+            path_index=None
+        )
+        
         operation_id = create_operation(
             {
                 'operation_type': OperationType.DELETE,
                 'user_id': user.id,
                 'game_id': game.id,
                 'local_save_path': '',
+                'remote_ftp_path': remote_ftp_path,
                 'save_folder_number': folder_number,
-                'smb_path': save_folder.smb_path,
-                'path_index': None
             },
             client_worker
         )
@@ -580,15 +644,22 @@ def list_saves(request, game_id):
     
     try:
         # All validations passed - create LIST operation
+        # Build complete remote FTP path on server
+        remote_ftp_path = _build_full_remote_path(
+            username=user.username,
+            game_name=game.name,
+            save_folder_number=save_folder_number,
+            path_index=None
+        )
+        
         operation_id = create_operation(
             {
                 'operation_type': OperationType.LIST,
                 'user_id': user.id,
                 'game_id': game.id,
                 'local_save_path': '',
+                'remote_ftp_path': remote_ftp_path,
                 'save_folder_number': save_folder_number,
-                'smb_path': save_folder.smb_path,
-                'path_index': None
             },
             client_worker
         )
@@ -650,17 +721,20 @@ def backup_all_saves(request, game_id):
         return error_response
     
     # Create backup operation in queue
-    # Backup doesn't need local_save_path or save_folder_number, but we need to provide local_save_path
-    # Use a placeholder since backup saves to Downloads folder
+    # Backup doesn't need local_save_path or save_folder_number, but we need to provide remote path base
+    # Build base path for all game saves (username/gamename)
+    safe_game_name = "".join(c for c in game.name if c.isalnum() or c in (' ', '-', '_')).strip()
+    safe_game_name = safe_game_name.replace(' ', '_')
+    remote_ftp_path = f"{user.username}/{safe_game_name}"
+    
     operation_id = create_operation(
         {
             'operation_type': OperationType.BACKUP,
             'user_id': user.id,
             'game_id': game.id,
             'local_save_path': '',
+            'remote_ftp_path': remote_ftp_path,
             'save_folder_number': None,
-            'smb_path': None,
-            'path_index': None
         },
         client_worker
     )
@@ -714,15 +788,22 @@ def delete_all_saves(request, game_id):
                     continue
                 
                 # Create DELETE operation (will be processed by client worker)
+                # Build complete remote FTP path on server
+                remote_ftp_path = _build_full_remote_path(
+                    username=user.username,
+                    game_name=game.name,
+                    save_folder_number=save_folder.folder_number,
+                    path_index=None
+                )
+                
                 operation_id = create_operation(
                     {
                         'operation_type': OperationType.DELETE,
                         'user_id': user.id,
                         'game_id': game.id,
                         'local_save_path': '',
+                        'remote_ftp_path': remote_ftp_path,
                         'save_folder_number': save_folder.folder_number,
-                        'smb_path': save_folder.smb_path,
-                        'path_index': None
                     },
                     client_worker
                 )

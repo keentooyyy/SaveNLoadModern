@@ -149,53 +149,6 @@ Please ensure:
             return lambda current, total, msg: self._update_progress(operation_id, current, total, msg)
         return None
     
-    def _sanitize_game_name(self, game_name: str) -> str:
-        """
-        Sanitize game name for use in file paths
-        
-        Args:
-            game_name: Original game name
-            
-        Returns:
-            Sanitized game name safe for file paths
-        """
-        safe_name = "".join(c for c in game_name if c.isalnum() or c in (' ', '-', '_')).strip()
-        return safe_name.replace(' ', '_')
-    
-    def _build_remote_path_base(self, username: str, game_name: str, 
-                                save_folder_number: Optional[int] = None,
-                                remote_path: Optional[str] = None,
-                                path_index: Optional[int] = None) -> str:
-        """
-        Build base remote path with optional path_index support
-        
-        Args:
-            username: Username for path
-            game_name: Game name (will be sanitized)
-            save_folder_number: Optional save folder number
-            remote_path: Optional custom remote path (base path like "username/gamename/save_1")
-            path_index: Optional path index (1-based) to append path_X subfolder
-            
-        Returns:
-            Remote path string (includes path_X if path_index provided)
-        """
-        if remote_path:
-            base_path = remote_path.replace('\\', '/').strip('/')
-        else:
-            safe_game_name = self._sanitize_game_name(game_name)
-            path_parts = [username, safe_game_name]
-            
-            if save_folder_number is not None:
-                path_parts.append(f"save_{save_folder_number}")
-            
-            base_path = '/'.join(path_parts)
-        
-        # Append path_X if path_index is provided (for multi-path support)
-        if path_index is not None:
-            base_path = f"{base_path}/path_{path_index}"
-        
-        return base_path
-    
     def _create_error_response(self, error_message: str, **kwargs) -> Dict[str, Any]:
         """
         Create standardized error response dictionary
@@ -268,11 +221,16 @@ Please ensure:
             print("Warning: Insufficient file permissions")
             return False
     
-    def save_game(self, game_id: int, local_save_path: str, 
-                 username: str, game_name: str, save_folder_number: int, 
-                 remote_path: Optional[str] = None, operation_id: Optional[int] = None,
-                 path_index: Optional[int] = None) -> Dict[str, Any]:
-        """Save game - rclone handles everything with parallel transfers"""
+    def save_game(self, local_save_path: str, remote_ftp_path: str,
+                 operation_id: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Save game - upload files to pre-built remote FTP path
+        
+        Args:
+            local_save_path: Local path to save files  
+            remote_ftp_path: Complete remote FTP path (built by server)
+            operation_id: Optional operation ID for progress tracking
+        """
         print(f"Backing up save files...")
         
         if not os.path.exists(local_save_path):
@@ -297,19 +255,10 @@ Please ensure:
                 # Create progress callback using helper
                 progress_callback = self._create_progress_callback(operation_id)
                 
-                # Build remote path with path_index support
-                remote_path_custom = self._build_remote_path_base(
-                    username, game_name, save_folder_number, remote_path, path_index
-                )
-                
-                # Use remote_path_custom directly - it now includes path_X if path_index provided
+                # Use pre-built remote path from server
                 success, message, uploaded_files, failed_files, bytes_transferred, files_transferred = self.rclone_client.upload_directory(
                     local_dir=local_save_path,
-                    username=username,
-                    game_name=game_name,
-                    folder_number=save_folder_number,
-                    remote_path_custom=remote_path_custom,
-                    path_index=None,  # Already included in remote_path_custom
+                    remote_ftp_path=remote_ftp_path,
                     transfers=RCLONE_TRANSFERS,  # Parallel transfers
                     progress_callback=progress_callback
                 )
@@ -346,19 +295,11 @@ Please ensure:
                 # Create progress callback using helper
                 progress_callback = self._create_progress_callback(operation_id)
                 
-                # Build remote path with path_index support
-                remote_path_custom = self._build_remote_path_base(
-                    username, game_name, save_folder_number, remote_path, path_index
-                )
-                
+                # Use pre-built remote path from server
                 success, message, bytes_transferred = self.rclone_client.upload_save(
-                    username=username,
-                    game_name=game_name,
                     local_file_path=local_save_path,
-                    folder_number=save_folder_number,
+                    remote_ftp_path=remote_ftp_path,
                     remote_filename=os.path.basename(local_save_path),
-                    remote_path_custom=remote_path_custom,
-                    path_index=None,  # Already included in remote_path_custom
                     progress_callback=progress_callback
                 )
                 
@@ -378,29 +319,32 @@ Please ensure:
         except Exception as e:
             return self._handle_operation_exception('Save', e)
     
-    def load_game(self, game_id: int, local_save_path: str,
-                 username: str, game_name: str, save_folder_number: int, 
-                 remote_path: Optional[str] = None, operation_id: Optional[int] = None,
-                 path_index: Optional[int] = None) -> Dict[str, Any]:
-        """Load game - rclone handles everything with parallel transfers"""
+    def load_game(self, local_save_path: str, remote_ftp_path: str,
+                 operation_id: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Load game - download files from pre-built remote FTP path
+        
+        Args:
+            local_save_path: Local path to restore files to
+            remote_ftp_path: Complete remote FTP path (built by server)
+            operation_id: Optional operation ID for progress tracking
+        """
         print(f"Preparing to download save files...")
         
         try:
-            # Build remote path with path_index support
-            remote_path_base = self._build_remote_path_base(
-                username, game_name, save_folder_number, remote_path, path_index
-            )
-            
-            # Detect if remote path includes path_X folder (e.g., path_1, path_2)
-            # If so, we need to strip it to avoid creating path_X subfolder locally
+            # Detect if remote path includes path_X folder and prepare strip_prefix
             strip_prefix = None
-            if path_index is not None:
-                strip_prefix = f"path_{path_index}"
+            if '/path_' in remote_ftp_path:
+                # Extract path_X from the end
+                path_part = remote_ftp_path.split('/')[-1]
+                if path_part.startswith('path_'):
+                    strip_prefix = path_part
             
             # Ensure local directory exists
             if os.path.isfile(local_save_path):
                 local_save_path = os.path.dirname(local_save_path)
             
+            # Create directory if it doesn't exist
             try:
                 os.makedirs(local_save_path, exist_ok=True)
             except OSError as e:
@@ -414,13 +358,30 @@ Please ensure:
                     f'Local save path is not a directory: {local_save_path}'
                 )
             
+            # IMPORTANT: Clear the local directory completely before downloading
+            # This ensures a clean restore without old files interfering
+            print(f"Clearing local directory: {local_save_path}")
+            try:
+                import shutil
+                for item in os.listdir(local_save_path):
+                    item_path = os.path.join(local_save_path, item)
+                    if os.path.isfile(item_path) or os.path.islink(item_path):
+                        os.unlink(item_path)
+                        print(f"  Deleted file: {item}")
+                    elif os.path.isdir(item_path):
+                        shutil.rmtree(item_path)
+                        print(f"  Deleted folder: {item}")
+                print(f"Local directory cleared successfully")
+            except Exception as e:
+                print(f"Warning: Failed to clear some items from directory: {str(e)}")
+                # Continue anyway - partial clear is better than nothing
+            
             # Create progress callback using helper
             progress_callback = self._create_progress_callback(operation_id)
             
-            # Use remote_path_base which includes path_X if path_index provided
-            # Pass strip_prefix to avoid creating path_X subfolder locally
+            # Use pre-built remote path from server
             success, message, downloaded_files, failed_files = self.rclone_client.download_directory(
-                remote_path_base=remote_path_base,
+                remote_ftp_path=remote_ftp_path,
                 local_dir=local_save_path,
                 transfers=RCLONE_TRANSFERS,  # Parallel transfers
                 progress_callback=progress_callback,
@@ -444,22 +405,19 @@ Please ensure:
         except Exception as e:
             return self._handle_operation_exception('Load', e)
     
-    def list_saves(self, game_id: int, username: str, game_name: str, 
-                  save_folder_number: int, remote_path: Optional[str] = None,
-                  path_index: Optional[int] = None) -> Dict[str, Any]:
-        """List all save files - rclone handles it"""
+    def list_saves(self, remote_ftp_path: str) -> Dict[str, Any]:
+        """
+        List all save files from pre-built remote FTP path
+        
+        Args:
+            remote_ftp_path: Complete remote FTP path (built by server)
+        """
         print(f"Listing save files...")
         
         try:
-            # Update to use _build_remote_path_base with path_index
-            remote_path_base = self._build_remote_path_base(
-                username, game_name, save_folder_number, remote_path, path_index
-            )
+            # Use pre-built remote path from server
             success, files, directories, message = self.rclone_client.list_saves(
-                username=username,
-                game_name=game_name,
-                folder_number=save_folder_number,
-                remote_path_custom=remote_path_base
+                remote_ftp_path=remote_ftp_path
             )
             
             if not success:
@@ -474,30 +432,19 @@ Please ensure:
         except Exception as e:
             return self._handle_operation_exception('List', e)
     
-    def delete_save_folder(self, game_id: Optional[int], username: str, game_name: Optional[str],
-                          save_folder_number: Optional[int], remote_path: Optional[str] = None,
-                          operation_id: Optional[int] = None,
-                          path_index: Optional[int] = None) -> Dict[str, Any]:
-        """Delete save folder or user directory - rclone handles it"""
-        # Check if this is a user deletion operation (game_name is None)
-        if game_name is None:
-            print(f"Deleting user directory for {username}...")
-            # For user deletion, remote_path is just the username (e.g., "spamonly31")
-            remote_path_base = remote_path if remote_path else username
-        else:
-            print(f"Deleting save folder...")
-            if not remote_path:
-                return self._create_error_response(
-                    'Remote path is required for delete operation'
-                )
-            # Update to use _build_remote_path_base with path_index
-            remote_path_base = self._build_remote_path_base(
-                username, game_name, save_folder_number, remote_path, path_index
-            )
+    def delete_save_folder(self, remote_ftp_path: str, operation_id: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Delete save folder from pre-built remote FTP path
+        
+        Args:
+            remote_ftp_path: Complete remote FTP path (built by server)
+            operation_id: Optional operation ID for progress tracking
+        """
+        print(f"Deleting save folder...")
         
         try:
-            # Let rclone delete it
-            success, message = self.rclone_client.delete_directory(remote_path_base)
+            # Use pre-built remote path from server
+            success, message = self.rclone_client.delete_directory(remote_ftp_path)
             
             if success:
                 print(f"Delete complete")
@@ -509,15 +456,21 @@ Please ensure:
         except Exception as e:
             return self._handle_operation_exception('Delete', e)
     
-    def backup_all_saves(self, game_id: int, username: str, game_name: str,
-                        operation_id: Optional[int] = None) -> Dict[str, Any]:
-        """Backup all saves - download using rclone, zip, and save to Downloads folder"""
+    def backup_all_saves(self, remote_ftp_path: str, operation_id: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Backup all saves from pre-built remote FTP path
+        
+        Args:
+            remote_ftp_path: Complete remote base path (built by server, e.g., "username/gamename")
+            operation_id: Optional operation ID for progress tracking
+        """
+        # Extract game name from path for zip filename
+        path_parts = remote_ftp_path.split('/')
+        game_name = path_parts[-1] if len(path_parts) >= 2 else "game"
+        
         print(f"Backing up all saves for {game_name}...")
         
         try:
-            # Build base remote path using helper
-            remote_path_base = self._build_remote_path_base(username, game_name)
-            
             # Create temp directory for downloads
             temp_dir = tempfile.mkdtemp(prefix='sn_backup_')
             print(f"Downloading from FTP to temp directory: {temp_dir}")
@@ -526,9 +479,9 @@ Please ensure:
                 # Create progress callback using helper
                 progress_callback = self._create_progress_callback(operation_id)
                 
-                # Download all saves using rclone
+                # Download all saves using rclone with pre-built path
                 success, message, downloaded_files, failed_files = self.rclone_client.download_directory(
-                    remote_path_base=remote_path_base,
+                    remote_ftp_path=remote_ftp_path,
                     local_dir=temp_dir,
                     transfers=RCLONE_TRANSFERS,
                     progress_callback=progress_callback
@@ -543,9 +496,9 @@ Please ensure:
                     shutil.rmtree(temp_dir, ignore_errors=True)
                     return self._create_error_response('No save files found to backup')
                 
-                # Create zip file
-                safe_game_name_zip = self._sanitize_game_name(game_name)
-                zip_filename = f"{safe_game_name_zip}_saves_bak.zip"
+                # Create zip file (use game name from path)
+                safe_game_name = game_name.replace(' ', '_')
+                zip_filename = f"{safe_game_name}_saves_bak.zip"
                 
                 # Get Downloads folder
                 downloads_path = Path.home() / 'Downloads'
@@ -645,12 +598,8 @@ Please ensure:
                     system = platform.system()
                     
                     if system == 'Windows':
-                        if file_name:
-                            # Open folder and select file
-                            subprocess.Popen(f'explorer /select,"{normalized_path}"', shell=True)
-                        else:
-                            # Open folder
-                            subprocess.Popen(f'explorer "{folder_path}"', shell=True)
+                        # Always open the folder containing the file (no selection)
+                        subprocess.Popen(f'explorer "{folder_path}"', shell=True)
                     elif system == 'Darwin':  # macOS
                         if file_name:
                             subprocess.Popen(['open', '-R', normalized_path])
@@ -1067,30 +1016,16 @@ Please ensure:
                     from datetime import datetime
                     self.redis_client.hset(f'operation:{operation_id}', 'started_at', datetime.now().isoformat())
                     
-                    # Build operation dict (same format as HTTP endpoint returned)
+                    # Build operation dict (reading directly from Redis)
                     operation_dict = {
                         'id': operation_id,
                         'type': operation_hash.get('type', ''),
                         'local_save_path': operation_hash.get('local_save_path', ''),
                         'save_folder_number': int(operation_hash['save_folder_number']) if operation_hash.get('save_folder_number') else None,
-                        'remote_path': operation_hash.get('smb_path', ''),
-                        'path_index': int(operation_hash['path_index']) if operation_hash.get('path_index') else None,
+                        'remote_ftp_path': operation_hash.get('remote_ftp_path', ''),  # NEW: Pre-built FTP path from server
                         'username': operation_hash.get('username', self.linked_user or ''),  # From hash or cached
+                        'game_id': int(operation_hash.get('game_id')) if operation_hash.get('game_id') else None,
                     }
-                    
-                    # Get game_id and game_name from operation hash (should be stored by server)
-                    game_id = operation_hash.get('game_id')
-                    if game_id:
-                        try:
-                            operation_dict['game_id'] = int(game_id)
-                            # Game name should be in operation hash - if not stored, use empty string
-                            operation_dict['game_name'] = operation_hash.get('game_name', '')
-                        except ValueError:
-                            operation_dict['game_id'] = None
-                            operation_dict['game_name'] = None
-                    else:
-                        operation_dict['game_id'] = None
-                        operation_dict['game_name'] = None
                     
                     # Process the operation
                     self._process_operation(operation_dict)
@@ -1111,46 +1046,32 @@ Please ensure:
         """Process a pending operation from the server"""
         op_type = operation.get('type')
         operation_id = operation.get('id')
-        game_id = operation.get('game_id')
         local_path = operation.get('local_save_path')
-        username = operation.get('username')
-        game_name = operation.get('game_name')
-        save_folder_number = operation.get('save_folder_number')
-        remote_path = operation.get('remote_path')  # Base path like "username/gamename/save_1" or "username" for user deletion
-        path_index = operation.get('path_index')  # Extract path_index from operation
+        remote_ftp_path = operation.get('remote_ftp_path')  # Pre-built complete FTP path from server
         
         op_type_display = op_type.capitalize()
-        # Handle user deletion operations (game_name is None)
-        if game_name:
-            print(f"\nProcessing: {op_type_display} operation for {game_name}")
-        else:
-            print(f"\nProcessing: {op_type_display} operation for user {username}")
+        print(f"\nProcessing: {op_type_display} operation")
         
-        # For delete operations, remote_path is sufficient (can delete entire directories)
-        if op_type == 'delete' and not remote_path:
-            print(f"Error: Delete operation missing remote_path")
+        # Validate required data based on operation type
+        if op_type in ['save', 'load'] and not local_path:
+            print(f"Error: Operation missing local path")
             return
         
-        if op_type in ['save', 'load', 'list'] and save_folder_number is None:
-            print(f"Error: Operation missing required information")
+        if op_type in ['save', 'load', 'list', 'delete', 'backup'] and not remote_ftp_path:
+            print(f"Error: Operation missing remote FTP path")
             return
         
-        # Backup doesn't require save_folder_number
-        if op_type == 'backup' and not username:
-            print(f"Error: Backup operation missing username")
-            return
-        
-        # Pass path_index to operations that need it
+        # Call simplified methods with pre-built remote_ftp_path
         if op_type == 'save':
-            result = self.save_game(game_id, local_path, username, game_name, save_folder_number, remote_path, operation_id, path_index)
+            result = self.save_game(local_path, remote_ftp_path, operation_id)
         elif op_type == 'load':
-            result = self.load_game(game_id, local_path, username, game_name, save_folder_number, remote_path, operation_id, path_index)
+            result = self.load_game(local_path, remote_ftp_path, operation_id)
         elif op_type == 'list':
-            result = self.list_saves(game_id, username, game_name, save_folder_number, remote_path, path_index)
+            result = self.list_saves(remote_ftp_path)
         elif op_type == 'delete':
-            result = self.delete_save_folder(game_id, username, game_name, save_folder_number, remote_path, operation_id, path_index)
+            result = self.delete_save_folder(remote_ftp_path, operation_id)
         elif op_type == 'backup':
-            result = self.backup_all_saves(game_id, username, game_name, operation_id)
+            result = self.backup_all_saves(remote_ftp_path, operation_id)
         elif op_type == 'open_folder':
             result = self.open_folder(local_path, operation_id)
         else:
