@@ -471,14 +471,6 @@ body {
     text-overflow: ellipsis;
 }
 
-/* Toast positioning utility - use Bootstrap classes instead of inline styles */
-.toast-container-custom {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 9999;
-    min-width: 300px;
-}
 
 /* Utility class for min-height 80vh */
 .min-vh-80 {
@@ -558,6 +550,20 @@ body {
 
 .search-input-container {
     min-width: 200px;
+}
+
+/* Toastr overrides */
+#toast-container > div {
+    box-shadow: none;
+    -webkit-box-shadow: none;
+    -moz-box-shadow: none;
+    opacity: 1;
+    filter: none;
+}
+
+.toast-close-button {
+    text-shadow: none;
+    -webkit-text-shadow: none;
 }
 
 .sort-select-width {

@@ -257,38 +257,55 @@ window.applyModalStacking = applyModalStacking;
 // Override native confirm() globally
 window.confirm = customConfirm;
 
+const toastrDefaults = {
+    closeButton: true,
+    debug: false,
+    newestOnTop: false,
+    progressBar: true,
+    positionClass: 'toast-top-right',
+    preventDuplicates: false,
+    onclick: null,
+    showDuration: 300,
+    hideDuration: 1000,
+    timeOut: 5000,
+    extendedTimeOut: 1000,
+    showEasing: 'swing',
+    hideEasing: 'linear',
+    showMethod: 'fadeIn',
+    hideMethod: 'fadeOut'
+};
+
+function configureToastrOptions(overrides = {}) {
+    if (!window.toastr) {
+        return;
+    }
+    window.toastr.options = {
+        ...toastrDefaults,
+        ...(window.toastr.options || {}),
+        ...(overrides || {})
+    };
+}
+
+configureToastrOptions();
+
 /**
  * Show toast notification (XSS-safe)
  * Used across multiple JavaScript files for consistent toast notifications
  * @param {string} message - The message to display
- * @param {string} type - The alert type: 'success', 'error', or 'info' (default)
+ * @param {string} type - The toast type: 'success', 'error', 'warning', or 'info' (default)
+ * @param {object} options - Optional overrides for toast behavior
  */
-function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-    toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-
-    // Use textContent for message to prevent XSS
-    const messageSpan = document.createElement('span');
-    messageSpan.textContent = message;
-    toast.appendChild(messageSpan);
-
-    // Create close button safely
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'btn-close';
-    closeBtn.setAttribute('data-bs-dismiss', 'alert');
-    closeBtn.setAttribute('aria-label', 'Close');
-    toast.appendChild(closeBtn);
-
-    document.body.appendChild(toast);
-
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-        if (toast.parentNode) {
-            toast.remove();
-        }
-    }, 5000);
+function showToast(message, type = 'info', options = {}) {
+    if (!window.toastr) {
+        console.warn('Toastr is not loaded.');
+        return;
+    }
+    configureToastrOptions(options);
+    const normalized = String(type || 'info').toLowerCase();
+    const show = typeof window.toastr[normalized] === 'function'
+        ? window.toastr[normalized]
+        : window.toastr.info;
+    show(message);
 }
 
 /**
