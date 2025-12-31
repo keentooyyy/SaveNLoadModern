@@ -400,6 +400,12 @@ document.addEventListener('DOMContentLoaded', function () {
             const saveLocations = saveLocationManager.getAllLocations();
             const banner = document.getElementById('banner')?.value.trim();
 
+            const duplicateLocations = saveLocationManager.getDuplicateLocations();
+            if (duplicateLocations.length > 0) {
+                window.showToast('Duplicate save file locations are not allowed.', 'error');
+                return;
+            }
+
             if (!name || saveLocations.length === 0) {
                 window.showToast('Game name and at least one save file location are required.', 'error');
                 return;

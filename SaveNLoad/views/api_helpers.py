@@ -85,6 +85,36 @@ def normalize_save_file_locations(data, single_key='save_file_location', multi_k
     return [loc.strip() for loc in save_file_locations if loc and loc.strip()]
 
 
+def validate_unique_save_file_locations(save_file_locations):
+    """
+    Ensure save file locations are unique (case-insensitive, normalized paths).
+    Returns: JsonResponse error or None
+    """
+    if not save_file_locations:
+        return None
+
+    seen = set()
+    duplicates = set()
+
+    for location in save_file_locations:
+        cleaned = str(location).strip()
+        if not cleaned:
+            continue
+        normalized = os.path.normpath(cleaned).replace('\\', '/').lower()
+        if normalized in seen:
+            duplicates.add(cleaned)
+        else:
+            seen.add(normalized)
+
+    if duplicates:
+        return json_response_error(
+            'Duplicate save file locations are not allowed',
+            status=400
+        )
+
+    return None
+
+
 def get_game_or_error(game_id):
     """
     Get game by ID or return error response

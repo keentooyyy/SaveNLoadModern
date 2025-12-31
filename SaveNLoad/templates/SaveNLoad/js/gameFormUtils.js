@@ -202,6 +202,27 @@ class SaveLocationManager {
     }
 
     /**
+     * Get duplicate save locations (case-insensitive, slash-normalized)
+     * @returns {string[]} Array of duplicate locations
+     */
+    getDuplicateLocations() {
+        const locations = this.getAllLocations();
+        const seen = new Set();
+        const duplicates = new Set();
+
+        locations.forEach(location => {
+            const normalized = location.replace(/\\/g, '/').toLowerCase();
+            if (seen.has(normalized)) {
+                duplicates.add(location);
+            } else {
+                seen.add(normalized);
+            }
+        });
+
+        return Array.from(duplicates);
+    }
+
+    /**
      * Populate save locations in the form
      * @param {string} saveFileLocation - Newline-separated locations
      */

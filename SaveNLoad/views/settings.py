@@ -11,6 +11,7 @@ from SaveNLoad.views.api_helpers import (
     json_response_success,
     delete_game_banner_file,
     normalize_save_file_locations,
+    validate_unique_save_file_locations,
     cleanup_operations_by_status,
     cleanup_operations_by_age
 )
@@ -86,6 +87,10 @@ def create_game(request):
         
         if not save_file_locations:
             return json_response_error('At least one valid save file location is required.', status=400)
+
+        duplicate_error = validate_unique_save_file_locations(save_file_locations)
+        if duplicate_error:
+            return duplicate_error
         
         # Check if game with same name already exists
         if Game.objects.filter(name=name).exists():
@@ -384,6 +389,10 @@ def game_detail(request, game_id):
         
         if not save_file_locations:
             return json_response_error('At least one valid save file location is required.', status=400)
+
+        duplicate_error = validate_unique_save_file_locations(save_file_locations)
+        if duplicate_error:
+            return duplicate_error
 
         # Ensure unique name (excluding this game)
         if Game.objects.exclude(pk=game.id).filter(name=name).exists():

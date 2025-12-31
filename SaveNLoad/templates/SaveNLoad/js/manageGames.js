@@ -213,6 +213,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const saveLocations = manageSaveLocationManager.getAllLocations();
         const filteredLocations = saveLocations.filter(loc => loc && loc.trim());
 
+        const duplicateLocations = manageSaveLocationManager.getDuplicateLocations();
+        if (duplicateLocations.length > 0) {
+            window.showToast('Duplicate save file locations are not allowed.', 'error');
+            return;
+        }
+
         if (filteredLocations.length === 0) {
             window.showToast('At least one save file location is required', 'error');
             return;
