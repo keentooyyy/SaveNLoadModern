@@ -497,6 +497,7 @@ class RcloneClient:
         # Normalize and build full remote path
         normalized_path = self._normalize_path(remote_ftp_path)
         remote_full = self._build_remote_path(normalized_path)
+        base_path = normalized_path
         
         # If we need to strip path_X prefix, use temp directory workaround
         if strip_path_prefix:
@@ -645,7 +646,7 @@ class RcloneClient:
             check_cmd = ['lsjson', remote_full]
             check_success, _, _ = self._run_rclone(check_cmd, timeout=30)
             if not check_success:
-                return False, [], [], f"Path not found: {remote_path}"
+                return False, [], [], f"Path not found: {base_path}"
             return False, [], [], f"List failed: {stderr.strip() or 'Unknown error'}"
         
         # Parse JSON output
@@ -656,14 +657,14 @@ class RcloneClient:
         
         files = []
         directories = set()
-        base_path_len = len(remote_path) if remote_path else 0
+        base_path_len = len(base_path) if base_path else 0
         
         for item in items:
             full_path = item.get('Path', '').replace('\\', '/')
             
             # Get relative path (remove base path)
-            if base_path_len > 0 and full_path.startswith(remote_path):
-                rel_path = full_path[len(remote_path):].lstrip('/')
+            if base_path_len > 0 and full_path.startswith(base_path):
+                rel_path = full_path[len(base_path):].lstrip('/')
             else:
                 rel_path = full_path
             

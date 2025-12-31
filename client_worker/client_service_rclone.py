@@ -594,9 +594,6 @@ Please ensure:
         local_path contains JSON with paths and create_folders flag
         """
         import json
-        import subprocess
-        import platform
-        import os
         
         try:
             # Parse JSON data
@@ -983,8 +980,6 @@ Please ensure:
         try:
             while self.running:
                 time.sleep(1)
-        except KeyboardInterrupt:
-            pass
         except KeyboardInterrupt:
             # This will be caught by signal handler, but handle it here too
             self._shutdown(client_id)
