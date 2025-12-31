@@ -8,54 +8,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Uses shared utility functions from utils.js (showToast, setButtonLoadingState, showError, clearError, getCsrfToken, createFetchHeaders)
 
-    function clearFieldErrors() {
-        // Clear all field errors
-        const errorElements = document.querySelectorAll('.invalid-feedback');
-        const inputs = document.querySelectorAll('.is-invalid');
-        errorElements.forEach(el => clearError(el));
-        inputs.forEach(input => {
-            input.classList.remove('is-invalid');
-            input.classList.remove('border-danger');
-        });
-    }
-
-    function showFieldError(fieldName, message) {
-        const input = document.getElementById(fieldName);
-        const errorDiv = document.getElementById(fieldName + '-error');
-
-        if (input && errorDiv) {
-            input.classList.add('is-invalid');
-            input.classList.add('border-danger');
-            showError(errorDiv, message);
-        }
-    }
-
-    function clearSpecificFieldError(fieldName) {
-        const input = document.getElementById(fieldName);
-        const errorDiv = document.getElementById(fieldName + '-error');
-
-        if (input && errorDiv) {
-            input.classList.remove('is-invalid');
-            input.classList.remove('border-danger');
-            clearError(errorDiv);
-        }
-    }
-
     // Clear field errors when user starts typing
-    const usernameInput = document.getElementById('username');
-    const passwordInput = document.getElementById('password');
-
-    if (usernameInput) {
-        usernameInput.addEventListener('input', function () {
-            clearSpecificFieldError('username');
-        });
-    }
-
-    if (passwordInput) {
-        passwordInput.addEventListener('input', function () {
-            clearSpecificFieldError('password');
-        });
-    }
+    setupFieldErrorClear(['username', 'password']);
 
     loginForm.addEventListener('submit', function (e) {
         e.preventDefault();

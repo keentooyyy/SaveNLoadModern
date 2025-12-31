@@ -957,31 +957,6 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        // Show toast notification
-        function showToast(message, type = 'info') {
-            const toast = document.createElement('div');
-            const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-            toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-
-            const messageText = document.createTextNode(message);
-            toast.appendChild(messageText);
-
-            const closeBtn = document.createElement('button');
-            closeBtn.type = 'button';
-            closeBtn.className = 'btn-close';
-            closeBtn.setAttribute('data-bs-dismiss', 'alert');
-            closeBtn.setAttribute('aria-label', 'Close');
-            toast.appendChild(closeBtn);
-
-            document.body.appendChild(toast);
-
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    toast.remove();
-                }
-            }, 5000);
-        }
-
         try {
             const urlPattern = window.DELETE_SAVE_FOLDER_URL_PATTERN;
             // Replace both placeholders: first game_id, then folder_number
@@ -1036,31 +1011,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!csrfToken) {
             console.error('CSRF token not found');
             return;
-        }
-
-        // Show toast notification
-        function showToast(message, type = 'info') {
-            const toast = document.createElement('div');
-            const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-            toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-
-            const messageText = document.createTextNode(message);
-            toast.appendChild(messageText);
-
-            const closeBtn = document.createElement('button');
-            closeBtn.type = 'button';
-            closeBtn.className = 'btn-close';
-            closeBtn.setAttribute('data-bs-dismiss', 'alert');
-            closeBtn.setAttribute('aria-label', 'Close');
-            toast.appendChild(closeBtn);
-
-            document.body.appendChild(toast);
-
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    toast.remove();
-                }
-            }, 5000);
         }
 
         try {
@@ -1298,31 +1248,6 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        // Show toast notification helper
-        function showToast(message, type = 'info') {
-            const toast = document.createElement('div');
-            const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-            toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-
-            const messageText = document.createTextNode(message);
-            toast.appendChild(messageText);
-
-            const closeBtn = document.createElement('button');
-            closeBtn.type = 'button';
-            closeBtn.className = 'btn-close';
-            closeBtn.setAttribute('data-bs-dismiss', 'alert');
-            closeBtn.setAttribute('aria-label', 'Close');
-            toast.appendChild(closeBtn);
-
-            document.body.appendChild(toast);
-
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    toast.remove();
-                }
-            }, 5000);
-        }
-
         const url = window.OPEN_SAVE_LOCATION_URL_PATTERN.replace('0', gameId);
 
         try {
@@ -1487,29 +1412,6 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await response.json();
 
             if (!response.ok || !data.success) {
-                function showToast(message, type = 'info') {
-                    const toast = document.createElement('div');
-                    const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-                    toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-
-                    const messageText = document.createTextNode(message);
-                    toast.appendChild(messageText);
-
-                    const closeBtn = document.createElement('button');
-                    closeBtn.type = 'button';
-                    closeBtn.className = 'btn-close';
-                    closeBtn.setAttribute('data-bs-dismiss', 'alert');
-                    closeBtn.setAttribute('aria-label', 'Close');
-                    toast.appendChild(closeBtn);
-
-                    document.body.appendChild(toast);
-
-                    setTimeout(() => {
-                        if (toast.parentNode) {
-                            toast.remove();
-                        }
-                    }, 5000);
-                }
                 window.showToast(data.error || 'Failed to create backup', 'error');
                 return;
             }
@@ -1528,85 +1430,16 @@ document.addEventListener('DOMContentLoaded', function () {
                         checkBackupResult(operationId);
                     },
                     () => {
-                        function showToast(message, type = 'info') {
-                            const toast = document.createElement('div');
-                            const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-                            toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-
-                            const messageText = document.createTextNode(message);
-                            toast.appendChild(messageText);
-
-                            const closeBtn = document.createElement('button');
-                            closeBtn.type = 'button';
-                            closeBtn.className = 'btn-close';
-                            closeBtn.setAttribute('data-bs-dismiss', 'alert');
-                            closeBtn.setAttribute('aria-label', 'Close');
-                            toast.appendChild(closeBtn);
-
-                            document.body.appendChild(toast);
-
-                            setTimeout(() => {
-                                if (toast.parentNode) {
-                                    toast.remove();
-                                }
-                            }, 5000);
-                        }
                         window.showToast('Backup failed', 'error');
                     }
                 );
             } else {
                 // Fallback: no operation ID, show toast
-                function showToast(message, type = 'info') {
-                    const toast = document.createElement('div');
-                    const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-                    toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-
-                    const messageText = document.createTextNode(message);
-                    toast.appendChild(messageText);
-
-                    const closeBtn = document.createElement('button');
-                    closeBtn.type = 'button';
-                    closeBtn.className = 'btn-close';
-                    closeBtn.setAttribute('data-bs-dismiss', 'alert');
-                    closeBtn.setAttribute('aria-label', 'Close');
-                    toast.appendChild(closeBtn);
-
-                    document.body.appendChild(toast);
-
-                    setTimeout(() => {
-                        if (toast.parentNode) {
-                            toast.remove();
-                        }
-                    }, 5000);
-                }
                 window.showToast(data.message || 'Backup operation queued', 'info');
             }
 
         } catch (error) {
             console.error('Error creating backup:', error);
-            function showToast(message, type = 'info') {
-                const toast = document.createElement('div');
-                const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-                toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-
-                const messageText = document.createTextNode(message);
-                toast.appendChild(messageText);
-
-                const closeBtn = document.createElement('button');
-                closeBtn.type = 'button';
-                closeBtn.className = 'btn-close';
-                closeBtn.setAttribute('data-bs-dismiss', 'alert');
-                closeBtn.setAttribute('aria-label', 'Close');
-                toast.appendChild(closeBtn);
-
-                document.body.appendChild(toast);
-
-                setTimeout(() => {
-                    if (toast.parentNode) {
-                        toast.remove();
-                    }
-                }, 5000);
-            }
             window.showToast('Error: Failed to create backup. Please try again.', 'error');
         }
     }
@@ -1787,30 +1620,6 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await response.json();
 
             if (!response.ok || !data.success) {
-                // Show toast notification
-                function showToast(message, type = 'info') {
-                    const toast = document.createElement('div');
-                    const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-                    toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-
-                    const messageText = document.createTextNode(message);
-                    toast.appendChild(messageText);
-
-                    const closeBtn = document.createElement('button');
-                    closeBtn.type = 'button';
-                    closeBtn.className = 'btn-close';
-                    closeBtn.setAttribute('data-bs-dismiss', 'alert');
-                    closeBtn.setAttribute('aria-label', 'Close');
-                    toast.appendChild(closeBtn);
-
-                    document.body.appendChild(toast);
-
-                    setTimeout(() => {
-                        if (toast.parentNode) {
-                            toast.remove();
-                        }
-                    }, 5000);
-                }
                 window.showToast(data.error || 'Failed to delete all saves', 'error');
                 return;
             }
@@ -1838,58 +1647,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 );
             } else {
                 // Fallback: no operation IDs, show toast
-                function showToast(message, type = 'info') {
-                    const toast = document.createElement('div');
-                    const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-                    toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-
-                    const messageText = document.createTextNode(message);
-                    toast.appendChild(messageText);
-
-                    const closeBtn = document.createElement('button');
-                    closeBtn.type = 'button';
-                    closeBtn.className = 'btn-close';
-                    closeBtn.setAttribute('data-bs-dismiss', 'alert');
-                    closeBtn.setAttribute('aria-label', 'Close');
-                    toast.appendChild(closeBtn);
-
-                    document.body.appendChild(toast);
-
-                    setTimeout(() => {
-                        if (toast.parentNode) {
-                            toast.remove();
-                        }
-                    }, 5000);
-                }
                 window.showToast(data.message || 'All saves deleted successfully!', 'success');
                 loadSaveFolders(gameId);
             }
 
         } catch (error) {
             console.error('Error deleting all saves:', error);
-            function showToast(message, type = 'info') {
-                const toast = document.createElement('div');
-                const alertType = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
-                toast.className = `alert alert-${alertType} alert-dismissible fade show position-fixed toast-container-custom`;
-
-                const messageText = document.createTextNode(message);
-                toast.appendChild(messageText);
-
-                const closeBtn = document.createElement('button');
-                closeBtn.type = 'button';
-                closeBtn.className = 'btn-close';
-                closeBtn.setAttribute('data-bs-dismiss', 'alert');
-                closeBtn.setAttribute('aria-label', 'Close');
-                toast.appendChild(closeBtn);
-
-                document.body.appendChild(toast);
-
-                setTimeout(() => {
-                    if (toast.parentNode) {
-                        toast.remove();
-                    }
-                }, 5000);
-            }
             window.showToast('Error: Failed to delete all saves. Please try again.', 'error');
         }
     }

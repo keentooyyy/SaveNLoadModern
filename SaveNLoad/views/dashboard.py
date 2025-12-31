@@ -8,7 +8,7 @@ from django.views.decorators.http import require_http_methods
 from datetime import timedelta
 import json
 from SaveNLoad.views.custom_decorators import login_required, get_current_user, client_worker_required
-from SaveNLoad.views.api_helpers import check_admin_or_error, json_response_success
+from SaveNLoad.views.api_helpers import check_admin_or_error, json_response_success, get_game_save_locations
 from SaveNLoad.views.rawg_api import get_popular_games
 from SaveNLoad.models import SimpleUsers, Game
 from SaveNLoad.models.operation_constants import OperationType
@@ -94,7 +94,7 @@ def _get_dashboard_context_data(user):
     for game in db_games:
         # Use annotated field instead of map lookup
         last_played = game.user_last_played
-        save_locations = game.save_file_locations if isinstance(game.save_file_locations, list) else []
+        save_locations = get_game_save_locations(game)
         available_games.append({
             'id': game.id,
             'title': game.name,
@@ -190,7 +190,7 @@ def search_available_games(request):
     # Execute query
     for game in db_games:
         last_played = game.user_last_played
-        save_locations = game.save_file_locations if isinstance(game.save_file_locations, list) else []
+        save_locations = get_game_save_locations(game)
         games_list.append({
             'id': game.id,
             'title': game.name,

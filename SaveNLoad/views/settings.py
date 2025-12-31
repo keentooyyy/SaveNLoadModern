@@ -9,7 +9,10 @@ from SaveNLoad.views.api_helpers import (
     check_admin_or_error,
     json_response_error,
     json_response_success,
-    delete_game_banner_file
+    delete_game_banner_file,
+    normalize_save_file_locations,
+    cleanup_operations_by_status,
+    cleanup_operations_by_age
 )
 from SaveNLoad.views.rawg_api import search_games as rawg_search_games
 from SaveNLoad.models import Game
@@ -67,24 +70,20 @@ def create_game(request):
                 return error_response
             name = (data.get('name') or '').strip()
             # Support both single and multiple save locations
-            save_file_locations = data.get('save_file_locations', [])
-            if not save_file_locations:
-                # Fallback to single location for backward compatibility
-                single_location = (data.get('save_file_location') or '').strip()
-                if single_location:
-                    save_file_locations = [single_location]
+            save_file_locations = normalize_save_file_locations(data)
             banner = (data.get('banner') or '').strip()
         else:
             name = request.POST.get('name', '').strip()
-            save_file_location = request.POST.get('save_file_location', '').strip()
-            save_file_locations = [save_file_location] if save_file_location else []
+            form_data = {
+                'save_file_location': request.POST.get('save_file_location', '').strip(),
+                'save_file_locations': request.POST.getlist('save_file_locations')
+            }
+            save_file_locations = normalize_save_file_locations(form_data)
             banner = request.POST.get('banner', '').strip()
         
         if not name or not save_file_locations:
             return json_response_error('Game name and at least one save file location are required.', status=400)
         
-        # Filter out empty locations
-        save_file_locations = [loc.strip() for loc in save_file_locations if loc.strip()]
         if not save_file_locations:
             return json_response_error('At least one valid save file location is required.', status=400)
         
@@ -376,20 +375,13 @@ def game_detail(request, game_id):
 
         name = (data.get('name') or '').strip()
         # Support both single and multiple save locations
-        save_file_locations = data.get('save_file_locations', [])
-        if not save_file_locations:
-            # Fallback to single location for backward compatibility
-            single_location = (data.get('save_file_location') or '').strip()
-            if single_location:
-                save_file_locations = [single_location]
+        save_file_locations = normalize_save_file_locations(data)
         
         banner = (data.get('banner') or '').strip()
 
         if not name or not save_file_locations:
             return json_response_error('Game name and at least one save file location are required.', status=400)
         
-        # Filter out empty locations
-        save_file_locations = [loc.strip() for loc in save_file_locations if loc.strip()]
         if not save_file_locations:
             return json_response_error('At least one valid save file location is required.', status=400)
 
@@ -760,103 +752,37 @@ def operation_queue_cleanup(request):
     
     from SaveNLoad.utils.redis_client import get_redis_client
     from SaveNLoad.services.redis_operation_service import OperationStatus
-    from django.utils import timezone
-    from datetime import timedelta
     
     data, error_response = parse_json_body(request)
     if error_response:
         return error_response
     
     cleanup_type = data.get('type', '').strip()
-    redis_client = get_redis_client()
     
     if cleanup_type == 'completed':
-        # Get all completed operations
-        operation_keys = redis_client.keys('operation:*')
-        completed_keys = []
-        for key in operation_keys:
-            status = redis_client.hget(key, 'status')
-            if status == OperationStatus.COMPLETED:
-                completed_keys.append(key)
-        
-        deleted_count = 0
-        for key in completed_keys:
-            redis_client.delete(key)
-            deleted_count += 1
-        
-        if deleted_count == 0:
-            return json_response_success(
-                message='No completed operations to delete',
-                data={'deleted_count': 0}
-            )
-        
-        return json_response_success(
-            message=f'Deleted {deleted_count} completed operation(s)',
-            data={'deleted_count': deleted_count}
+        return cleanup_operations_by_status(
+            status=OperationStatus.COMPLETED,
+            no_items_message='No completed operations to delete',
+            success_message_template='Deleted {count} completed operation(s)'
         )
     
     elif cleanup_type == 'failed':
-        # Get all failed operations
-        operation_keys = redis_client.keys('operation:*')
-        failed_keys = []
-        for key in operation_keys:
-            status = redis_client.hget(key, 'status')
-            if status == OperationStatus.FAILED:
-                failed_keys.append(key)
-        
-        deleted_count = 0
-        for key in failed_keys:
-            redis_client.delete(key)
-            deleted_count += 1
-        
-        if deleted_count == 0:
-            return json_response_success(
-                message='No failed operations to delete',
-                data={'deleted_count': 0}
-            )
-        
-        return json_response_success(
-            message=f'Deleted {deleted_count} failed operation(s)',
-            data={'deleted_count': deleted_count}
+        return cleanup_operations_by_status(
+            status=OperationStatus.FAILED,
+            no_items_message='No failed operations to delete',
+            success_message_template='Deleted {count} failed operation(s)'
         )
     
     elif cleanup_type == 'old':
-        # Get operations older than 30 days
-        thirty_days_ago = timezone.now() - timedelta(days=30)
-        operation_keys = redis_client.keys('operation:*')
-        old_keys = []
-        
-        for key in operation_keys:
-            created_at_str = redis_client.hget(key, 'created_at')
-            if created_at_str:
-                try:
-                    from datetime import datetime
-                    created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
-                    if timezone.is_aware(created_at):
-                        created_at = timezone.make_naive(created_at)
-                    if created_at < timezone.make_naive(thirty_days_ago):
-                        old_keys.append(key)
-                except:
-                    pass
-        
-        deleted_count = 0
-        for key in old_keys:
-            redis_client.delete(key)
-            deleted_count += 1
-        
-        if deleted_count == 0:
-            return json_response_success(
-                message='No old operations (30+ days) to delete',
-                data={'deleted_count': 0}
-            )
-        
-        return json_response_success(
-            message=f'Deleted {deleted_count} old operation(s) (30+ days)',
-            data={'deleted_count': deleted_count}
+        return cleanup_operations_by_age(
+            days=30,
+            no_items_message='No old operations (30+ days) to delete',
+            success_message_template='Deleted {count} old operation(s) (30+ days)'
         )
     
     elif cleanup_type == 'all':
         # Delete all operations
+        redis_client = get_redis_client()
         operation_keys = redis_client.keys('operation:*')
         deleted_count = len(operation_keys)
         

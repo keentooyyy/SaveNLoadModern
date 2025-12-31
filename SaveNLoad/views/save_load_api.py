@@ -11,23 +11,24 @@ from SaveNLoad.views.api_helpers import (
     get_game_or_error,
     get_client_worker_or_error,
     get_local_save_path_or_error,
-    get_all_save_paths_or_error,
+    resolve_save_paths_or_error,
     get_save_folder_or_error,
     get_latest_save_folder_or_error,
     validate_save_folder_or_error,
+    validate_game_path_mapping_or_error,
+    get_game_save_locations,
     create_operation_response,
-    get_operation_or_error,
     json_response_error,
     json_response_success
 )
 from SaveNLoad.utils.string_utils import transform_path_error_message
 from SaveNLoad.utils.datetime_utils import calculate_progress_percentage, to_isoformat
 from SaveNLoad.utils.model_utils import filter_by_user_and_game
+from SaveNLoad.utils.path_utils import generate_game_directory_path, generate_save_folder_path
 from SaveNLoad.models.save_folder import SaveFolder
 from SaveNLoad.models import Game
 from SaveNLoad.services.redis_operation_service import create_operation
 import json
-import os
 import zipfile
 import tempfile
 import io
@@ -50,12 +51,8 @@ def _build_full_remote_path(username: str, game_name: str, save_folder_number: i
     Returns:
         Complete remote path like "username/GameName/save_1" or "username/GameName/save_1/path_2"
     """
-    # Sanitize game name - keep only alphanumeric, spaces, hyphens, and underscores
-    safe_game_name = "".join(c for c in game_name if c.isalnum() or c in (' ', '-', '_')).strip()
-    safe_game_name = safe_game_name.replace(' ', '_')
-    
-    # Build base path
-    remote_path = f"{username}/{safe_game_name}/save_{save_folder_number}"
+    # Build base path using shared sanitization rules
+    remote_path = generate_save_folder_path(username, game_name, save_folder_number)
     
     # Add path_index if provided (for multi-path games)
     if path_index is not None:
@@ -93,27 +90,15 @@ def save_game(request, game_id):
         if error_response:
             return error_response
     
-        # Check if multiple paths are provided OR if game has multiple paths
-        # First check if explicit paths are provided in request
-        if 'local_save_paths' in data:
-            # Handle multiple save locations from request
-            save_paths = data.get('local_save_paths', [])
-            
-            # If empty array provided, fail immediately - no fallback
-            if isinstance(save_paths, list) and len(save_paths) == 0:
-                return json_response_error('local_save_paths cannot be empty. Please provide at least one save file path.', status=400)
-            
-            # Validate provided paths
-            save_paths, error_response = get_all_save_paths_or_error(data, game, 'local_save_paths')
-            if error_response:
-                return error_response
-        # Check if game has multiple paths stored in JSON array
-        elif game.save_file_locations and isinstance(game.save_file_locations, list) and len(game.save_file_locations) > 1:
-            # Game has multiple paths - use them directly
-            save_paths = [path.strip() for path in game.save_file_locations if path and path.strip()]
-            if not save_paths:
-                return json_response_error('Game has invalid save file locations', status=400)
-        else:
+        save_paths, error_response, use_multi_paths = resolve_save_paths_or_error(
+            data,
+            game,
+            require_non_empty_if_provided=True
+        )
+        if error_response:
+            return error_response
+        
+        if not use_multi_paths:
             # Single path (existing behavior) - no path_index
             local_save_path, error_response = get_local_save_path_or_error(data, game)
             if error_response:
@@ -166,31 +151,13 @@ def save_game(request, game_id):
         # Create operations for each path using path mappings
         operation_ids = []
         for path in save_paths:
-            # Validate path is in game's configured paths
-            normalized_path = os.path.normpath(path)
-            # Ensure save_file_locations is a list
-            if not game.save_file_locations:
-                return json_response_error('Game has no save file locations configured', status=400)
-            if not isinstance(game.save_file_locations, list):
-                return json_response_error('Game save file locations is invalid', status=400)
-            game_paths = {os.path.normpath(p) for p in game.save_file_locations if p}
-            
-            if normalized_path not in game_paths:
-                return json_response_error(
-                    f'Path "{path}" is not configured for this game. Please edit the game to add this path.',
-                    status=400
-                )
-            
-            # Get path_index from existing mapping (no auto-creation)
-            if use_subfolders:
-                path_index = game.get_path_index(path)
-                if path_index is None:
-                    return json_response_error(
-                        f'Path "{path}" is not mapped. Please edit the game to configure path mappings.',
-                        status=400
-                    )
-            else:
-                path_index = None
+            path_index, error_response = validate_game_path_mapping_or_error(
+                game,
+                path,
+                use_subfolders
+            )
+            if error_response:
+                return error_response
             
             # Build complete remote FTP path on server
             remote_ftp_path = _build_full_remote_path(
@@ -270,20 +237,11 @@ def load_game(request, game_id):
         if error_response:
             return error_response
     
-    # Check if multiple paths are provided OR if game has multiple paths
-    # First check if explicit paths are provided in request
-    if 'local_save_paths' in data:
-        # Handle multiple save locations from request
-        load_paths, error_response = get_all_save_paths_or_error(data, game, 'local_save_paths')
-        if error_response:
-            return error_response
-    # Check if game has multiple paths stored in JSON array
-    elif game.save_file_locations and isinstance(game.save_file_locations, list) and len(game.save_file_locations) > 1:
-        # Game has multiple paths - use them directly
-        load_paths = [path.strip() for path in game.save_file_locations if path and path.strip()]
-        if not load_paths:
-            return json_response_error('Game has invalid save file locations', status=400)
-    else:
+    load_paths, error_response, use_multi_paths = resolve_save_paths_or_error(data, game)
+    if error_response:
+        return error_response
+    
+    if not use_multi_paths:
         # Single path (existing behavior) - no path_index
         local_save_path, error_response = get_local_save_path_or_error(data, game)
         if error_response:
@@ -323,27 +281,13 @@ def load_game(request, game_id):
     # Create operations for each path using path mappings
     operation_ids = []
     for path in load_paths:
-        # Validate path is in game's configured paths
-        normalized_path = os.path.normpath(path)
-        game_paths = {os.path.normpath(p) for p in game.save_file_locations if p}
-        
-        if normalized_path not in game_paths:
-            return json_response_error(
-                f'Path "{path}" is not configured for this game. Please edit the game to add this path.',
-                status=400
-            )
-        
-        # Get path_index from mapping (or None if not mapped and single path)
-        if use_subfolders:
-            path_index = game.get_path_index(path)
-            # If path not mapped, this is an error - can't load without knowing which server path
-            if path_index is None:
-                return json_response_error(
-                    f'Path "{path}" is not mapped. Please edit the game to configure path mappings.',
-                    status=400
-                )
-        else:
-            path_index = None
+        path_index, error_response = validate_game_path_mapping_or_error(
+            game,
+            path,
+            use_subfolders
+        )
+        if error_response:
+            return error_response
         
         # Build complete remote FTP path on server
         remote_ftp_path = _build_full_remote_path(
@@ -723,9 +667,7 @@ def backup_all_saves(request, game_id):
     # Create backup operation in queue
     # Backup doesn't need local_save_path or save_folder_number, but we need to provide remote path base
     # Build base path for all game saves (username/gamename)
-    safe_game_name = "".join(c for c in game.name if c.isalnum() or c in (' ', '-', '_')).strip()
-    safe_game_name = safe_game_name.replace(' ', '_')
-    remote_ftp_path = f"{user.username}/{safe_game_name}"
+    remote_ftp_path = generate_game_directory_path(user.username, game.name)
     
     operation_id = create_operation(
         {
@@ -855,7 +797,7 @@ def get_game_save_location(request, game_id):
         return error_response
     
     # Return first path for backward compatibility, or all paths
-    save_paths = game.save_file_locations if isinstance(game.save_file_locations, list) else []
+    save_paths = get_game_save_locations(game)
     return json_response_success(
         data={
             'save_file_location': save_paths[0] if save_paths else '',
@@ -889,7 +831,7 @@ def open_save_location(request, game_id):
         return error_response
     
     # Get all save paths for opening folders
-    save_paths = game.save_file_locations if isinstance(game.save_file_locations, list) and len(game.save_file_locations) > 0 else []
+    save_paths = get_game_save_locations(game)
     
     if not save_paths:
         return json_response_error('No save file location found for this game', status=400)

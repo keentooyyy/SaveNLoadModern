@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const emailInput = document.getElementById('email');
             const emailError = document.getElementById('email-error');
-            const email = emailInput.value.trim();
+            const email = sanitizeEmailInput(emailInput.value);
             const csrfToken = getCsrfToken();
 
             // Clear previous errors
@@ -27,8 +27,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             // Basic email format validation
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
+            if (!validateEmailFormat(email)) {
                 showError(emailError, 'Please enter a valid email address.');
                 return;
             }

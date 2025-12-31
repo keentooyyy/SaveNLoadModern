@@ -31,7 +31,6 @@ from SaveNLoad.views.api_helpers import (
     json_response_success,
     delete_game_banner_file
 )
-import json
 import os
 
 
@@ -194,7 +193,9 @@ def get_pending_operations(request, client_id):
 def update_operation_progress(request, operation_id):
     """Update progress for an operation"""
     try:
-        data = json.loads(request.body or "{}")
+        data, error_response = parse_json_body(request)
+        if error_response:
+            return error_response
         
         # Check if operation exists
         operation = get_operation(operation_id)
@@ -343,7 +344,9 @@ def complete_operation(request, operation_id):
     from django.utils import timezone
     
     try:
-        data = json.loads(request.body or "{}")
+        data, error_response = parse_json_body(request)
+        if error_response:
+            return error_response
         
         # Get operation from Redis
         operation_dict = get_operation(operation_id)

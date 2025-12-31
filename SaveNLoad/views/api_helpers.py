@@ -7,8 +7,7 @@ from django.urls import reverse
 from SaveNLoad.models import Game
 from SaveNLoad.services.redis_worker_service import (
     get_user_workers,
-    is_worker_online,
-    get_worker_info
+    is_worker_online
 )
 from SaveNLoad.views.custom_decorators import get_current_user
 from SaveNLoad.utils.image_utils import get_image_url_or_fallback
@@ -65,6 +64,25 @@ def parse_json_body(request):
         return data, None
     except json.JSONDecodeError:
         return {}, json_response_error('Invalid JSON body', status=400)
+
+
+def normalize_save_file_locations(data, single_key='save_file_location', multi_key='save_file_locations'):
+    """
+    Normalize save file locations from a payload into a list of cleaned paths.
+    Returns: list of non-empty path strings
+    """
+    save_file_locations = data.get(multi_key, [])
+    
+    if not save_file_locations:
+        single_location = (data.get(single_key) or '').strip()
+        if single_location:
+            save_file_locations = [single_location]
+    
+    # Handle single string payloads
+    if isinstance(save_file_locations, str):
+        save_file_locations = [save_file_locations]
+    
+    return [loc.strip() for loc in save_file_locations if loc and loc.strip()]
 
 
 def get_game_or_error(game_id):
@@ -273,6 +291,79 @@ def get_all_save_paths_or_error(data, game, field_name='local_save_paths'):
     return save_paths, None
 
 
+def resolve_save_paths_or_error(data, game, require_non_empty_if_provided=False):
+    """
+    Resolve save paths and determine if multi-path handling should be used.
+    Returns: (save_paths_list_or_none, error_response_or_none, use_multi_paths_bool)
+    """
+    if 'local_save_paths' in data:
+        save_paths = data.get('local_save_paths', [])
+        if require_non_empty_if_provided and isinstance(save_paths, list) and len(save_paths) == 0:
+            return None, json_response_error(
+                'local_save_paths cannot be empty. Please provide at least one save file path.',
+                status=400
+            ), True
+        
+        save_paths, error_response = get_all_save_paths_or_error(data, game, 'local_save_paths')
+        if error_response:
+            return None, error_response, True
+        
+        return save_paths, None, True
+    
+    if game.save_file_locations and isinstance(game.save_file_locations, list) and len(game.save_file_locations) > 1:
+        save_paths = [path.strip() for path in game.save_file_locations if path and path.strip()]
+        if not save_paths:
+            return None, json_response_error('Game has invalid save file locations', status=400), True
+        return save_paths, None, True
+    
+    return None, None, False
+
+
+def get_game_paths_or_error(game):
+    """
+    Validate and return normalized save paths configured for a game.
+    Returns: (set_of_normalized_paths, error_response_or_none)
+    """
+    if not game.save_file_locations:
+        return None, json_response_error('Game has no save file locations configured', status=400)
+    if not isinstance(game.save_file_locations, list):
+        return None, json_response_error('Game save file locations is invalid', status=400)
+    
+    game_paths = {os.path.normpath(p) for p in game.save_file_locations if p}
+    if not game_paths:
+        return None, json_response_error('Game has invalid save file locations', status=400)
+    
+    return game_paths, None
+
+
+def validate_game_path_mapping_or_error(game, path, use_subfolders):
+    """
+    Validate a path belongs to a game's configured paths and return its path_index if needed.
+    Returns: (path_index_or_none, error_response_or_none)
+    """
+    game_paths, error_response = get_game_paths_or_error(game)
+    if error_response:
+        return None, error_response
+    
+    normalized_path = os.path.normpath(path)
+    if normalized_path not in game_paths:
+        return None, json_response_error(
+            f'Path "{path}" is not configured for this game. Please edit the game to add this path.',
+            status=400
+        )
+    
+    if use_subfolders:
+        path_index = game.get_path_index(path)
+        if path_index is None:
+            return None, json_response_error(
+                f'Path "{path}" is not mapped. Please edit the game to configure path mappings.',
+                status=400
+            )
+        return path_index, None
+    
+    return None, None
+
+
 def get_latest_save_folder_or_error(user, game):
     """
     Get latest save folder for user+game or return error response
@@ -364,6 +455,15 @@ def get_user_game_last_played(user, limit=None):
         query = query.order_by('-last_played')[:limit]
     
     return {sf['game']: sf['last_played'] for sf in query}
+
+
+def get_game_save_locations(game):
+    """
+    Return a normalized list of save file locations for a game.
+    """
+    if not game or not isinstance(game.save_file_locations, list):
+        return []
+    return [path for path in game.save_file_locations if path is not None]
 
 
 def build_game_data_dict(game, last_played=None, include_id=False, include_footer=False, footer_formatter=None):

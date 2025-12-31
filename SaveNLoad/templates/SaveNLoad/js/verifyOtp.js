@@ -98,28 +98,16 @@ document.addEventListener('DOMContentLoaded', function () {
             const otpError = document.getElementById('otp-error');
 
             // Clear previous errors
-            if (otpError) {
-                otpError.classList.add('d-none');
-                otpError.classList.remove('d-block');
-                otpError.textContent = '';
-            }
+            clearError(otpError);
 
             // Basic validation
             if (!otpCode) {
-                if (otpError) {
-                    otpError.textContent = 'OTP code is required.';
-                    otpError.classList.remove('d-none');
-                    otpError.classList.add('d-block');
-                }
+                showError(otpError, 'OTP code is required.');
                 return;
             }
 
             if (otpCode.length !== 6) {
-                if (otpError) {
-                    otpError.textContent = 'OTP code must be 6 digits.';
-                    otpError.classList.remove('d-none');
-                    otpError.classList.add('d-block');
-                }
+                showError(otpError, 'OTP code must be 6 digits.');
                 return;
             }
 
@@ -149,9 +137,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     const errorMsg = data.error || data.message || 'Invalid OTP code. Please try again.';
                     if (otpError) {
-                        otpError.textContent = errorMsg;
-                        otpError.classList.remove('d-none');
-                        otpError.classList.add('d-block');
+                        showError(otpError, errorMsg);
                     } else {
                         window.showToast(errorMsg, 'error');
                     }

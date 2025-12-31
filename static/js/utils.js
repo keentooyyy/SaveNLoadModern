@@ -402,6 +402,83 @@ function showError(errorElement, message) {
 }
 
 /**
+ * Show validation error for a specific field (input + error div)
+ * @param {string} fieldName - Input element id
+ * @param {string} message - Error message
+ * @param {object} options - Optional settings
+ * @param {string} options.errorSuffix - Error element id suffix (default: '-error')
+ * @param {HTMLElement} options.container - Optional container scope
+ */
+function showFieldError(fieldName, message, options = {}) {
+    const errorSuffix = options.errorSuffix || '-error';
+    const container = options.container || document;
+    const input = container.querySelector(`#${fieldName}`);
+    const errorDiv = container.querySelector(`#${fieldName}${errorSuffix}`);
+
+    if (input && errorDiv) {
+        input.classList.add('is-invalid');
+        input.classList.add('border-danger');
+        showError(errorDiv, message);
+    }
+}
+
+/**
+ * Clear validation error for a specific field (input + error div)
+ * @param {string} fieldName - Input element id
+ * @param {object} options - Optional settings
+ * @param {string} options.errorSuffix - Error element id suffix (default: '-error')
+ * @param {HTMLElement} options.container - Optional container scope
+ */
+function clearFieldError(fieldName, options = {}) {
+    const errorSuffix = options.errorSuffix || '-error';
+    const container = options.container || document;
+    const input = container.querySelector(`#${fieldName}`);
+    const errorDiv = container.querySelector(`#${fieldName}${errorSuffix}`);
+
+    if (input) {
+        input.classList.remove('is-invalid');
+        input.classList.remove('border-danger');
+    }
+    if (errorDiv) {
+        clearError(errorDiv);
+    }
+}
+
+/**
+ * Clear all field errors in a container
+ * @param {HTMLElement} container - Optional container scope
+ */
+function clearFieldErrors(container = document) {
+    const errorElements = container.querySelectorAll('.invalid-feedback');
+    const inputs = container.querySelectorAll('.is-invalid');
+    errorElements.forEach(el => clearError(el));
+    inputs.forEach(input => {
+        input.classList.remove('is-invalid');
+        input.classList.remove('border-danger');
+    });
+}
+
+/**
+ * Attach input listeners to clear field errors
+ * @param {string[]} fieldNames - Array of input ids
+ * @param {object} options - Optional settings
+ * @param {string} options.errorSuffix - Error element id suffix (default: '-error')
+ * @param {HTMLElement} options.container - Optional container scope
+ */
+function setupFieldErrorClear(fieldNames, options = {}) {
+    const names = Array.isArray(fieldNames) ? fieldNames : [fieldNames];
+    const container = options.container || document;
+    names.forEach(name => {
+        const input = container.querySelector(`#${name}`);
+        if (input) {
+            input.addEventListener('input', function () {
+                clearFieldError(name, options);
+            });
+        }
+    });
+}
+
+/**
  * Clear error message from error element
  * @param {HTMLElement} errorElement - The error display element
  */
@@ -451,6 +528,55 @@ function clearElement(element) {
     }
 }
 
+/**
+ * Sanitize email input (trim, strip tags, normalize, length limit)
+ * @param {string} email - Raw email input
+ * @returns {string} Sanitized email
+ */
+function sanitizeEmailInput(email) {
+    if (!email) return '';
+
+    let cleaned = email.trim();
+    const div = document.createElement('div');
+    div.textContent = cleaned;
+    cleaned = div.textContent || div.innerText || '';
+
+    if (cleaned.length > 254) {
+        cleaned = cleaned.substring(0, 254);
+    }
+
+    return cleaned.toLowerCase();
+}
+
+/**
+ * Sanitize password input (trim, remove null bytes, length limit)
+ * @param {string} password - Raw password input
+ * @returns {string} Sanitized password
+ */
+function sanitizePasswordInput(password) {
+    if (!password) return '';
+
+    let cleaned = password.trim();
+    cleaned = cleaned.replace(/\x00/g, '');
+
+    if (cleaned.length > 128) {
+        cleaned = cleaned.substring(0, 128);
+    }
+
+    return cleaned;
+}
+
+/**
+ * Validate email format
+ * @param {string} email - Email to validate
+ * @returns {boolean} True if valid
+ */
+function validateEmailFormat(email) {
+    if (!email) return false;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+}
+
 
 // Expose all utility functions to global scope
 window.showToast = showToast;
@@ -460,7 +586,14 @@ window.setButtonLoadingState = setButtonLoadingState;
 window.setButtonState = setButtonState;
 window.showError = showError;
 window.clearError = clearError;
+window.showFieldError = showFieldError;
+window.clearFieldError = clearFieldError;
+window.clearFieldErrors = clearFieldErrors;
+window.setupFieldErrorClear = setupFieldErrorClear;
 window.setupPasswordToggle = setupPasswordToggle;
 window.clearElement = clearElement;
 window.getNextModalZIndex = getNextModalZIndex;
+window.sanitizeEmailInput = sanitizeEmailInput;
+window.sanitizePasswordInput = sanitizePasswordInput;
+window.validateEmailFormat = validateEmailFormat;
 

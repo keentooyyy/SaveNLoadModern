@@ -4,60 +4,12 @@
  */
 document.addEventListener('DOMContentLoaded', function () {
 
-    // Sanitize email input
-    function sanitizeEmail(email) {
-        if (!email) return '';
-
-        // Strip whitespace
-        email = email.trim();
-
-        // Remove HTML tags (XSS prevention)
-        const div = document.createElement('div');
-        div.textContent = email;
-        email = div.textContent || div.innerText || '';
-
-        // Limit length (RFC 5321 limit is 254 characters)
-        if (email.length > 254) {
-            email = email.substring(0, 254);
-        }
-
-        // Normalize to lowercase
-        email = email.toLowerCase();
-
-        return email;
-    }
-
-    // Sanitize password input
-    function sanitizePassword(password) {
-        if (!password) return '';
-
-        // Strip whitespace
-        password = password.trim();
-
-        // Remove null bytes and other dangerous control characters
-        password = password.replace(/\x00/g, '');
-
-        // Limit length (prevent extremely long inputs)
-        if (password.length > 128) {
-            password = password.substring(0, 128);
-        }
-
-        return password;
-    }
-
-    // Validate email format
-    function validateEmailFormat(email) {
-        if (!email) return false;
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailRegex.test(email);
-    }
-
     // Initialize account settings
     const accountSettingsForm = document.getElementById('accountSettingsForm');
     const saveAccountSettingsBtn = document.getElementById('saveAccountSettingsBtn');
     const emailInput = document.getElementById('email');
     // Sanitize original email for proper comparison
-    const originalEmail = emailInput ? sanitizeEmail(emailInput.value) : '';
+    const originalEmail = emailInput ? sanitizeEmailInput(emailInput.value) : '';
 
     // Handle accordion chevron rotation
     const accountSettingsHeader = document.querySelector('.account-settings-header');
@@ -92,10 +44,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Sanitize inputs
             const rawEmail = emailInput?.value || '';
-            const email = sanitizeEmail(rawEmail);
-            const currentPassword = sanitizePassword(document.getElementById('currentPassword')?.value || '');
-            const newPassword = sanitizePassword(document.getElementById('newPassword')?.value || '');
-            const confirmPassword = sanitizePassword(document.getElementById('confirmPassword')?.value || '');
+            const email = sanitizeEmailInput(rawEmail);
+            const currentPassword = sanitizePasswordInput(document.getElementById('currentPassword')?.value || '');
+            const newPassword = sanitizePasswordInput(document.getElementById('newPassword')?.value || '');
+            const confirmPassword = sanitizePasswordInput(document.getElementById('confirmPassword')?.value || '');
 
             // Check if email changed (both are already sanitized and lowercased)
             const emailChanged = email && email !== originalEmail;

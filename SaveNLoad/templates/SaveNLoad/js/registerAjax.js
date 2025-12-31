@@ -5,68 +5,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Uses shared utility functions from utils.js
 
-    function clearFieldErrors() {
-        // Clear all field errors
-        const errorElements = document.querySelectorAll('.invalid-feedback');
-        const inputs = document.querySelectorAll('.is-invalid');
-        errorElements.forEach(el => clearError(el));
-        inputs.forEach(input => {
-            input.classList.remove('is-invalid');
-            input.classList.remove('border-danger');
-        });
-    }
-
-    function showFieldError(fieldName, message) {
-        const input = document.getElementById(fieldName);
-        const errorDiv = document.getElementById(fieldName + '-error');
-
-        if (input && errorDiv) {
-            input.classList.add('is-invalid');
-            input.classList.add('border-danger');
-            showError(errorDiv, message);
-        }
-    }
-
-    function clearSpecificFieldError(fieldName) {
-        const input = document.getElementById(fieldName);
-        const errorDiv = document.getElementById(fieldName + '-error');
-
-        if (input && errorDiv) {
-            input.classList.remove('is-invalid');
-            input.classList.remove('border-danger');
-            clearError(errorDiv);
-        }
-    }
-
     // Clear field errors when user starts typing
-    const usernameInput = document.getElementById('username');
-    const emailInput = document.getElementById('email');
-    const passwordInput = document.getElementById('password');
-    const repeatPasswordInput = document.getElementById('repeatPassword');
-
-    if (usernameInput) {
-        usernameInput.addEventListener('input', function () {
-            clearSpecificFieldError('username');
-        });
-    }
-
-    if (emailInput) {
-        emailInput.addEventListener('input', function () {
-            clearSpecificFieldError('email');
-        });
-    }
-
-    if (passwordInput) {
-        passwordInput.addEventListener('input', function () {
-            clearSpecificFieldError('password');
-        });
-    }
-
-    if (repeatPasswordInput) {
-        repeatPasswordInput.addEventListener('input', function () {
-            clearSpecificFieldError('repeatPassword');
-        });
-    }
+    setupFieldErrorClear(['username', 'email', 'password', 'repeatPassword']);
 
     registerForm.addEventListener('submit', function (e) {
         e.preventDefault();

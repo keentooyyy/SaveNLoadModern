@@ -5,6 +5,7 @@ from django.db import models
 from django.utils import timezone
 from SaveNLoad.models.user import SimpleUsers
 from SaveNLoad.models.game import Game
+from SaveNLoad.utils.path_utils import generate_save_folder_path
 
 
 class SaveFolder(models.Model):
@@ -35,22 +36,13 @@ class SaveFolder(models.Model):
     def save(self, *args, **kwargs):
         """Override save to auto-populate remote path if missing"""
         if not self.smb_path:
-            self.smb_path = self._generate_remote_path(self.user.username, self.game.name, self.folder_number)
+            self.smb_path = generate_save_folder_path(self.user.username, self.game.name, self.folder_number)
         super().save(*args, **kwargs)
     
     @property
     def folder_name(self) -> str:
         """Get the folder name (e.g., 'save_1')"""
         return f"save_{self.folder_number}"
-    
-    @staticmethod
-    def _generate_remote_path(username: str, game_name: str, folder_number: int) -> str:
-        """Generate the full remote path for a save folder in remote format (forward slashes)"""
-        # Sanitize game name
-        from SaveNLoad.utils.path_utils import sanitize_game_name
-        safe_game_name = sanitize_game_name(game_name)
-        # Generate full path in remote format: username/gamename/save_1
-        return f"{username}/{safe_game_name}/save_{folder_number}"
     
     @classmethod
     def get_or_create_next(cls, user: SimpleUsers, game: Game) -> 'SaveFolder':
@@ -75,7 +67,7 @@ class SaveFolder(models.Model):
             if oldest_folder:
                 # Reset created_at for reuse and update remote path (in case game name changed)
                 oldest_folder.created_at = timezone.now()
-                oldest_folder.smb_path = cls._generate_remote_path(user.username, game.name, oldest_folder.folder_number)
+                oldest_folder.smb_path = generate_save_folder_path(user.username, game.name, oldest_folder.folder_number)
                 oldest_folder.save(update_fields=['created_at', 'smb_path'])
                 return oldest_folder
         
@@ -88,7 +80,7 @@ class SaveFolder(models.Model):
                 break
         
         # Generate remote path
-        smb_path = cls._generate_remote_path(user.username, game.name, next_number)
+        smb_path = generate_save_folder_path(user.username, game.name, next_number)
         
         # Create new save folder
         save_folder = cls.objects.create(
