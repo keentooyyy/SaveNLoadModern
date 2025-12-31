@@ -42,6 +42,58 @@ else:
 HEARTBEAT_INTERVAL = 5  # Heartbeat interval in seconds (how often to update Redis heartbeat)
 WORKER_HEARTBEAT_TTL = 10  # Worker heartbeat TTL in seconds (must match server's WORKER_HEARTBEAT_TTL)
 
+_single_instance_handle = None  # Hold mutex/lock handle so it stays alive for process lifetime.
+
+def _show_single_instance_message():
+    # Keep the user-facing text in one place for both UI and console output.
+    message = "SaveNLoad Client Worker is already running. Close the existing instance before starting a new one."
+    try:
+        print(message)
+        # Pause so the message is readable in an .exe console window.
+        if sys.stdin and sys.stdin.isatty():
+            input("Press Enter to close...")
+    except Exception:
+        pass
+
+def _set_console_title(title: str):
+    # Windows console title defaults to the exe path; override for readability.
+    if platform.system() == 'Windows':
+        try:
+            os.system(f"title {title}")
+        except Exception:
+            pass
+    else:
+        # ANSI escape for most xterm-compatible terminals.
+        try:
+            sys.stdout.write(f"\x1b]0;{title}\x07")
+            sys.stdout.flush()
+        except Exception:
+            # Fallback via shell in case stdout isn't a TTY or ANSI is blocked.
+            try:
+                os.system(f'printf "\\033]0;{title}\\007"')
+            except Exception:
+                pass
+
+def _ensure_single_instance(mutex_name: str, lock_name: str) -> bool:
+    global _single_instance_handle
+    # Cross-platform lockfile; OS-specific locking API under the hood.
+    # mutex_name is kept for compatibility with existing call sites.
+    lock_path = Path(tempfile.gettempdir()) / f"{lock_name}.lock"
+    try:
+        lock_file = open(lock_path, 'a+')
+        if platform.system() == 'Windows':
+            import msvcrt
+            # Lock 1 byte; if already locked, this raises an exception.
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _single_instance_handle = lock_file
+        return True
+    except Exception:
+        _show_single_instance_message()
+        return False
+
 class ClientWorkerServiceRclone:
     """Service that runs on client PC - rclone handles all file operations"""
     
@@ -1109,7 +1161,12 @@ def main():
     parser.add_argument('--remote', default='ftp', help='Rclone remote name (default: ftp)')
     
     args = parser.parse_args()
-    
+
+    _set_console_title("SaveNLoad Client Worker")
+
+    if not _ensure_single_instance("Global\\SaveNLoadClientWorker", "savenload_client_worker"):
+        sys.exit(1)
+
     if not args.server:
         print("Error: Server URL is required. Set SAVENLOAD_SERVER_URL environment variable or use --server argument.")
         parser.print_help()
