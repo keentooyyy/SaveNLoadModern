@@ -594,6 +594,214 @@ function validateEmailFormat(email) {
     return emailRegex.test(email);
 }
 
+/**
+ * Normalize operation IDs from various response shapes.
+ * @param {object} data - Response data
+ * @returns {string[]} Normalized operation IDs
+ */
+function normalizeOperationIds(data) {
+    if (!data) {
+        return [];
+    }
+    if (Array.isArray(data.operation_ids)) {
+        return data.operation_ids;
+    }
+    if (Array.isArray(data.operationIds)) {
+        return data.operationIds;
+    }
+    if (data.data && Array.isArray(data.data.operation_ids)) {
+        return data.data.operation_ids;
+    }
+    if (typeof data.operation_ids === 'string') {
+        return data.operation_ids.split(',').map(id => id.trim()).filter(Boolean);
+    }
+    if (data.operation_id) {
+        return [data.operation_id];
+    }
+    if (data.data && data.data.operation_id) {
+        return [data.data.operation_id];
+    }
+    return [];
+}
+
+/**
+ * Poll multiple operations and aggregate progress.
+ * @param {string[]} operationIds - Operation IDs to poll
+ * @param {object} options - Polling options
+ * @param {number} options.maxAttempts - Max poll attempts (default 300)
+ * @param {number} options.pollInterval - Poll interval in ms (default 1000)
+ * @param {function} options.onProgress - Called with aggregated progress
+ * @param {function} options.onComplete - Called when all succeed
+ * @param {function} options.onPartial - Called when some succeed
+ * @param {function} options.onFail - Called when all fail
+ * @param {function} options.onTimeout - Called on timeout
+ * @param {function} options.onError - Called on unexpected errors
+ * @returns {Promise<{status: string}>} Resolves when finished
+ */
+function pollMultipleOperationStatus(operationIds, options = {}) {
+    if (!Array.isArray(operationIds) || operationIds.length === 0) {
+        return Promise.resolve({ status: 'no-ops' });
+    }
+
+    const maxAttempts = options.maxAttempts || 300;
+    const pollInterval = options.pollInterval || 1000;
+    const onProgress = options.onProgress;
+    const onComplete = options.onComplete;
+    const onPartial = options.onPartial;
+    const onFail = options.onFail;
+    const onTimeout = options.onTimeout;
+    const onError = options.onError;
+    const urlPattern = options.checkUrlPattern || window.CHECK_OPERATION_STATUS_URL_PATTERN;
+
+    const totalOperations = operationIds.length;
+    const operationStatuses = {};
+    operationIds.forEach(id => {
+        operationStatuses[id] = { completed: false, success: false };
+    });
+
+    let attempts = 0;
+    let pollHandle = null;
+    let resolved = false;
+
+    const resolveOnce = (resolve, status) => {
+        if (resolved) return;
+        resolved = true;
+        if (pollHandle) {
+            clearInterval(pollHandle);
+            pollHandle = null;
+        }
+        resolve({ status });
+    };
+
+    const aggregateAndReport = () => {
+        const activeOperations = Object.entries(operationStatuses)
+            .filter(([id, status]) => !status.completed && status.progress)
+            .map(([id, status]) => status.progress);
+
+        let totalCurrent = 0;
+        let totalTotal = 0;
+        let latestMessage = '';
+
+        activeOperations.forEach(progress => {
+            if (progress.current !== undefined && progress.total !== undefined) {
+                totalCurrent += progress.current || 0;
+                totalTotal += progress.total || 0;
+            }
+            if (progress.message) {
+                latestMessage = progress.message;
+            }
+        });
+
+        const completedCount = Object.values(operationStatuses).filter(s => s.completed).length;
+        const percentage = totalTotal > 0
+            ? Math.round((totalCurrent / totalTotal) * 100)
+            : Math.round((completedCount / totalOperations) * 100);
+
+        if (typeof onProgress === 'function') {
+            onProgress({
+                percentage,
+                current: totalCurrent,
+                total: totalTotal,
+                message: latestMessage,
+                completedCount,
+                totalOperations,
+                activeCount: activeOperations.length
+            });
+        }
+    };
+
+    const checkStatus = async () => {
+        try {
+            const statusPromises = operationIds.map(async (opId) => {
+                if (operationStatuses[opId].completed) {
+                    return operationStatuses[opId];
+                }
+
+                try {
+                    const url = urlPattern.replace('/0/', `/${opId}/`);
+                    const response = await fetch(url, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.completed) {
+                            operationStatuses[opId] = {
+                                completed: true,
+                                success: !data.failed
+                            };
+                        } else if (data.failed) {
+                            operationStatuses[opId] = {
+                                completed: true,
+                                success: false
+                            };
+                        } else if (data.progress) {
+                            operationStatuses[opId].progress = data.progress;
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error checking operation ${opId} status:`, error);
+                }
+
+                return operationStatuses[opId];
+            });
+
+            await Promise.all(statusPromises);
+            aggregateAndReport();
+
+            const allCompleted = Object.values(operationStatuses).every(status => status.completed);
+            if (!allCompleted) {
+                return false;
+            }
+
+            const allSuccessful = Object.values(operationStatuses).every(status => status.success);
+            const someSuccessful = Object.values(operationStatuses).some(status => status.success);
+
+            if (allSuccessful && typeof onComplete === 'function') {
+                onComplete();
+            } else if (someSuccessful && typeof onPartial === 'function') {
+                onPartial();
+            } else if (!someSuccessful && typeof onFail === 'function') {
+                onFail();
+            } else if (typeof onComplete === 'function') {
+                onComplete();
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error checking operation status:', error);
+            if (typeof onError === 'function') {
+                onError(error);
+            }
+            return false;
+        }
+    };
+
+    return new Promise(async (resolve) => {
+        const completed = await checkStatus();
+        if (completed) {
+            resolveOnce(resolve, 'completed');
+            return;
+        }
+
+        pollHandle = setInterval(async () => {
+            attempts++;
+            const done = await checkStatus();
+
+            if (done) {
+                resolveOnce(resolve, 'completed');
+                return;
+            }
+
+            if (attempts >= maxAttempts) {
+                if (typeof onTimeout === 'function') {
+                    onTimeout();
+                }
+                resolveOnce(resolve, 'timeout');
+            }
+        }, pollInterval);
+    });
+}
 
 // Expose all utility functions to global scope
 window.showToast = showToast;
@@ -613,4 +821,6 @@ window.getNextModalZIndex = getNextModalZIndex;
 window.sanitizeEmailInput = sanitizeEmailInput;
 window.sanitizePasswordInput = sanitizePasswordInput;
 window.validateEmailFormat = validateEmailFormat;
+window.normalizeOperationIds = normalizeOperationIds;
+window.pollMultipleOperationStatus = pollMultipleOperationStatus;
 

@@ -280,30 +280,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Uses shared utility functions from utils.js
-    function normalizeOperationIds(data) {
-        if (!data) {
-            return [];
-        }
-        if (Array.isArray(data.operation_ids)) {
-            return data.operation_ids;
-        }
-        if (Array.isArray(data.operationIds)) {
-            return data.operationIds;
-        }
-        if (data.data && Array.isArray(data.data.operation_ids)) {
-            return data.data.operation_ids;
-        }
-        if (typeof data.operation_ids === 'string') {
-            return data.operation_ids.split(',').map(id => id.trim()).filter(Boolean);
-        }
-        if (data.operation_id) {
-            return [data.operation_id];
-        }
-        if (data.data && data.data.operation_id) {
-            return [data.data.operation_id];
-        }
-        return [];
-    }
 
     async function deleteGame() {
         if (!currentDeleteUrlRef || !currentDetailUrlRef) return;
@@ -1060,12 +1036,81 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const data = await response.json();
 
-            if (data.success) {
-                const operationIds = normalizeOperationIds(data);
-                if (operationIds.length > 0) {
-                    // Show progress modal and poll for status using the first op id.
-                    const modalData = createProgressModal(operationIds[0], 'Loading Game', 'load');
-                    pollOperationStatus(
+                if (data.success) {
+                    const operationIds = window.normalizeOperationIds ? window.normalizeOperationIds(data) : [];
+                    if (operationIds.length > 1) {
+                    const modalData = createProgressModal(operationIds[0], `Loading ${operationIds.length} Location(s)...`, 'load');
+                    const { modal, modalBackdrop, modalContent, updateProgress, progressBar, progressText, progressDetails } = modalData;
+                    window.pollMultipleOperationStatus(operationIds, {
+                        onProgress: (progress) => {
+                            if (progress.total > 0) {
+                                updateProgress({
+                                    percentage: progress.percentage,
+                                    current: progress.current,
+                                    total: progress.total,
+                                    message: progress.message
+                                });
+                            } else {
+                                updateProgress({
+                                    percentage: progress.percentage,
+                                    message: progress.message || `Processing... (${progress.completedCount}/${progress.totalOperations} completed)`
+                                });
+                            }
+                        },
+                        onComplete: () => {
+                            progressBar.classList.remove('progress-bar-animated');
+                            progressBar.style.backgroundColor = getCSSVariable('--color-success');
+                            progressBar.style.width = '100%';
+                            progressBar.setAttribute('aria-valuenow', '100');
+                            progressText.textContent = 'All Operations Complete!';
+                            progressDetails.textContent = 'Game loaded successfully!';
+                            window.showToast('Game loaded successfully!', 'success');
+                            modal._element.addEventListener('hidden.bs.modal', () => modalBackdrop.remove(), { once: true });
+                            setTimeout(() => modal.hide(), 1500);
+                        },
+                        onPartial: () => {
+                            progressBar.classList.remove('progress-bar-animated');
+                            progressBar.style.backgroundColor = getCSSVariable('--color-warning');
+                            progressText.textContent = 'Partially Complete';
+                            progressDetails.textContent = 'Some locations failed to load';
+                            window.showToast('Partially completed. Some locations failed to load.', 'warning');
+                            modal._element.addEventListener('hidden.bs.modal', () => modalBackdrop.remove(), { once: true });
+                            setTimeout(() => modal.hide(), 1500);
+                        },
+                        onFail: () => {
+                            progressBar.classList.remove('progress-bar-animated');
+                            progressBar.style.backgroundColor = getCSSVariable('--color-danger');
+                            progressText.textContent = 'All Operations Failed';
+                            progressDetails.textContent = 'Failed to load game';
+                            window.showToast('Failed to load game', 'error');
+                            modal._element.addEventListener('hidden.bs.modal', () => modalBackdrop.remove(), { once: true });
+                            setTimeout(() => modal.hide(), 1500);
+                        },
+                        onTimeout: () => {
+                            progressBar.classList.remove('progress-bar-animated');
+                            progressBar.style.backgroundColor = getCSSVariable('--color-warning');
+                            progressText.textContent = 'Operation Timed Out';
+                            progressDetails.textContent = 'The operation is taking longer than expected. Please check the status manually.';
+                            const modalFooter = document.createElement('div');
+                            modalFooter.className = 'modal-footer bg-primary border-secondary';
+                            const closeBtn = document.createElement('button');
+                            closeBtn.type = 'button';
+                            closeBtn.className = 'btn btn-outline-secondary text-white';
+                            closeBtn.textContent = 'Close';
+                            closeBtn.onclick = () => {
+                                modal.hide();
+                                modalBackdrop.remove();
+                            };
+                            modalFooter.appendChild(closeBtn);
+                            modalContent.appendChild(modalFooter);
+                        },
+                        onError: () => {
+                            window.showToast('Failed to load game', 'error');
+                        }
+                    });
+                    } else if (operationIds.length === 1) {
+                        const modalData = createProgressModal(operationIds[0], 'Loading Game', 'load');
+                        pollOperationStatus(
                         operationIds[0],
                         modalData,
                         () => {

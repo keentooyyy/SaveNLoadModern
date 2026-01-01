@@ -6,31 +6,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return; // getCsrfToken already shows a toast
     }
 
-    function normalizeOperationIds(data) {
-        if (!data) {
-            return [];
-        }
-        if (Array.isArray(data.operation_ids)) {
-            return data.operation_ids;
-        }
-        if (Array.isArray(data.operationIds)) {
-            return data.operationIds;
-        }
-        if (data.data && Array.isArray(data.data.operation_ids)) {
-            return data.data.operation_ids;
-        }
-        if (typeof data.operation_ids === 'string') {
-            return data.operation_ids.split(',').map(id => id.trim()).filter(Boolean);
-        }
-        if (data.operation_id) {
-            return [data.operation_id];
-        }
-        if (data.data && data.data.operation_id) {
-            return [data.data.operation_id];
-        }
-        return [];
-    }
-
     // Poll operation status until completion
     async function pollOperationStatus(operationId, btn, originalIcon, originalText) {
         // Handle both single operation ID and array of operation IDs
@@ -266,11 +241,11 @@ document.addEventListener('DOMContentLoaded', function () {
                             progressText.textContent = 'All Operations Complete!';
                             const isLoadOperation = originalText && originalText.includes('Load');
                             progressDetails.textContent = isLoadOperation
-                                ? `Successfully loaded ${totalOperations} location(s)`
+                                ? 'Game loaded successfully!'
                                 : 'Game saved successfully!';
                             window.showToast(
                                 isLoadOperation
-                                    ? `Successfully loaded ${totalOperations} location(s)!`
+                                    ? 'Game loaded successfully!'
                                     : 'Game saved successfully!',
                                 'success'
                             );
@@ -443,190 +418,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }, pollInterval);
     }
 
-    // Poll multiple operation statuses until all complete
-    async function pollMultipleOperationStatus(operationIds, btn, originalIcon, originalText, totalPaths) {
-        const maxAttempts = 300; // 300 attempts = 5 minutes max (1 second intervals)
-        let attempts = 0;
-        const pollInterval = 1000; // Poll every 1 second
-
-        // Create modal for progress
-        const modalId = `progressModal_multi_${operationIds.join('_')}`;
-        const modalBackdrop = document.createElement('div');
-        modalBackdrop.className = 'modal fade';
-        modalBackdrop.id = modalId;
-        modalBackdrop.setAttribute('data-bs-backdrop', 'static');
-        modalBackdrop.setAttribute('data-bs-keyboard', 'false');
-        modalBackdrop.setAttribute('tabindex', '-1');
-        modalBackdrop.setAttribute('aria-labelledby', `${modalId}Label`);
-        modalBackdrop.setAttribute('aria-hidden', 'true');
-
-        const modalDialog = document.createElement('div');
-        modalDialog.className = 'modal-dialog modal-dialog-centered';
-
-        const modalContent = document.createElement('div');
-        modalContent.className = 'modal-content bg-primary text-white border-0';
-
-        const modalHeader = document.createElement('div');
-        modalHeader.className = 'modal-header bg-primary border-secondary';
-
-        const modalTitle = document.createElement('h5');
-        modalTitle.className = 'modal-title text-white';
-        modalTitle.id = `${modalId}Label`;
-        modalTitle.textContent = `Saving ${totalPaths} Location(s)...`;
-
-        modalHeader.appendChild(modalTitle);
-
-        const modalBody = document.createElement('div');
-        modalBody.className = 'modal-body bg-primary';
-
-        const progressBarWrapper = document.createElement('div');
-        progressBarWrapper.className = 'progress mb-3';
-        progressBarWrapper.style.height = '30px';
-
-        const progressBar = document.createElement('div');
-        progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated';
-        progressBar.setAttribute('role', 'progressbar');
-        progressBar.style.width = '0%';
-        progressBar.style.backgroundColor = '#28a745';
-        progressBar.setAttribute('aria-valuenow', '0');
-        progressBar.setAttribute('aria-valuemin', '0');
-        progressBar.setAttribute('aria-valuemax', '100');
-
-        const progressText = document.createElement('div');
-        progressText.className = 'text-center mt-3 text-white fs-6 fw-medium';
-        progressText.textContent = 'Starting...';
-
-        const progressDetails = document.createElement('div');
-        progressDetails.className = 'text-center text-white-50 mt-2 small';
-        progressDetails.textContent = `Processing ${totalPaths} save location(s). Please wait...`;
-
-        progressBarWrapper.appendChild(progressBar);
-        modalBody.appendChild(progressBarWrapper);
-        modalBody.appendChild(progressText);
-        modalBody.appendChild(progressDetails);
-
-        modalContent.appendChild(modalHeader);
-        modalContent.appendChild(modalBody);
-        modalDialog.appendChild(modalContent);
-        modalBackdrop.appendChild(modalDialog);
-
-        document.body.appendChild(modalBackdrop);
-
-        const modal = new bootstrap.Modal(modalBackdrop, {
-            backdrop: 'static',
-            keyboard: false
-        });
-        modal.show();
-
-        // Track completion status for each operation
-        const operationStatuses = {};
-        operationIds.forEach(id => {
-            operationStatuses[id] = { completed: false, success: false };
-        });
-
-        const pollStatus = async () => {
-            attempts++;
-
-            if (attempts > maxAttempts) {
-                modal.hide();
-                setTimeout(() => modalBackdrop.remove(), 300);
-                window.showToast('Operation timed out. Please check the status manually.', 'error');
-                // Restore button
-                btn.disabled = false;
-                while (btn.firstChild) {
-                    btn.removeChild(btn.firstChild);
-                }
-                if (originalIcon) {
-                    const iconClone = originalIcon.cloneNode(true);
-                    btn.appendChild(iconClone);
-                }
-                btn.appendChild(document.createTextNode(' Save'));
-                return;
-            }
-
-            // Poll all operations
-            const statusPromises = operationIds.map(async (opId) => {
-                if (operationStatuses[opId].completed) {
-                    return operationStatuses[opId];
-                }
-
-                try {
-                    const statusUrl = window.CHECK_OPERATION_STATUS_URL_PATTERN.replace('/0/', `/${opId}/`);
-                    const statusResponse = await fetch(statusUrl, {
-                        headers: window.createFetchHeaders ? window.createFetchHeaders(window.getCsrfToken()) : { 'X-Requested-With': 'XMLHttpRequest' }
-                    });
-
-                    if (statusResponse.ok) {
-                        const statusData = await statusResponse.json();
-                        if (statusData.status === 'completed') {
-                            operationStatuses[opId] = { completed: true, success: statusData.success || false };
-                        } else if (statusData.status === 'failed') {
-                            operationStatuses[opId] = { completed: true, success: false };
-                        } else if (statusData.progress) {
-                            // Update progress if available
-                            const progress = statusData.progress;
-                            if (progress.current !== undefined && progress.total !== undefined) {
-                                const percent = Math.round((progress.current / progress.total) * 100);
-                                progressBar.style.width = `${percent}%`;
-                                progressBar.setAttribute('aria-valuenow', percent);
-                                if (progress.message) {
-                                    progressText.textContent = progress.message;
-                                }
-                            }
-                        }
-                    }
-                } catch (error) {
-                    console.error(`Error checking operation ${opId} status:`, error);
-                }
-
-                return operationStatuses[opId];
-            });
-
-            await Promise.all(statusPromises);
-
-            // Check if all operations are complete
-            const allCompleted = Object.values(operationStatuses).every(status => status.completed);
-            const allSuccessful = Object.values(operationStatuses).every(status => status.success);
-            const someSuccessful = Object.values(operationStatuses).some(status => status.success);
-
-            if (allCompleted) {
-                modal.hide();
-                setTimeout(() => modalBackdrop.remove(), 300);
-
-                if (allSuccessful) {
-                    window.showToast('Game saved successfully!', 'success');
-                } else if (someSuccessful) {
-                    window.showToast(`Partially completed. Some locations saved successfully.`, 'warning');
-                } else {
-                    window.showToast('Save operation failed for all locations.', 'error');
-                }
-
-                // Restore button
-                btn.disabled = false;
-                while (btn.firstChild) {
-                    btn.removeChild(btn.firstChild);
-                }
-                if (originalIcon) {
-                    const iconClone = originalIcon.cloneNode(true);
-                    btn.appendChild(iconClone);
-                }
-                btn.appendChild(document.createTextNode(' Save'));
-            } else {
-                // Update progress based on completed operations
-                const completedCount = Object.values(operationStatuses).filter(s => s.completed).length;
-                const overallPercent = Math.round((completedCount / totalPaths) * 100);
-                progressBar.style.width = `${overallPercent}%`;
-                progressBar.setAttribute('aria-valuenow', overallPercent);
-                progressText.textContent = `Processing... (${completedCount}/${totalPaths} completed)`;
-
-                setTimeout(pollStatus, pollInterval);
-            }
-        };
-
-        // Start polling
-        setTimeout(pollStatus, pollInterval);
-    }
-
     // Uses shared utility functions from utils.js
 
     // Handle Save button clicks
@@ -707,7 +498,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 // Handle both single operation_id and multiple operation_ids
                 if (data.success) {
-                    const operationIds = normalizeOperationIds(data);
+                    const operationIds = window.normalizeOperationIds ? window.normalizeOperationIds(data) : [];
                     if (operationIds.length > 1) {
                         // Multiple operations (multi-path save) - pass array
                         await pollOperationStatus(operationIds, btn, originalIcon, originalText);
@@ -884,7 +675,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 // Handle both single operation_id and multiple operation_ids
                 if (data.success) {
-                    const operationIds = normalizeOperationIds(data);
+                    const operationIds = window.normalizeOperationIds ? window.normalizeOperationIds(data) : [];
                     if (operationIds.length > 1) {
                         // Multiple operations (multi-path load) - pass array
                         const originalText = ' Quick Load';
