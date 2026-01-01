@@ -10,7 +10,6 @@ from SaveNLoad.services.redis_worker_service import (
     get_worker_info,
     claim_worker as redis_claim_worker,
     unclaim_worker as redis_unclaim_worker,
-    get_user_workers,
     is_worker_online,
     get_unclaimed_workers,
     issue_ws_token,
@@ -87,43 +86,6 @@ def unregister_client(request):
     except Exception as e:
         print(f"ERROR: Failed to unregister client: {e}")
         return json_response_error(str(e), status=500)
-
-
-@csrf_exempt
-@require_http_methods(["GET"])
-def check_connection(request):
-    """Check if client worker is connected for current user"""
-    from SaveNLoad.views.custom_decorators import get_current_user
-    
-    user = get_current_user(request)
-    if not user:
-        return JsonResponse({
-            'connected': False,
-            'client_id': None,
-            'last_ping_response': None,
-        })
-    
-    # Get online workers for this user
-    worker_ids = get_user_workers(user.id)
-    
-    if not worker_ids:
-        return JsonResponse({
-            'connected': False,
-            'client_id': None,
-            'last_ping_response': None,
-            'message': 'No active devices found. Please ensure your client is running.'
-        })
-    
-    # Get most recent worker (first one, as they're already filtered to online)
-    client_id = worker_ids[0]
-    worker_info = get_worker_info(client_id)
-    
-    return JsonResponse({
-        'connected': True,
-        'client_id': client_id,
-        'last_ping_response': worker_info['last_ping'] if worker_info else None,
-        'worker_count': len(worker_ids)
-    })
 
 
 @csrf_exempt

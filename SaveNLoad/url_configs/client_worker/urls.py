@@ -6,7 +6,6 @@ app_name = 'client_worker'
 urlpatterns = [
     path('register/', client_worker_api.register_client, name='register'),
     path('unregister/', client_worker_api.unregister_client, name='unregister'),
-    path('check/', client_worker_api.check_connection, name='check'),
     
     # Association endpoints
     path('unpaired/', client_worker_api.get_unpaired_workers, name='unpaired'),

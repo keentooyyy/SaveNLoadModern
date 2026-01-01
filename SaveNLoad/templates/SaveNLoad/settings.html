@@ -33,7 +33,6 @@
 
 <script>
     // Inject Django URLs for worker check
-    window.WORKER_CHECK_URL = '{% url "client_worker:check" %}';
 
     window.UPDATE_ACCOUNT_SETTINGS_URL = '{% if is_user %}{% url "user:update_account_settings" %}{% else %}{% url "admin:update_account_settings" %}{% endif %}';
 
@@ -59,7 +58,6 @@
     {% endif %}
 </script>
 <script>
-    {% include 'SaveNLoad/js/workerCheck.js' %}
 
     {% include 'SaveNLoad/js/logoutHandler.js' %}
     {% include 'SaveNLoad/js/accountSettings.js' %}
