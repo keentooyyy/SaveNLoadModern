@@ -3,8 +3,9 @@ Redis-based worker management service
 Handles worker registration, heartbeat, claiming, and online status
 """
 from SaveNLoad.utils.redis_client import get_redis_client
+from SaveNLoad.services.ws_worker_service import send_worker_message
 from django.utils import timezone
-import json
+import secrets
 
 # Worker heartbeat TTL (10 seconds - worker pings every 5s, so this allows 1 missed ping)
 WORKER_HEARTBEAT_TTL = 10
@@ -27,11 +28,15 @@ def register_worker(client_id, user_id=None):
     # Set heartbeat key with TTL
     redis_client.setex(f'worker:{client_id}', WORKER_HEARTBEAT_TTL, '1')
     
+    existing_info = redis_client.hgetall(f'worker:{client_id}:info') or {}
+
     # Create or update worker info hash
     worker_info = {
-        'user_id': str(user_id) if user_id else '',
-        'created_at': timezone.now().isoformat(),
-        'last_ping': timezone.now().isoformat()
+        'user_id': str(user_id) if user_id else existing_info.get('user_id', ''),
+        'created_at': existing_info.get('created_at', timezone.now().isoformat()),
+        'last_ping': timezone.now().isoformat(),
+        'ws_connected': existing_info.get('ws_connected', '0'),
+        'ws_token': existing_info.get('ws_token', ''),
     }
     redis_client.hset(f'worker:{client_id}:info', mapping=worker_info)
     
@@ -86,6 +91,52 @@ def ping_worker(client_id):
     return {'linked_user': None}
 
 
+def issue_ws_token(client_id):
+    """
+    Issue or rotate a WebSocket auth token for the worker.
+    """
+    redis_client = get_redis_client()
+    token = secrets.token_urlsafe(32)
+    redis_client.hset(
+        f'worker:{client_id}:info',
+        mapping={
+            'ws_token': token,
+            'ws_token_created_at': timezone.now().isoformat()
+        }
+    )
+    return token
+
+
+def validate_ws_token(client_id, token):
+    """
+    Validate a WebSocket auth token for a worker.
+    """
+    redis_client = get_redis_client()
+    stored = redis_client.hget(f'worker:{client_id}:info', 'ws_token')
+    return bool(stored) and stored == token
+
+
+def set_worker_ws_status(client_id, is_connected, mark_offline=False):
+    """
+    Update WebSocket connection status and optionally mark the worker offline immediately.
+    """
+    redis_client = get_redis_client()
+    now = timezone.now().isoformat()
+
+    mapping = {
+        'ws_connected': '1' if is_connected else '0',
+    }
+    if is_connected:
+        mapping['last_ws_connect'] = now
+        redis_client.setex(f'worker:{client_id}', WORKER_HEARTBEAT_TTL, '1')
+    else:
+        mapping['last_ws_disconnect'] = now
+        if mark_offline:
+            redis_client.delete(f'worker:{client_id}')
+
+    redis_client.hset(f'worker:{client_id}:info', mapping=mapping)
+
+
 def get_worker_info(client_id):
     """
     Get worker information
@@ -112,7 +163,9 @@ def get_worker_info(client_id):
         'client_id': client_id,
         'user_id': int(info['user_id']) if info.get('user_id') else None,
         'created_at': info.get('created_at'),
-        'last_ping': info.get('last_ping')
+        'last_ping': info.get('last_ping'),
+        'ws_connected': info.get('ws_connected') == '1',
+        'username': info.get('username')
     }
 
 
@@ -147,11 +200,14 @@ def claim_worker(client_id, user_id, username=None):
         redis_client.hset(f'worker:{client_id}:info', 'username', username)
     redis_client.sadd(f'user:{user_id}:workers', client_id)
     
-    # Notify worker via Pub/Sub that claim status changed
-    try:
-        redis_client.publish(f'worker:{client_id}:notify', 'claim_status_changed')
-    except Exception:
-        pass  # Don't fail if Pub/Sub fails
+    send_worker_message(
+        client_id,
+        event_type='claim_status',
+        payload={
+            'claimed': True,
+            'linked_user': username or ''
+        }
+    )
     
     return True
 
@@ -181,11 +237,14 @@ def unclaim_worker(client_id):
     redis_client.hset(f'worker:{client_id}:info', 'user_id', '')
     redis_client.hset(f'worker:{client_id}:info', 'username', '')
     
-    # Notify worker via Pub/Sub that claim status changed
-    try:
-        redis_client.publish(f'worker:{client_id}:notify', 'claim_status_changed')
-    except Exception:
-        pass  # Don't fail if Pub/Sub fails
+    send_worker_message(
+        client_id,
+        event_type='claim_status',
+        payload={
+            'claimed': False,
+            'linked_user': ''
+        }
+    )
     
     return True
 
@@ -217,10 +276,14 @@ def get_user_workers(user_id):
             # Clear user_id from worker info (auto-unclaim)
             redis_client.hset(f'worker:{worker_id}:info', 'user_id', '')
             redis_client.hset(f'worker:{worker_id}:info', 'username', '')
-            try:
-                redis_client.publish(f'worker:{worker_id}:notify', 'claim_status_changed')
-            except Exception:
-                pass
+            send_worker_message(
+                worker_id,
+                event_type='claim_status',
+                payload={
+                    'claimed': False,
+                    'linked_user': ''
+                }
+            )
             print(f"Auto-unclaimed offline worker {worker_id} for user {user_id}")
     
     return list(online_workers)
@@ -308,10 +371,14 @@ def get_unclaimed_workers():
                 # Orphaned claim - clean it up
                 redis_client.hset(f'worker:{client_id}:info', 'user_id', '')
                 redis_client.hset(f'worker:{client_id}:info', 'username', '')
-                try:
-                    redis_client.publish(f'worker:{client_id}:notify', 'claim_status_changed')
-                except Exception:
-                    pass
+                send_worker_message(
+                    client_id,
+                    event_type='claim_status',
+                    payload={
+                        'claimed': False,
+                        'linked_user': ''
+                    }
+                )
                 unclaimed.append(client_id)
                 print(f"Auto-unclaimed orphaned worker {client_id}")
     

@@ -3,6 +3,7 @@ Redis-based operation queue service
 Handles operation creation, queuing, and status management
 """
 from SaveNLoad.utils.redis_client import get_redis_client
+from SaveNLoad.services.ws_worker_service import send_worker_message
 from django.utils import timezone
 import json
 import uuid
@@ -43,6 +44,7 @@ def create_operation(operation_data, client_id):
         'id': operation_id,
         'type': operation_data['operation_type'],
         'status': OperationStatus.PENDING,
+        'client_id': client_id,
         'user_id': str(operation_data['user_id']),
         'game_id': str(operation_data.get('game_id', '')) if operation_data.get('game_id') else '',
         'local_save_path': operation_data.get('local_save_path', ''),
@@ -64,8 +66,13 @@ def create_operation(operation_data, client_id):
     # Add to worker's operation list (left push for FIFO)
     redis_client.lpush(f'worker:{client_id}:operations', operation_id)
     
-    # Notify worker via Pub/Sub
-    notify_worker(client_id)
+    # Notify worker via WebSocket
+    send_worker_message(
+        client_id,
+        event_type='operation',
+        payload=_build_operation_payload(operation_hash),
+        correlation_id=operation_id
+    )
     
     return operation_id
 
@@ -124,6 +131,28 @@ def get_pending_operations(client_id):
     return pending_operations
 
 
+def get_pending_operations_for_worker(client_id):
+    """
+    Get pending operations for a worker without changing status.
+    Intended for WS connect/reconnect to re-send pending work.
+    """
+    redis_client = get_redis_client()
+
+    operation_ids = redis_client.lrange(f'worker:{client_id}:operations', 0, -1)
+    pending_operations = []
+
+    for operation_id in operation_ids:
+        operation_hash = redis_client.hgetall(f'operation:{operation_id}')
+        if not operation_hash:
+            continue
+
+        status = operation_hash.get('status', '')
+        if status == OperationStatus.PENDING:
+            pending_operations.append(_build_operation_payload(operation_hash))
+
+    return pending_operations
+
+
 def mark_operation_in_progress(operation_id):
     """
     Mark operation as in_progress
@@ -153,11 +182,7 @@ def complete_operation(operation_id, result_data=None):
     if result_data:
         redis_client.hset(f'operation:{operation_id}', 'result_data', json.dumps(result_data))
     
-    # Remove from worker's operation list
-    # Find which worker has this operation
-    worker_keys = redis_client.keys('worker:*:operations')
-    for worker_key in worker_keys:
-        redis_client.lrem(worker_key, 0, operation_id)
+    _remove_from_worker_queue(redis_client, operation_id)
     
     # Keep operation hash for a while (24 hours) for history, then delete
     # For now, we'll keep it indefinitely or until manually cleaned up
@@ -178,21 +203,7 @@ def fail_operation(operation_id, error_message):
     redis_client.hset(f'operation:{operation_id}', 'completed_at', timezone.now().isoformat())
     redis_client.hset(f'operation:{operation_id}', 'error_message', error_message)
     
-    # Remove from worker's operation list
-    worker_keys = redis_client.keys('worker:*:operations')
-    for worker_key in worker_keys:
-        redis_client.lrem(worker_key, 0, operation_id)
-
-
-def notify_worker(client_id):
-    """
-    Publish notification to worker's Pub/Sub channel
-    
-    Args:
-        client_id: Worker identifier
-    """
-    redis_client = get_redis_client()
-    redis_client.publish(f'worker:{client_id}:notify', 'new_operation')
+    _remove_from_worker_queue(redis_client, operation_id)
 
 
 def get_operation(operation_id):
@@ -215,6 +226,7 @@ def get_operation(operation_id):
         'id': operation_hash.get('id'),
         'type': operation_hash.get('type'),
         'status': operation_hash.get('status'),
+        'client_id': operation_hash.get('client_id'),
         'user_id': int(operation_hash['user_id']) if operation_hash.get('user_id') else None,
         'game_id': int(operation_hash['game_id']) if operation_hash.get('game_id') else None,
         'local_save_path': operation_hash.get('local_save_path', ''),
@@ -250,6 +262,29 @@ def update_operation_progress(operation_id, current=None, total=None, message=No
         redis_client.hset(f'operation:{operation_id}', 'progress_total', str(total))
     if message is not None:
         redis_client.hset(f'operation:{operation_id}', 'progress_message', str(message)[:200])
+
+
+def _remove_from_worker_queue(redis_client, operation_id):
+    operation_hash = redis_client.hgetall(f'operation:{operation_id}')
+    client_id = operation_hash.get('client_id') if operation_hash else None
+    if client_id:
+        redis_client.lrem(f'worker:{client_id}:operations', 0, operation_id)
+        return
+
+    worker_keys = redis_client.keys('worker:*:operations')
+    for worker_key in worker_keys:
+        redis_client.lrem(worker_key, 0, operation_id)
+
+
+def _build_operation_payload(operation_hash):
+    return {
+        'id': operation_hash.get('id', ''),
+        'type': operation_hash.get('type', ''),
+        'local_save_path': operation_hash.get('local_save_path', ''),
+        'save_folder_number': int(operation_hash['save_folder_number']) if operation_hash.get('save_folder_number') else None,
+        'remote_ftp_path': operation_hash.get('remote_ftp_path', ''),
+        'game_id': int(operation_hash.get('game_id')) if operation_hash.get('game_id') else None,
+    }
 
 
 def get_operations_by_game(game_id):

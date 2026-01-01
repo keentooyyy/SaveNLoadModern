@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import signal
+import json
 import requests
 import webbrowser
 import threading
@@ -16,15 +17,14 @@ import subprocess
 import platform
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List, Callable
-from concurrent.futures import ThreadPoolExecutor
-from queue import Queue
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.align import Align
 from rich.text import Text
 from rclone_client import RcloneClient, RCLONE_TRANSFERS
-import redis
+import websocket
 
 # Load environment variables
 if getattr(sys, 'frozen', False):
@@ -39,8 +39,7 @@ else:
 
 
 # Client worker configuration constants
-HEARTBEAT_INTERVAL = 5  # Heartbeat interval in seconds (how often to update Redis heartbeat)
-WORKER_HEARTBEAT_TTL = 10  # Worker heartbeat TTL in seconds (must match server's WORKER_HEARTBEAT_TTL)
+HEARTBEAT_INTERVAL = 5  # Heartbeat interval in seconds (WebSocket keepalive)
 
 _single_instance_handle = None  # Hold mutex/lock handle so it stays alive for process lifetime.
 
@@ -119,9 +118,14 @@ class ClientWorkerServiceRclone:
         self.session = requests.Session()
         self.running = False
         self._heartbeat_thread = None
-        self._redis_thread = None
+        self._ws_thread = None
+        self._ws = None
+        self._ws_token = None
+        self._ws_connected = False
+        self._ws_send_lock = threading.Lock()
         self._current_client_id = None
         self.linked_user = None  # Track ownership status
+        self._active_operations = set()
         
         # Setup rich console for formatted output
         self.console = Console()
@@ -129,61 +133,20 @@ class ClientWorkerServiceRclone:
         # Setup rclone client - it handles everything
         self.rclone_client = RcloneClient(remote_name=remote_name)
         
-        # Setup Redis connection (REQUIRED - no fallbacks)
-        redis_host = os.getenv('REDIS_HOST')
-        redis_port = int(os.getenv('REDIS_PORT'))
-        redis_password = os.getenv('REDIS_PASSWORD')
-        
-        
-        # Redis connection is now strictly from env vars
-
-        
-        try:
-            if redis_password:
-                self.redis_client = redis.Redis(
-                    host=redis_host,
-                    port=redis_port,
-                    password=redis_password,
-                    decode_responses=True,
-                    socket_connect_timeout=5,
-                    socket_timeout=5
-                )
-            else:
-                self.redis_client = redis.Redis(
-                    host=redis_host,
-                    port=redis_port,
-                    decode_responses=True,
-                    socket_connect_timeout=5,
-                    socket_timeout=5
-                )
-            # Test connection - fail if Redis is not available
-            self.redis_client.ping()
-        except Exception as e:
-            error_msg = f"""
-[red][ERROR][/red] Redis connection failed - Redis is REQUIRED for this worker.
-
-Attempted to connect to Redis at {redis_host}:{redis_port}
-Error: {e}
-
-Please ensure:
-1. Redis is running and accessible from your client PC
-2. REDIS_HOST environment variable is set correctly (or matches your server URL hostname)
-3. Redis port {redis_port} is not blocked by firewall
-4. If using Docker, ensure Redis port is exposed: docker-compose.yml should have 'ports: ["6379:6379"]'
-"""
-            self.console.print(error_msg)
-            raise ConnectionError(f"Redis connection failed: {e}. Redis is required - no fallback available.")
+        # WebSocket connection is established after registration.
     
     def _update_progress(self, operation_id: int, current: int, total: int, message: str = ''):
         """Send progress update to server"""
-        try:
-            self.session.post(
-                f"{self.server_url}/api/client/progress/{operation_id}/",
-                json={'current': current, 'total': total, 'message': message},
-                timeout=2
-            )
-        except Exception:
-            pass
+        self._send_ws_message(
+            'progress',
+            {
+                'operation_id': operation_id,
+                'current': current,
+                'total': total,
+                'message': message,
+            },
+            correlation_id=str(operation_id)
+        )
     
     # ========== HELPER METHODS FOR CODE REUSE ==========
     
@@ -261,6 +224,101 @@ Please ensure:
                 self.console.print(message)
         except Exception:
             pass  # Console might be closed, but continue execution
+
+    def _build_ws_url(self, client_id: str) -> str:
+        parsed = urlparse(self.server_url)
+        scheme = 'wss' if parsed.scheme == 'https' else 'ws'
+        return f"{scheme}://{parsed.netloc}/ws/worker/{client_id}/?token={self._ws_token}"
+
+    def _send_ws_message(self, message_type: str, payload: Dict[str, Any], correlation_id: Optional[str] = None):
+        if not self._ws or not self._ws_connected:
+            return
+
+        message = {
+            'type': message_type,
+            'message_id': str(time.time_ns()),
+            'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S'),
+            'correlation_id': correlation_id,
+            'payload': payload,
+        }
+
+        try:
+            with self._ws_send_lock:
+                self._ws.send(json.dumps(message))
+        except Exception:
+            pass
+
+    def _ws_connect_loop(self, client_id: str):
+        while self.running:
+            try:
+                ws_url = self._build_ws_url(client_id)
+                self._ws = websocket.WebSocketApp(
+                    ws_url,
+                    on_open=self._on_ws_open,
+                    on_message=self._on_ws_message,
+                    on_close=self._on_ws_close,
+                    on_error=self._on_ws_error
+                )
+                self._ws.run_forever(ping_interval=10, ping_timeout=5)
+            except Exception:
+                pass
+
+            self._ws_connected = False
+            if self.running:
+                time.sleep(2)
+
+    def _on_ws_open(self, ws):
+        self._ws_connected = True
+        self._safe_console_print("[green][OK] WebSocket connected[/green]")
+        self._send_ws_message('hello', {'client_id': self._current_client_id})
+
+    def _on_ws_close(self, ws, status_code, msg):
+        self._ws_connected = False
+        self._safe_console_print("[yellow][!] WebSocket disconnected[/yellow]")
+
+    def _on_ws_error(self, ws, error):
+        self._ws_connected = False
+
+    def _on_ws_message(self, ws, message):
+        try:
+            data = json.loads(message)
+        except Exception:
+            return
+
+        message_type = data.get('type')
+        payload = data.get('payload') or {}
+
+        if message_type == 'operation':
+            self._handle_operation_message(payload)
+        elif message_type == 'claim_status':
+            self._handle_claim_status(payload)
+
+    def _handle_operation_message(self, operation: Dict[str, Any]):
+        operation_id = operation.get('id')
+        if not operation_id or operation_id in self._active_operations:
+            return
+
+        self._active_operations.add(operation_id)
+        self._send_ws_message('operation_started', {'operation_id': operation_id}, correlation_id=str(operation_id))
+        try:
+            self._process_operation(operation)
+        finally:
+            self._active_operations.discard(operation_id)
+
+    def _handle_claim_status(self, payload: Dict[str, Any]):
+        claimed = payload.get('claimed', False)
+        linked_user = payload.get('linked_user') or None
+
+        if claimed:
+            if linked_user and linked_user != self.linked_user:
+                self._safe_console_print(f"\n[green][OK] Device claimed by user: {linked_user}[/green]")
+            elif not self.linked_user:
+                self._safe_console_print(f"\n[green][OK] Device claimed[/green]")
+            self.linked_user = linked_user or self.linked_user
+        else:
+            if self.linked_user:
+                self._safe_console_print("\n[yellow][!] Device unclaimed (waiting for owner)[/yellow]")
+            self.linked_user = None
     
     def check_permissions(self) -> bool:
         """Check if we have necessary permissions to access files"""
@@ -707,76 +765,20 @@ Please ensure:
                 # API returns {data: {client_id, linked_user}}
                 response_data = data_obj = data.get('data', {}) if 'data' in data else data
                 self.linked_user = response_data.get('linked_user')
-                return True
+                self._ws_token = response_data.get('ws_token')
+                return bool(self._ws_token)
             return False
         except Exception:
             return False
-    
-    def _check_claim_status(self, client_id: str):
-        """Check and update claim status from Redis - can be called from heartbeat or Pub/Sub"""
-        try:
-            # Check for ownership changes by reading from Redis - NO HTTP CALLS!
-            user_id = self.redis_client.hget(f'worker:{client_id}:info', 'user_id')
-            username = self.redis_client.hget(f'worker:{client_id}:info', 'username')  # Should be stored by server
-            
-            # Determine current claim status - user_id is the source of truth
-            is_claimed = user_id and user_id != ''
-            current_username = username if (username and username != '') else None
-            
-            # Detect state changes - check if claim status changed
-            was_claimed = self.linked_user is not None
-            
-            if is_claimed:
-                # Worker is claimed - use username if available, otherwise show as claimed but unknown user
-                if current_username:
-                    # Has username - check if it changed
-                    if current_username != self.linked_user:
-                        self._safe_console_print(f"\n[green][OK] Device claimed by user: {current_username}[/green]")
-                        self.linked_user = current_username
-                else:
-                    # Claimed but no username yet (might be set by another process) - still update state
-                    if not was_claimed:
-                        self._safe_console_print(f"\n[green][OK] Device claimed (user ID: {user_id})[/green]")
-                        self.linked_user = f"user_{user_id}"  # Temporary until username is set
-            else:
-                # Worker is unclaimed
-                if was_claimed:
-                    # Was claimed, now unclaimed
-                    self._safe_console_print(f"\n[yellow][!] Device unclaimed (waiting for owner)[/yellow]")
-                    self.linked_user = None
-        except Exception as e:
-            # Don't fail on claim status check errors
-            pass
-    
+
     def _heartbeat_loop(self, client_id: str):
-        """Background thread that continuously updates heartbeat in Redis and checks ownership"""
+        """Background thread that continuously sends heartbeats to the server"""
         heartbeat_interval = HEARTBEAT_INTERVAL
-        
-        # Validate TTL matches expected range (safety check)
-        if WORKER_HEARTBEAT_TTL < 3 or WORKER_HEARTBEAT_TTL > 30:
-            print(f"WARNING: WORKER_HEARTBEAT_TTL ({WORKER_HEARTBEAT_TTL}) is outside recommended range (3-30 seconds)")
-        
+
         while self.running:
-            try:
-                import datetime
-                # Refresh heartbeat TTL directly in Redis (must match server's WORKER_HEARTBEAT_TTL)
-                # IMPORTANT: This value must match SaveNLoad/services/redis_worker_service.py WORKER_HEARTBEAT_TTL
-                self.redis_client.setex(f'worker:{client_id}', WORKER_HEARTBEAT_TTL, '1')
-                # Update last_ping in info hash
-                self.redis_client.hset(f'worker:{client_id}:info', 'last_ping', datetime.datetime.now().isoformat())
-                
-                # Check claim status (called from heartbeat loop and Pub/Sub notifications)
-                self._check_claim_status(client_id)
-                        
-            except redis.ConnectionError:
-                # Redis connection lost - this is fatal, worker should exit
-                self._safe_console_print("[red][ERROR] Redis connection lost - worker cannot continue without Redis[/red]")
-                self.running = False
-                break
-            except Exception as e:
-                # Other errors - log but continue
-                self._safe_console_print(f"[yellow][WARNING] Heartbeat update failed: {e}[/yellow]")
-            
+            if self._ws_connected:
+                self._send_ws_message('heartbeat', {'client_id': client_id})
+
             for _ in range(heartbeat_interval * 10):
                 if not self.running:
                     break
@@ -806,6 +808,12 @@ Please ensure:
         if self._heartbeat_thread and self._heartbeat_thread.is_alive():
             self._safe_console_print("[dim]Waiting for heartbeat thread...[/dim]")
             self._heartbeat_thread.join(timeout=2)
+
+        if self._ws:
+            try:
+                self._ws.close()
+            except Exception:
+                pass
         
         # Unregister from server
         if client_id:
@@ -819,7 +827,7 @@ Please ensure:
         time.sleep(0.5)  # Brief pause to ensure message is visible
     
     def run(self):
-        """Run the service (Redis-only mode)"""
+        """Run the service (WebSocket mode)"""
         # ASCII art banner using rich
         ascii_art = """  $$$$$$\\  $$\\       $$$$$$\\ $$$$$$$$\\ $$\\   $$\\ $$$$$$$$\\
   $$  __$$\\ $$ |      \\_$$  _|$$  _____|$$$\\  $$ |\\__$$  __|
@@ -884,13 +892,11 @@ Please ensure:
         rclone_status = "[green][OK][/green]" if rclone_success else "[red][FAIL][/red]"
         
         # Status output using rich Panel with ASCII-safe indicators
-        redis_channel = f'worker:{client_id}:notify'
-        
         status_content = f"""[green][OK][/green] Connected to server
 [green][OK][/green] Client ID: {client_id}
 {rclone_status} {rclone_message}
-[green][OK][/green] Subscribed to Redis channel: {redis_channel}
-[green][OK][/green] Heartbeat active (Redis, every {HEARTBEAT_INTERVAL}s)"""
+[yellow][!][/yellow] WebSocket connecting...
+[green][OK][/green] Heartbeat active (WebSocket, every {HEARTBEAT_INTERVAL}s)"""
         
         # Add owner status at the bottom
         owner_status = f"[green][OK][/green] Owned by: {self.linked_user}" if self.linked_user else "[yellow][!][/yellow] Waiting for Claim"
@@ -898,10 +904,9 @@ Please ensure:
         
         self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, args=(client_id,), daemon=True)
         self._heartbeat_thread.start()
-        
-        # Start Redis Pub/Sub thread
-        self._redis_thread = threading.Thread(target=self._redis_subscribe_loop, args=(client_id,), daemon=True)
-        self._redis_thread.start()
+
+        self._ws_thread = threading.Thread(target=self._ws_connect_loop, args=(client_id,), daemon=True)
+        self._ws_thread.start()
         
         status_panel = Panel(
             status_content,
@@ -976,7 +981,7 @@ Please ensure:
             except Exception:
                 pass  # Fallback to signal handlers if this fails
         
-        # Redis Pub/Sub thread handles all operations - just wait for shutdown
+        # WebSocket thread handles all operations - just wait for shutdown
         try:
             while self.running:
                 time.sleep(1)
@@ -987,107 +992,6 @@ Please ensure:
             # Final cleanup (in case signal handler didn't run)
             if self.running:
                 self._shutdown(client_id)
-    
-    def _redis_subscribe_loop(self, client_id: str):
-        """Subscribe to Redis Pub/Sub channel for real-time operation notifications"""
-        pubsub = self.redis_client.pubsub()
-        channel = f'worker:{client_id}:notify'
-        
-        try:
-            pubsub.subscribe(channel)
-            
-            # Fetch any pending operations immediately
-            self._fetch_and_process_operations(client_id)
-            
-            while self.running:
-                try:
-                    message = pubsub.get_message(timeout=1.0, ignore_subscribe_messages=True)
-                    if message and message['type'] == 'message':
-                        message_data = message.get('data', '')
-                        if isinstance(message_data, bytes):
-                            message_data = message_data.decode('utf-8')
-                        
-                        # Check if it's a claim status change notification
-                        if message_data == 'claim_status_changed':
-                            # Immediately check claim status (don't wait for next heartbeat)
-                            self._check_claim_status(client_id)
-                        else:
-                            # New operation notification - fetch operations
-                            self._safe_console_print(f"[cyan][*] Received operation notification via Redis Pub/Sub[/cyan]")
-                            self._fetch_and_process_operations(client_id)
-                except redis.ConnectionError:
-                    # Redis connection lost - this is fatal
-                    self._safe_console_print("[red][ERROR] Redis connection lost - worker cannot continue without Redis[/red]")
-                    self.running = False
-                    break
-                except Exception as e:
-                    # Continue on other errors
-                    pass
-        except Exception as e:
-            self._safe_console_print(f"[red][ERROR] Redis Pub/Sub error: {e} - worker cannot continue[/red]")
-            self.running = False
-        finally:
-            try:
-                pubsub.close()
-            except:
-                pass
-    
-    def _fetch_and_process_operations(self, client_id: str):
-        """Fetch pending operations directly from Redis and process them"""
-        try:
-            # Read operations directly from Redis - no HTTP polling!
-            operation_ids = self.redis_client.lrange(f'worker:{client_id}:operations', 0, -1)
-            
-            if not operation_ids:
-                return
-            
-            # Linked user status is already tracked in heartbeat loop - no HTTP needed
-            
-            # Process each pending operation
-            operations_to_remove = []
-            for operation_id in operation_ids:
-                # Get operation hash from Redis
-                operation_hash = self.redis_client.hgetall(f'operation:{operation_id}')
-                
-                if not operation_hash:
-                    # Operation doesn't exist, mark for removal
-                    operations_to_remove.append(operation_id)
-                    continue
-                
-                status = operation_hash.get('status', '')
-                
-                # Only process pending operations
-                if status == 'pending':
-                    # Mark as in_progress in Redis
-                    self.redis_client.hset(f'operation:{operation_id}', 'status', 'in_progress')
-                    from datetime import datetime
-                    self.redis_client.hset(f'operation:{operation_id}', 'started_at', datetime.now().isoformat())
-                    
-                    # Build operation dict (reading directly from Redis)
-                    operation_dict = {
-                        'id': operation_id,
-                        'type': operation_hash.get('type', ''),
-                        'local_save_path': operation_hash.get('local_save_path', ''),
-                        'save_folder_number': int(operation_hash['save_folder_number']) if operation_hash.get('save_folder_number') else None,
-                        'remote_ftp_path': operation_hash.get('remote_ftp_path', ''),  # NEW: Pre-built FTP path from server
-                        'username': operation_hash.get('username', self.linked_user or ''),  # From hash or cached
-                        'game_id': int(operation_hash.get('game_id')) if operation_hash.get('game_id') else None,
-                    }
-                    
-                    # Process the operation
-                    self._process_operation(operation_dict)
-            
-            # Remove invalid operation IDs from list
-            for operation_id in operations_to_remove:
-                self.redis_client.lrem(f'worker:{client_id}:operations', 0, operation_id)
-                
-        except redis.ConnectionError:
-            # Redis connection lost - fatal error
-            self._safe_console_print("[red][ERROR] Redis connection lost - worker cannot continue without Redis[/red]")
-            self.running = False
-        except Exception as e:
-            # Silently handle other errors
-            pass
     
     def _process_operation(self, operation: Dict[str, Any]):
         """Process a pending operation from the server"""
@@ -1132,15 +1036,9 @@ Please ensure:
             error = result.get('error', result.get('message', 'Unknown error'))
             print(f"Error: {error}")
         
-        try:
-            response = self.session.post(
-                f"{self.server_url}/api/client/complete/{operation_id}/",
-                json=result
-            )
-            if response.status_code != 200:
-                print(f"Warning: Complete operation returned status {response.status_code}: {response.text}")
-        except Exception as e:
-            print(f"Error: Failed to mark operation as complete: {e}")
+        result_payload = dict(result)
+        result_payload['operation_id'] = operation_id
+        self._send_ws_message('complete', result_payload, correlation_id=str(operation_id))
 
 
 def main():

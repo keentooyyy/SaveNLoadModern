@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
+from urllib.parse import quote
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -59,6 +60,7 @@ else:
 # Application definition
 
 INSTALLED_APPS = [
+    'channels',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -99,6 +101,7 @@ MIDDLEWARE = [
 ROOT_URLCONF = 'config.urls'
 
 WSGI_APPLICATION = 'config.wsgi.application'
+ASGI_APPLICATION = 'config.asgi.application'
 
 
 # Database
@@ -121,6 +124,18 @@ REDIS_PORT = int(os.getenv('REDIS_PORT'))
 REDIS_DB = int(os.getenv('REDIS_DB'))
 REDIS_PASSWORD = os.getenv('REDIS_PASSWORD')
 REDIS_URL = os.getenv(f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}')
+
+_redis_auth = f":{quote(REDIS_PASSWORD)}@" if REDIS_PASSWORD else ""
+_redis_channel_url = f"redis://{_redis_auth}{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [_redis_channel_url],
+        },
+    },
+}
 
 
 # Password validation

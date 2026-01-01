@@ -5,12 +5,8 @@ app_name = 'client_worker'
 
 urlpatterns = [
     path('register/', client_worker_api.register_client, name='register'),
-    path('ping/<str:client_id>/', client_worker_api.ping_worker, name='ping'),
     path('unregister/', client_worker_api.unregister_client, name='unregister'),
     path('check/', client_worker_api.check_connection, name='check'),
-    path('pending/<str:client_id>/', client_worker_api.get_pending_operations, name='pending'),
-    path('progress/<str:operation_id>/', client_worker_api.update_operation_progress, name='update_progress'),
-    path('complete/<str:operation_id>/', client_worker_api.complete_operation, name='complete'),
     
     # Association endpoints
     path('unpaired/', client_worker_api.get_unpaired_workers, name='unpaired'),
