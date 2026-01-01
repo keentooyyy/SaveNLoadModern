@@ -24,9 +24,9 @@ class SavenloadConfig(AppConfig):
                 try:
                     redis_client = get_redis_client()
                     
-                    # Enable keyspace notifications for expired events (REQUIRED - no fallback)
-                    # This allows us to get notified when keys expire
-                    redis_client.config_set('notify-keyspace-events', 'Ex')
+                    # Enable keyspace notifications for expired + delete events.
+                    # 'E' = keyevent, 'x' = expired, 'g' = generic (DEL).
+                    redis_client.config_set('notify-keyspace-events', 'Exg')
                     # Verify it was set
                     current_config = redis_client.config_get('notify-keyspace-events')
                     print(f"Redis keyspace notifications enabled: {current_config.get('notify-keyspace-events', 'NOT SET')}")
@@ -48,12 +48,16 @@ class SavenloadConfig(AppConfig):
                         decode_responses=True
                     )
                     
-                    # Subscribe to expired events for worker heartbeat keys
-                    # Use __keyevent@<db>__:expired channel - this sends the key name as data
+                    # Subscribe to expired + delete events for worker heartbeat keys
+                    # Use __keyevent@<db>__:expired|del channels - data is the key name
                     # This is more reliable than __keyspace@<db>__:worker:* pattern
-                    keyevent_pattern = f'__keyevent@{redis_db}__:expired'
+                    keyevent_patterns = [
+                        f'__keyevent@{redis_db}__:expired',
+                        f'__keyevent@{redis_db}__:del',
+                    ]
                     pubsub = pubsub_client.pubsub()
-                    pubsub.psubscribe(keyevent_pattern)
+                    for pattern in keyevent_patterns:
+                        pubsub.psubscribe(pattern)
                     
                     print(f"Real-time worker cleanup listener started (Redis keyspace notifications)")
                     
@@ -71,6 +75,10 @@ class SavenloadConfig(AppConfig):
                         if message['type'] == 'pmessage':
                             channel = message['channel']
                             key_name = message['data']  # In keyevent, data is the key name
+                            try:
+                                event_name = str(channel).split(':', 1)[1]
+                            except Exception:
+                                event_name = str(channel)
                             
                             # Prevent duplicate processing with thread-safe check
                             with processing_lock:
@@ -112,6 +120,7 @@ class SavenloadConfig(AppConfig):
                                                 processed_keys.add(f'unclaimed_{client_id}')
                                             
                                             unclaim_worker(client_id)
+                                            print(f"Real-time cleanup: event={event_name} key={key_name}")
                                             print(f"Real-time cleanup: Auto-unclaimed offline worker {client_id}")
                                     except Exception as e:
                                         print(f"Error auto-unclaiming offline worker {client_id}: {e}")

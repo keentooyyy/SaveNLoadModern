@@ -280,6 +280,30 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Uses shared utility functions from utils.js
+    function normalizeOperationIds(data) {
+        if (!data) {
+            return [];
+        }
+        if (Array.isArray(data.operation_ids)) {
+            return data.operation_ids;
+        }
+        if (Array.isArray(data.operationIds)) {
+            return data.operationIds;
+        }
+        if (data.data && Array.isArray(data.data.operation_ids)) {
+            return data.data.operation_ids;
+        }
+        if (typeof data.operation_ids === 'string') {
+            return data.operation_ids.split(',').map(id => id.trim()).filter(Boolean);
+        }
+        if (data.operation_id) {
+            return [data.operation_id];
+        }
+        if (data.data && data.data.operation_id) {
+            return [data.data.operation_id];
+        }
+        return [];
+    }
 
     async function deleteGame() {
         if (!currentDeleteUrlRef || !currentDetailUrlRef) return;
@@ -1036,21 +1060,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const data = await response.json();
 
-            if (data.success && data.operation_id) {
-                // Show progress modal and poll for status
-                const modalData = createProgressModal(data.operation_id, 'Loading Game', 'load');
-                pollOperationStatus(
-                    data.operation_id,
-                    modalData,
-                    () => {
-                        window.showToast('Game loaded successfully!', 'success');
-                    },
-                    () => {
-                        window.showToast('Failed to load game', 'error');
-                    }
-                );
-            } else if (data.success) {
-                window.showToast(data.message || 'Game loaded successfully!', 'success');
+            if (data.success) {
+                const operationIds = normalizeOperationIds(data);
+                if (operationIds.length > 0) {
+                    // Show progress modal and poll for status using the first op id.
+                    const modalData = createProgressModal(operationIds[0], 'Loading Game', 'load');
+                    pollOperationStatus(
+                        operationIds[0],
+                        modalData,
+                        () => {
+                            window.showToast('Game loaded successfully!', 'success');
+                        },
+                        () => {
+                            window.showToast('Failed to load game', 'error');
+                        }
+                    );
+                } else {
+                    window.showToast(data.message || 'Game loaded successfully!', 'success');
+                }
             } else {
                 window.showToast(data.error || data.message || 'Failed to load game', 'error');
             }

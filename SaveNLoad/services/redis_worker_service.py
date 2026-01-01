@@ -167,6 +167,8 @@ def set_worker_ws_status(client_id, is_connected, mark_offline=False):
         mapping['last_ws_disconnect'] = now
         if mark_offline:
             redis_client.delete(f'worker:{client_id}')
+            # If the worker went offline, clear any stale claim immediately.
+            unclaim_worker(client_id)
 
     redis_client.hset(f'worker:{client_id}:info', mapping=mapping)
     _notify_ui_workers_update()

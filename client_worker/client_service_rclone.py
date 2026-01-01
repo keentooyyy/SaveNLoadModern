@@ -5,7 +5,6 @@ Runs on client PC to handle save/load operations - rclone does all the heavy lif
 import os
 import sys
 import time
-import signal
 import json
 import requests
 import webbrowser
@@ -128,6 +127,7 @@ class ClientWorkerServiceRclone:
         self._rclone_status_line = None
         self.linked_user = None  # Track ownership status
         self._active_operations = set()
+        self._active_operations_lock = threading.Lock()
         
         # Setup rich console for formatted output
         self.console = Console()
@@ -395,16 +395,25 @@ class ClientWorkerServiceRclone:
             None
         """
         operation_id = operation.get('id')
-        if not operation_id or operation_id in self._active_operations:
+        if not operation_id:
             return
 
-        # Track active ops to prevent duplicates while running.
-        self._active_operations.add(operation_id)
+        with self._active_operations_lock:
+            if operation_id in self._active_operations:
+                return
+            # Track active ops to prevent duplicates while running.
+            self._active_operations.add(operation_id)
+
         self._send_ws_message('operation_started', {'operation_id': operation_id}, correlation_id=str(operation_id))
-        try:
-            self._process_operation(operation)
-        finally:
-            self._active_operations.discard(operation_id)
+
+        def run_operation():
+            try:
+                self._process_operation(operation)
+            finally:
+                with self._active_operations_lock:
+                    self._active_operations.discard(operation_id)
+
+        threading.Thread(target=run_operation, daemon=True).start()
 
     def _handle_claim_status(self, payload: Dict[str, Any]):
         """
@@ -955,11 +964,6 @@ class ClientWorkerServiceRclone:
         self._safe_console_print("\n[yellow]Shutting down gracefully...[/yellow]")
         
         self.running = False
-        
-        # Wait for heartbeat thread to finish
-        if self._heartbeat_thread and self._heartbeat_thread.is_alive():
-            self._safe_console_print("[dim]Waiting for heartbeat thread...[/dim]")
-            self._heartbeat_thread.join(timeout=2)
 
         if self._ws:
             try:
@@ -978,7 +982,6 @@ class ClientWorkerServiceRclone:
                 pass
         
         self._safe_console_print("[green]Shutdown complete.[/green]")
-        time.sleep(0.5)  # Brief pause to ensure message is visible
     
     def run(self):
         """Run the service (WebSocket mode)"""
@@ -1083,45 +1086,11 @@ class ClientWorkerServiceRclone:
         except Exception:
             pass
         
-        # Setup signal handlers for graceful shutdown
-        def signal_handler(signum, frame):
-            """Handle shutdown signals"""
-            self._shutdown(client_id)
-            sys.exit(0)
-        
-        # Register signal handlers
-        signal.signal(signal.SIGINT, signal_handler)
-        if hasattr(signal, 'SIGTERM'):
-            signal.signal(signal.SIGTERM, signal_handler)
-        
-        # Windows-specific: Handle console close event
-        if platform.system() == 'Windows':
-            try:
-                import ctypes
-                from ctypes import wintypes
-                
-                # Define handler function type
-                HandlerRoutine = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.DWORD)
-                
-                # Handler for console close event
-                def console_handler(dwCtrlType):
-                    if dwCtrlType == 0:  # CTRL_CLOSE_EVENT
-                        self._shutdown(client_id)
-                        return True  # Handled
-                    return False  # Not handled, let default handler process it
-                
-                # Register console control handler
-                kernel32 = ctypes.windll.kernel32
-                kernel32.SetConsoleCtrlHandler(HandlerRoutine(console_handler), True)
-            except Exception:
-                pass  # Fallback to signal handlers if this fails
-        
         # WebSocket thread handles all operations - just wait for shutdown
         try:
             while self.running:
                 time.sleep(1)
         except KeyboardInterrupt:
-            # This will be caught by signal handler, but handle it here too
             self._shutdown(client_id)
         finally:
             # Final cleanup (in case signal handler didn't run)

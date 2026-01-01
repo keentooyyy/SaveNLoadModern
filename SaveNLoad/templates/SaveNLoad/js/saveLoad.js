@@ -6,6 +6,31 @@ document.addEventListener('DOMContentLoaded', function () {
         return; // getCsrfToken already shows a toast
     }
 
+    function normalizeOperationIds(data) {
+        if (!data) {
+            return [];
+        }
+        if (Array.isArray(data.operation_ids)) {
+            return data.operation_ids;
+        }
+        if (Array.isArray(data.operationIds)) {
+            return data.operationIds;
+        }
+        if (data.data && Array.isArray(data.data.operation_ids)) {
+            return data.data.operation_ids;
+        }
+        if (typeof data.operation_ids === 'string') {
+            return data.operation_ids.split(',').map(id => id.trim()).filter(Boolean);
+        }
+        if (data.operation_id) {
+            return [data.operation_id];
+        }
+        if (data.data && data.data.operation_id) {
+            return [data.data.operation_id];
+        }
+        return [];
+    }
+
     // Poll operation status until completion
     async function pollOperationStatus(operationId, btn, originalIcon, originalText) {
         // Handle both single operation ID and array of operation IDs
@@ -242,11 +267,11 @@ document.addEventListener('DOMContentLoaded', function () {
                             const isLoadOperation = originalText && originalText.includes('Load');
                             progressDetails.textContent = isLoadOperation
                                 ? `Successfully loaded ${totalOperations} location(s)`
-                                : `Successfully saved ${totalOperations} location(s)`;
+                                : 'Game saved successfully!';
                             window.showToast(
                                 isLoadOperation
                                     ? `Successfully loaded ${totalOperations} location(s)!`
-                                    : `Successfully saved ${totalOperations} location(s)!`,
+                                    : 'Game saved successfully!',
                                 'success'
                             );
                         } else if (someSuccessful) {
@@ -569,7 +594,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 setTimeout(() => modalBackdrop.remove(), 300);
 
                 if (allSuccessful) {
-                    window.showToast(`Successfully saved ${totalPaths} location(s)!`, 'success');
+                    window.showToast('Game saved successfully!', 'success');
                 } else if (someSuccessful) {
                     window.showToast(`Partially completed. Some locations saved successfully.`, 'warning');
                 } else {
@@ -682,12 +707,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 // Handle both single operation_id and multiple operation_ids
                 if (data.success) {
-                    if (data.operation_ids && Array.isArray(data.operation_ids) && data.operation_ids.length > 0) {
+                    const operationIds = normalizeOperationIds(data);
+                    if (operationIds.length > 1) {
                         // Multiple operations (multi-path save) - pass array
-                        await pollOperationStatus(data.operation_ids, btn, originalIcon, originalText);
-                    } else if (data.operation_id) {
+                        await pollOperationStatus(operationIds, btn, originalIcon, originalText);
+                    } else if (operationIds.length === 1) {
                         // Single operation - existing behavior
-                        await pollOperationStatus(data.operation_id, btn, originalIcon, originalText);
+                        await pollOperationStatus(operationIds[0], btn, originalIcon, originalText);
                     } else {
                         // Success but no operation ID (shouldn't happen, but handle gracefully)
                         window.showToast(data.message || 'Save operation completed', 'success');
@@ -858,14 +884,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 // Handle both single operation_id and multiple operation_ids
                 if (data.success) {
-                    if (data.operation_ids && Array.isArray(data.operation_ids) && data.operation_ids.length > 0) {
+                    const operationIds = normalizeOperationIds(data);
+                    if (operationIds.length > 1) {
                         // Multiple operations (multi-path load) - pass array
                         const originalText = ' Quick Load';
-                        await pollOperationStatus(data.operation_ids, btn, originalIcon, originalText);
-                    } else if (data.operation_id) {
+                        await pollOperationStatus(operationIds, btn, originalIcon, originalText);
+                    } else if (operationIds.length === 1) {
                         // Single operation - use shared pollOperationStatus function
                         const originalText = ' Quick Load';
-                        await pollOperationStatus(data.operation_id, btn, originalIcon, originalText);
+                        await pollOperationStatus(operationIds[0], btn, originalIcon, originalText);
                     } else {
                         // Success but no operation ID (shouldn't happen, but handle gracefully)
                         window.showToast(data.message || 'Load operation completed', 'success');
