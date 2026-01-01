@@ -8,10 +8,12 @@ from SaveNLoad.models import SimpleUsers
 from SaveNLoad.services.redis_worker_service import (
     register_worker,
     get_worker_info,
+    get_worker_claim_data,
     claim_worker as redis_claim_worker,
     unclaim_worker as redis_unclaim_worker,
     is_worker_online,
     get_unclaimed_workers,
+    get_workers_snapshot,
     issue_ws_token,
 )
 from SaveNLoad.views.api_helpers import (
@@ -35,24 +37,23 @@ def register_client(request):
         if not client_id:
             return json_response_error('client_id is required', status=400)
         
-        # Get existing worker info to check for linked user
-        worker_info = get_worker_info(client_id)
-        user_id = worker_info['user_id'] if worker_info and worker_info.get('user_id') else None
+        # Get claim data even if the worker was offline (heartbeat missing).
+        user_id, linked_user = get_worker_claim_data(client_id)
         
         # Register worker (creates or updates) - no auto-claiming, user must manually claim via frontend
         register_worker(client_id, user_id)
         ws_token = issue_ws_token(client_id)
         
         # Get linked user username if exists
-        linked_user = None
         if user_id:
-            try:
-                user = SimpleUsers.objects.get(pk=user_id)
-                linked_user = user.username
-            except SimpleUsers.DoesNotExist:
-                pass
+            if not linked_user:
+                try:
+                    user = SimpleUsers.objects.get(pk=user_id)
+                    linked_user = user.username
+                except SimpleUsers.DoesNotExist:
+                    linked_user = None
         
-        print(f"Client worker registered: {client_id}")
+        print(f"Client worker registered: {client_id} linked_user={linked_user} user_id={user_id}")
         return json_response_success(
             message='Client worker registered successfully',
             data={
@@ -93,37 +94,13 @@ def unregister_client(request):
 def get_unpaired_workers(request):
     """Get list of all online workers with their claim status"""
     from SaveNLoad.views.custom_decorators import get_current_user
-    from SaveNLoad.services.redis_worker_service import get_online_workers
     
     user = get_current_user(request)
     if not user:
         return json_response_error('Authentication required', status=401)
     
-    # Get all online workers
-    online_worker_ids = get_online_workers()
-    
-    workers_list = []
-    for client_id in online_worker_ids:
-        worker_info = get_worker_info(client_id)
-        user_id = worker_info.get('user_id') if worker_info else None
-        linked_username = None
-        if user_id:
-            try:
-                linked_user = SimpleUsers.objects.get(pk=user_id)
-                linked_username = linked_user.username
-            except SimpleUsers.DoesNotExist:
-                pass
-        
-        workers_list.append({
-            'client_id': client_id,
-            'last_ping_response': worker_info['last_ping'] if worker_info else None,
-            'hostname': client_id,
-            'linked_user': linked_username,
-            'claimed': user_id is not None
-        })
-    
     return JsonResponse({
-        'workers': workers_list
+        'workers': get_workers_snapshot()
     })
 
 
@@ -160,7 +137,7 @@ def claim_worker(request):
         if not success:
             return json_response_error('Failed to claim worker', status=500)
         
-        print(f"Worker {client_id} claimed by {user.username}")
+        print(f"Worker {client_id} claimed by {user.username} user_id={user.id}")
         return json_response_success(message='Worker claimed successfully')
         
     except Exception as e:
@@ -198,7 +175,7 @@ def unclaim_worker(request):
         # Release it
         redis_unclaim_worker(client_id)
         
-        print(f"Worker {client_id} unclaimed by {user.username}")
+        print(f"Worker {client_id} unclaimed by {user.username} user_id={user.id}")
         return json_response_success(message='Worker unclaimed successfully')
         
     except Exception as e:

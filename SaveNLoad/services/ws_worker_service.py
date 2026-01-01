@@ -78,3 +78,86 @@ def send_worker_message(client_id, event_type, payload=None, correlation_id=None
         }
     )
     return True
+
+
+def ui_workers_group_name():
+    """
+    Group name for UI clients that want worker list updates.
+    
+    Returns:
+        str: Group name
+    """
+    return 'ui.workers'
+
+
+def send_ui_workers_update(workers):
+    """
+    Broadcast worker list updates to UI listeners.
+    
+    Args:
+        workers: List of worker dicts
+    
+    Returns:
+        bool: True if enqueued, False otherwise
+    """
+    channel_layer = get_channel_layer()
+    if not channel_layer:
+        return False
+
+    message = build_worker_message(
+        event_type='workers_update',
+        payload={'workers': workers}
+    )
+
+    async_to_sync(channel_layer.group_send)(
+        ui_workers_group_name(),
+        {
+            'type': 'ui.message',
+            'message': message,
+        }
+    )
+    return True
+
+
+def ui_user_group_name(user_id):
+    """
+    Group name for UI clients scoped to a single user.
+    
+    Args:
+        user_id: User identifier
+    
+    Returns:
+        str: Group name
+    """
+    safe_id = str(user_id) if user_id is not None else 'unknown'
+    return f'ui.user.{safe_id}'
+
+
+def send_ui_user_worker_status(user_id, connected):
+    """
+    Broadcast worker availability status to a specific user's UI clients.
+    
+    Args:
+        user_id: User identifier
+        connected: True if any worker is online for the user
+    
+    Returns:
+        bool: True if enqueued, False otherwise
+    """
+    channel_layer = get_channel_layer()
+    if not channel_layer:
+        return False
+
+    message = build_worker_message(
+        event_type='worker_status',
+        payload={'connected': bool(connected)}
+    )
+
+    async_to_sync(channel_layer.group_send)(
+        ui_user_group_name(user_id),
+        {
+            'type': 'ui.user.message',
+            'message': message,
+        }
+    )
+    return True

@@ -3,7 +3,11 @@ Redis-based worker management service
 Handles worker registration, heartbeat, claiming, and online status
 """
 from SaveNLoad.utils.redis_client import get_redis_client
-from SaveNLoad.services.ws_worker_service import send_worker_message
+from SaveNLoad.services.ws_worker_service import (
+    send_worker_message,
+    send_ui_workers_update,
+    send_ui_user_worker_status,
+)
 from django.utils import timezone
 import secrets
 
@@ -46,11 +50,14 @@ def register_worker(client_id, user_id=None):
     if user_id:
         redis_client.sadd(f'user:{user_id}:workers', client_id)
     
-    return {
+    worker_data = {
         'client_id': client_id,
         'user_id': user_id,
         'created_at': worker_info['created_at']
     }
+    _notify_ui_workers_update()
+    _notify_ui_user_worker_status(user_id)
+    return worker_data
 
 
 def ping_worker(client_id):
@@ -162,6 +169,10 @@ def set_worker_ws_status(client_id, is_connected, mark_offline=False):
             redis_client.delete(f'worker:{client_id}')
 
     redis_client.hset(f'worker:{client_id}:info', mapping=mapping)
+    _notify_ui_workers_update()
+    user_id = redis_client.hget(f'worker:{client_id}:info', 'user_id')
+    # Notify user-scoped listeners about availability changes.
+    _notify_ui_user_worker_status(user_id)
 
 
 def get_worker_info(client_id):
@@ -194,6 +205,38 @@ def get_worker_info(client_id):
         'ws_connected': info.get('ws_connected') == '1',
         'username': info.get('username')
     }
+
+
+def get_worker_claim_data(client_id):
+    """
+    Get worker claim data without requiring the heartbeat key.
+
+    Args:
+        client_id: Worker identifier
+
+    Returns:
+        (user_id, username) tuple; user_id is int or None
+    """
+    redis_client = get_redis_client()
+    info = redis_client.hgetall(f'worker:{client_id}:info') or {}
+
+    user_id = info.get('user_id')
+    username = info.get('username')
+
+    if isinstance(user_id, bytes):
+        user_id = user_id.decode('utf-8')
+    if isinstance(username, bytes):
+        username = username.decode('utf-8')
+
+    if user_id:
+        try:
+            user_id = int(user_id)
+        except (TypeError, ValueError):
+            user_id = None
+    else:
+        user_id = None
+
+    return user_id, username
 
 
 def claim_worker(client_id, user_id, username=None):
@@ -236,6 +279,8 @@ def claim_worker(client_id, user_id, username=None):
             'linked_user': username or ''
         }
     )
+    _notify_ui_workers_update()
+    _notify_ui_user_worker_status(user_id)
     
     return True
 
@@ -274,6 +319,8 @@ def unclaim_worker(client_id):
             'linked_user': ''
         }
     )
+    _notify_ui_workers_update()
+    _notify_ui_user_worker_status(user_id)
     
     return True
 
@@ -301,19 +348,7 @@ def get_user_workers(user_id):
         else:
             # Worker is offline - auto-unclaim it
             # Remove from user's set
-            redis_client.srem(f'user:{user_id}:workers', worker_id)
-            # Clear user_id from worker info (auto-unclaim)
-            redis_client.hset(f'worker:{worker_id}:info', 'user_id', '')
-            redis_client.hset(f'worker:{worker_id}:info', 'username', '')
-            # Notify worker (if it reconnects) that it's unclaimed.
-            send_worker_message(
-                worker_id,
-                event_type='claim_status',
-                payload={
-                    'claimed': False,
-                    'linked_user': ''
-                }
-            )
+            unclaim_worker(worker_id)
             print(f"Auto-unclaimed offline worker {worker_id} for user {user_id}")
     
     return list(online_workers)
@@ -377,6 +412,31 @@ def get_online_workers():
     return online_workers
 
 
+def has_online_worker(user_id):
+    """
+    Check if a user has any online workers without mutating claim state.
+    
+    Args:
+        user_id: User identifier
+    
+    Returns:
+        bool
+    """
+    if not user_id:
+        return False
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return False
+    
+    redis_client = get_redis_client()
+    worker_ids = redis_client.smembers(f'user:{user_id}:workers')
+    for worker_id in worker_ids:
+        if is_worker_online(worker_id):
+            return True
+    return False
+
+
 def get_unclaimed_workers():
     """
     Get all online workers that are not claimed by any user
@@ -399,19 +459,75 @@ def get_unclaimed_workers():
             # This handles edge cases where cleanup might have been partial
             if not redis_client.sismember(f'user:{user_id}:workers', client_id):
                 # Orphaned claim - clean it up
-                redis_client.hset(f'worker:{client_id}:info', 'user_id', '')
-                redis_client.hset(f'worker:{client_id}:info', 'username', '')
-                # Notify worker about unclaim to sync state.
-                send_worker_message(
-                    client_id,
-                    event_type='claim_status',
-                    payload={
-                        'claimed': False,
-                        'linked_user': ''
-                    }
-                )
+                unclaim_worker(client_id)
                 unclaimed.append(client_id)
                 print(f"Auto-unclaimed orphaned worker {client_id}")
     
     return unclaimed
+
+
+def get_workers_snapshot():
+    """
+    Get a snapshot of all online workers with claim status.
+    
+    Returns:
+        list of worker dicts
+    """
+    from SaveNLoad.models import SimpleUsers
+    
+    workers_list = []
+    for client_id in sorted(get_online_workers()):
+        worker_info = get_worker_info(client_id)
+        user_id = worker_info.get('user_id') if worker_info else None
+        linked_username = worker_info.get('username') if worker_info else None
+        if user_id and not linked_username:
+            try:
+                linked_user = SimpleUsers.objects.get(pk=user_id)
+                linked_username = linked_user.username
+            except SimpleUsers.DoesNotExist:
+                linked_username = None
+        
+        workers_list.append({
+            'client_id': client_id,
+            'last_ping_response': worker_info.get('last_ping') if worker_info else None,
+            'hostname': client_id,
+            'linked_user': linked_username,
+            'claimed': user_id is not None
+        })
+    
+    return workers_list
+
+
+def _notify_ui_workers_update():
+    """
+    Best-effort broadcast of worker list updates to UI listeners.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
+    try:
+        send_ui_workers_update(get_workers_snapshot())
+    except Exception as e:
+        print(f"UI workers update failed: {e}")
+
+
+def _notify_ui_user_worker_status(user_id):
+    """
+    Best-effort broadcast of user worker availability to UI listeners.
+
+    Args:
+        user_id: User identifier
+
+    Returns:
+        None
+    """
+    if not user_id:
+        return
+    try:
+        send_ui_user_worker_status(user_id, has_online_worker(user_id))
+    except Exception as e:
+        print(f"UI user status update failed: {e}")
 

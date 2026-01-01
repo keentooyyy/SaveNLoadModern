@@ -13,6 +13,7 @@ from SaveNLoad.views.rawg_api import get_popular_games
 from SaveNLoad.models import SimpleUsers, Game
 from SaveNLoad.models.operation_constants import OperationType
 from SaveNLoad.services.redis_operation_service import OperationStatus
+from SaveNLoad.services.redis_worker_service import get_user_workers, get_workers_snapshot
 from SaveNLoad.models.save_folder import SaveFolder
 from SaveNLoad.utils.image_utils import get_image_url_or_fallback
 
@@ -145,6 +146,21 @@ def user_dashboard(request):
     }
     
     return render(request, 'SaveNLoad/dashboard.html', context)
+
+
+@login_required
+def worker_required(request):
+    """Worker-required landing page when no client worker is connected."""
+    user = get_current_user(request)
+    worker_ids = get_user_workers(user.id)
+    if worker_ids:
+        target = 'admin:dashboard' if user.is_admin() else 'user:dashboard'
+        return redirect(reverse(target))
+
+    unpaired_workers = get_workers_snapshot()
+    return render(request, 'SaveNLoad/worker_required.html', {
+        'unpaired_workers': unpaired_workers
+    })
 
 
 @login_required

@@ -23,6 +23,7 @@ from rich.console import Console, Group
 from rich.panel import Panel
 from rich.align import Align
 from rich.text import Text
+from rich.live import Live
 from rclone_client import RcloneClient, RCLONE_TRANSFERS
 import websocket
 
@@ -124,6 +125,12 @@ class ClientWorkerServiceRclone:
         self._ws_connected = False
         self._ws_send_lock = threading.Lock()
         self._current_client_id = None
+        self._ws_last_error = None
+        self._status_live = None
+        self._status_lock = threading.Lock()
+        self._rclone_status_line = None
+        self._info_panel = None
+        self._server_url_panel = None
         self.linked_user = None  # Track ownership status
         self._active_operations = set()
         
@@ -282,7 +289,6 @@ class ClientWorkerServiceRclone:
         while self.running:
             try:
                 ws_url = self._build_ws_url(client_id)
-                self._safe_console_print(f"[dim]WS connecting to {ws_url}[/dim]")
                 self._ws = websocket.WebSocketApp(
                     ws_url,
                     on_open=self._on_ws_open,
@@ -310,7 +316,8 @@ class ClientWorkerServiceRclone:
             None
         """
         self._ws_connected = True
-        self._safe_console_print("[green][OK] WebSocket connected[/green]")
+        self._ws_last_error = None
+        self._update_status_panel()
         self._send_ws_message('hello', {'client_id': self._current_client_id})
 
     def _on_ws_close(self, ws, status_code, msg):
@@ -326,7 +333,8 @@ class ClientWorkerServiceRclone:
             None
         """
         self._ws_connected = False
-        self._safe_console_print(f"[yellow][!] WebSocket disconnected code={status_code} msg={msg}[/yellow]")
+        self._ws_last_error = f"Disconnected code={status_code} msg={msg}"
+        self._update_status_panel()
 
     def _on_ws_error(self, ws, error):
         """
@@ -340,7 +348,8 @@ class ClientWorkerServiceRclone:
             None
         """
         self._ws_connected = False
-        self._safe_console_print(f"[red][ERROR] WebSocket error: {error}[/red]")
+        self._ws_last_error = f"Error: {error}"
+        self._update_status_panel()
 
     def _on_ws_message(self, ws, message):
         """
@@ -405,15 +414,47 @@ class ClientWorkerServiceRclone:
         linked_user = payload.get('linked_user') or None
 
         if claimed:
-            if linked_user and linked_user != self.linked_user:
-                self._safe_console_print(f"\n[green][OK] Device claimed by user: {linked_user}[/green]")
-            elif not self.linked_user:
-                self._safe_console_print(f"\n[green][OK] Device claimed[/green]")
             self.linked_user = linked_user or self.linked_user
         else:
-            if self.linked_user:
-                self._safe_console_print("\n[yellow][!] Device unclaimed (waiting for owner)[/yellow]")
             self.linked_user = None
+        self._update_status_panel()
+
+    def _build_status_panel(self) -> Panel:
+        ws_line = "[green][OK][/green] WebSocket connected" if self._ws_connected else "[red][FAIL][/red] WebSocket not connected"
+        if not self._ws_connected and self._ws_last_error:
+            ws_line = f"{ws_line} ({self._ws_last_error})"
+
+        status_content = f"""[green][OK][/green] Connected to server
+[green][OK][/green] Client ID: {self._current_client_id}
+{self._rclone_status_line}
+{ws_line}
+[green][OK][/green] Heartbeat active (WebSocket, every {HEARTBEAT_INTERVAL}s)"""
+
+        owner_status = f"[green][OK][/green] Owned by: {self.linked_user}" if self.linked_user else "[yellow][!][/yellow] Waiting for Claim"
+        status_content += f"\n{owner_status}"
+
+        return Panel(
+            status_content,
+            title="[bold]STATUS[/bold]",
+            border_style="bright_white",
+            padding=(1, 2),
+            width=80
+        )
+
+    def _update_status_panel(self):
+        if not self._status_live or not self._banner_panel or not self._info_panel or not self._server_url_panel:
+            return
+        with self._status_lock:
+            status_group = Group(
+                self._banner_panel,
+                "",
+                self._build_status_panel(),
+                "",
+                self._info_panel,
+                "",
+                self._server_url_panel
+            )
+            self._status_live.update(status_group, refresh=True)
     
     def check_permissions(self) -> bool:
         """Check if we have necessary permissions to access files"""
@@ -926,6 +967,12 @@ class ClientWorkerServiceRclone:
                 self._ws.close()
             except Exception:
                 pass
+
+        if self._status_live:
+            try:
+                self._status_live.stop()
+            except Exception:
+                pass
         
         # Unregister from server
         if client_id:
@@ -953,13 +1000,12 @@ class ClientWorkerServiceRclone:
         # Create centered ASCII art banner
         ascii_text = Text(ascii_art, style="bold")
         
-        banner_panel = Panel(
+        self._banner_panel = Panel(
             Align.center(ascii_text),
             border_style="bright_white",
             padding=(1, 2),
             width=80
         )
-        self.console.print(banner_panel)
         
         if not self.check_permissions():
             self.console.print("[yellow][WARNING][/yellow] Insufficient permissions - you may need elevated privileges\n")
@@ -1002,41 +1048,10 @@ class ClientWorkerServiceRclone:
         # Check rclone status
         rclone_success, rclone_message = self.rclone_client.check_status()
         rclone_status = "[green][OK][/green]" if rclone_success else "[red][FAIL][/red]"
-        
-        # Status output using rich Panel with ASCII-safe indicators
-        status_content = f"""[green][OK][/green] Connected to server
-[green][OK][/green] Client ID: {client_id}
-{rclone_status} {rclone_message}
-[yellow][!][/yellow] WebSocket connecting...
-[green][OK][/green] Heartbeat active (WebSocket, every {HEARTBEAT_INTERVAL}s)"""
-        
-        # Add owner status at the bottom
-        owner_status = f"[green][OK][/green] Owned by: {self.linked_user}" if self.linked_user else "[yellow][!][/yellow] Waiting for Claim"
-        status_content += f"\n{owner_status}"
-        
-        self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, args=(client_id,), daemon=True)
-        self._heartbeat_thread.start()
-
-        self._ws_thread = threading.Thread(target=self._ws_connect_loop, args=(client_id,), daemon=True)
-        self._ws_thread.start()
-        
-        status_panel = Panel(
-            status_content,
-            title="[bold]STATUS[/bold]",
-            border_style="bright_white",
-            padding=(1, 2),
-            width=80
-        )
-        self.console.print(status_panel)
-        
-        # Open browser to server URL for convenience (so user can login and claim)
-        try:
-            webbrowser.open(self.server_url)
-        except Exception:
-            pass
+        self._rclone_status_line = f"{rclone_status} {rclone_message}"
         
         # Important message panel
-        info_panel = Panel(
+        self._info_panel = Panel(
             "Do not close this terminal window.\n"
             "The service must remain running to process save/load operations.\n"
             "Press [bold]Ctrl+C[/bold] to stop the service gracefully.",
@@ -1045,20 +1060,40 @@ class ClientWorkerServiceRclone:
             padding=(1, 2),
             width=80
         )
-        self.console.print()
-        self.console.print(info_panel)
         
         # Server URL at the bottom - make it stand out
-        server_url_panel = Panel(
+        self._server_url_panel = Panel(
             Align.center(f"[bold bright_cyan]{self.server_url}[/bold bright_cyan]"),
             title="[bold bright_cyan]Server URL[/bold bright_cyan]",
             border_style="bright_cyan",
             padding=(1, 2),
             width=80
         )
-        self.console.print()
-        self.console.print(server_url_panel)
-        self.console.print()
+
+        status_group = Group(
+            self._banner_panel,
+            "",
+            self._build_status_panel(),
+            "",
+            self._info_panel,
+            "",
+            self._server_url_panel
+        )
+
+        self._status_live = Live(status_group, console=self.console, refresh_per_second=4)
+        self._status_live.start()
+
+        self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, args=(client_id,), daemon=True)
+        self._heartbeat_thread.start()
+
+        self._ws_thread = threading.Thread(target=self._ws_connect_loop, args=(client_id,), daemon=True)
+        self._ws_thread.start()
+
+        # Open browser to server URL for convenience (so user can login and claim)
+        try:
+            webbrowser.open(self.server_url)
+        except Exception:
+            pass
         
         # Setup signal handlers for graceful shutdown
         def signal_handler(signum, frame):

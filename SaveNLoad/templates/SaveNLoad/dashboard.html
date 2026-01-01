@@ -27,7 +27,7 @@
 
 <script>
     // Inject Django URLs for worker check
-
+    window.WORKER_REQUIRED_URL = '{% url "worker_required" %}';
 
     // Inject Django URL patterns (with placeholder for game_id or operation_id)
     {% if is_user %}
@@ -71,5 +71,6 @@
     {% include 'SaveNLoad/js/manageGames.js' %}
     {% include 'SaveNLoad/js/saveLoad.js' %}
     {% include 'SaveNLoad/js/availableGames.js' %}
+    {% include 'SaveNLoad/js/workerStatus.js' %}
 </script>
 {% endblock %}

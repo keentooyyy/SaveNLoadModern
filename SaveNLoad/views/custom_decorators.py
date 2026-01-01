@@ -1,9 +1,9 @@
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect
 from django.urls import reverse
 from django.http import JsonResponse
 from functools import wraps
 from SaveNLoad.models import SimpleUsers
-from SaveNLoad.services.redis_worker_service import get_user_workers, get_unclaimed_workers, is_worker_online
+from SaveNLoad.services.redis_worker_service import get_user_workers
 
 
 def login_required(view_func):
@@ -77,22 +77,8 @@ def client_worker_required(view_func):
                         'error': 'Client worker not connected. Please ensure the client worker is running and claimed.',
                         'requires_worker': True
                     }, status=503)
-                
-                # Fetch all online workers to show in the UI (only unclaimed ones)
-                from SaveNLoad.services.redis_worker_service import get_unclaimed_workers, get_worker_info
-                unclaimed_worker_ids = get_unclaimed_workers()
-                unclaimed_workers = []
-                for wid in unclaimed_worker_ids:
-                    worker_info = get_worker_info(wid)
-                    unclaimed_workers.append({
-                        'client_id': wid,
-                        'linked_user': None,  # Unclaimed workers have no linked user
-                        'claimed': False
-                    })
-                
-                return render(request, 'SaveNLoad/worker_required.html', {
-                    'unpaired_workers': unclaimed_workers
-                })
+
+                return redirect(reverse('worker_required'))
         
         return view_func(request, *args, **kwargs)
     return wrapper

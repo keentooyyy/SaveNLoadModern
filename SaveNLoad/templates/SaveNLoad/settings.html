@@ -33,6 +33,7 @@
 
 <script>
     // Inject Django URLs for worker check
+    window.WORKER_REQUIRED_URL = '{% url "worker_required" %}';
 
     window.UPDATE_ACCOUNT_SETTINGS_URL = '{% if is_user %}{% url "user:update_account_settings" %}{% else %}{% url "admin:update_account_settings" %}{% endif %}';
 
@@ -61,6 +62,7 @@
 
     {% include 'SaveNLoad/js/logoutHandler.js' %}
     {% include 'SaveNLoad/js/accountSettings.js' %}
+    {% include 'SaveNLoad/js/workerStatus.js' %}
     {% if not is_user %}
     {% include 'SaveNLoad/js/gameFormUtils.js' %}
     {% include 'SaveNLoad/js/settings.js' %}
