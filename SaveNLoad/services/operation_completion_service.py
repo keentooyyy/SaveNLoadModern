@@ -1,5 +1,4 @@
 from django.utils import timezone
-from SaveNLoad.models import SimpleUsers, Game
 from SaveNLoad.services.redis_operation_service import (
     complete_operation as redis_complete_operation,
     fail_operation as redis_fail_operation,
@@ -7,63 +6,90 @@ from SaveNLoad.services.redis_operation_service import (
     get_operations_by_game,
     get_operations_by_user,
 )
-from SaveNLoad.views.api_helpers import delete_game_banner_file
 from SaveNLoad.utils.string_utils import transform_path_error_message
+import os
 
 
 def process_operation_completion(operation_id, payload):
     """
-    Handle operation completion payloads from the worker (WS or HTTP).
-    Returns: (success_bool, error_message_or_none)
+    Handle operation completion payloads from the worker.
+    
+    Args:
+        operation_id: Operation identifier
+        payload: Completion payload from worker
+    
+    Returns:
+        tuple: (success_bool, error_message_or_none)
     """
     operation_dict = get_operation(operation_id)
     if not operation_dict:
         return False, 'Operation not found'
 
+    # Load related DB objects only when needed.
     user = _get_user(operation_dict.get('user_id'))
     game = _get_game(operation_dict.get('game_id'))
 
     success = payload.get('success', False)
     if success:
+        # Persist completion in Redis before touching DB side effects.
         redis_complete_operation(operation_id, result_data=payload)
 
         if operation_dict.get('type') == 'save' and game:
+            # Update playtime timestamp on successful save.
             game.last_played = timezone.now()
             game.save()
 
         if (operation_dict.get('type') == 'delete' and
                 operation_dict.get('save_folder_number') and game):
+            # Cleanup corresponding SaveFolder entry.
             _delete_save_folder_after_delete(user, game, operation_dict)
 
         if game:
+            # Game deletions require all related ops to complete.
             _check_and_handle_game_deletion_completion(operation_dict, game)
 
         if user:
+            # User deletions require all related ops to complete.
             _check_and_handle_user_deletion_completion(operation_dict, user)
 
         return True, None
 
+    # Failure path: normalize message for user display.
     error_message = payload.get('error', payload.get('message', 'Operation failed'))
     error_message = transform_path_error_message(error_message, operation_dict.get('type', ''))
 
     redis_fail_operation(operation_id, error_message)
 
     if game:
+        # Still check for game deletion completion on failure.
         _check_and_handle_game_deletion_completion(operation_dict, game)
 
     if user:
+        # Still check for user deletion completion on failure.
         _check_and_handle_user_deletion_completion(operation_dict, user)
 
     if (operation_dict.get('type') == 'save' and
             operation_dict.get('save_folder_number') and user and game):
+        # If failure is due to missing/empty saves, cleanup DB record.
         _cleanup_failed_save_folder(operation_id, operation_dict, user, game, error_message)
 
     return False, error_message
 
 
 def _get_user(user_id):
+    """
+    Resolve a SimpleUsers instance (lazy import avoids ASGI app registry issues).
+    
+    Args:
+        user_id: User ID
+    
+    Returns:
+        SimpleUsers instance or None
+    """
     if not user_id:
         return None
+    # Import inside function to avoid app-loading issues under ASGI startup.
+    from SaveNLoad.models import SimpleUsers
     try:
         return SimpleUsers.objects.get(pk=user_id)
     except SimpleUsers.DoesNotExist:
@@ -71,8 +97,19 @@ def _get_user(user_id):
 
 
 def _get_game(game_id):
+    """
+    Resolve a Game instance (lazy import avoids ASGI app registry issues).
+    
+    Args:
+        game_id: Game ID
+    
+    Returns:
+        Game instance or None
+    """
     if not game_id:
         return None
+    # Import inside function to avoid app-loading issues under ASGI startup.
+    from SaveNLoad.models import Game
     try:
         return Game.objects.get(pk=game_id)
     except Game.DoesNotExist:
@@ -80,8 +117,20 @@ def _get_game(game_id):
 
 
 def _delete_save_folder_after_delete(user, game, operation_dict):
+    """
+    Remove SaveFolder row after a successful remote delete.
+    
+    Args:
+        user: SimpleUsers instance
+        game: Game instance
+        operation_dict: Operation dict from Redis
+    
+    Returns:
+        None
+    """
     from SaveNLoad.models.save_folder import SaveFolder
     try:
+        # Delete the save folder that matches the operation.
         save_folder = SaveFolder.get_by_number(
             user,
             game,
@@ -95,9 +144,23 @@ def _delete_save_folder_after_delete(user, game, operation_dict):
 
 
 def _cleanup_failed_save_folder(operation_id, operation_dict, user, game, error_message):
+    """
+    Cleanup save folder entries when a save failed due to missing/empty local data.
+    
+    Args:
+        operation_id: Operation identifier
+        operation_dict: Operation dict from Redis
+        user: SimpleUsers instance
+        game: Game instance
+        error_message: Failure message
+    
+    Returns:
+        None
+    """
     from SaveNLoad.models.save_folder import SaveFolder
 
     error_lower = error_message.lower() if error_message else ''
+    # Only cleanup for known "no files" failure reasons.
     path_errors = [
         'does not exist', 'not found', 'local save path', 'local file not found',
         'local path does not exist', "don't have any save files", "haven't played the game",
@@ -116,6 +179,7 @@ def _cleanup_failed_save_folder(operation_id, operation_dict, user, game, error_
         if not save_folder:
             return
 
+        # Only delete if no other pending/in-progress save ops for this folder.
         other_ops = get_operations_by_user(
             user.id,
             game_id=game.id,
@@ -140,6 +204,16 @@ def _cleanup_failed_save_folder(operation_id, operation_dict, user, game, error_
 
 
 def _check_and_handle_game_deletion_completion(operation_dict, game):
+    """
+    Finalize game deletion once all delete operations are complete.
+    
+    Args:
+        operation_dict: Operation dict from Redis
+        game: Game instance
+    
+    Returns:
+        None
+    """
     if not (game and game.pending_deletion and
             operation_dict.get('type') == 'delete' and
             not operation_dict.get('save_folder_number')):
@@ -160,6 +234,7 @@ def _check_and_handle_game_deletion_completion(operation_dict, game):
     if remaining:
         return
 
+    # If any delete op failed, cancel pending_deletion.
     failed_ops = [op for op in game_deletion_ops if op.get('status') == 'failed']
     all_succeeded = len(failed_ops) == 0
 
@@ -167,7 +242,8 @@ def _check_and_handle_game_deletion_completion(operation_dict, game):
         game_name = game.name
         game_id = game.id
 
-        delete_game_banner_file(game)
+        # Remove associated banner file before deleting the game.
+        _delete_game_banner_file(game)
         game.delete()
         print(f"Game {game_id} ({game_name}) deleted from database after all storage cleanup operations completed successfully")
     else:
@@ -176,7 +252,45 @@ def _check_and_handle_game_deletion_completion(operation_dict, game):
         print(f"WARNING: Game {game.id} ({game.name}) deletion cancelled - {len(failed_ops)} storage operation(s) failed")
 
 
+def _delete_game_banner_file(game):
+    """
+    Delete the banner file associated with a game.
+    Returns: True if deleted successfully or no banner exists, False on error.
+    
+    Args:
+        game: Game instance
+    
+    Returns:
+        bool: True if deleted successfully or no banner exists, False on error
+    """
+    if not game or not game.banner:
+        return True
+
+    try:
+        if game.banner.name:
+            banner_path = game.banner.path
+            if os.path.exists(banner_path):
+                os.remove(banner_path)
+                print(f"Deleted banner file for game {game.id} ({game.name}): {banner_path}")
+            return True
+    except Exception as e:
+        print(f"WARNING: Failed to delete banner file for game {game.id} ({game.name}): {e}")
+        return False
+
+    return True
+
+
 def _check_and_handle_user_deletion_completion(operation_dict, user):
+    """
+    Finalize user deletion once all delete operations are complete.
+    
+    Args:
+        operation_dict: Operation dict from Redis
+        user: SimpleUsers instance
+    
+    Returns:
+        None
+    """
     if not (user and hasattr(user, 'pending_deletion') and user.pending_deletion and
             operation_dict.get('type') == 'delete' and
             not operation_dict.get('game_id') and
@@ -205,6 +319,7 @@ def _check_and_handle_user_deletion_completion(operation_dict, user):
         print(f"DEBUG: Still {len(remaining)} pending/in-progress operations for user {user.id}")
         return
 
+    # Only delete the user if every related op succeeded.
     failed_ops = [op for op in user_deletion_ops if op.get('status') == 'failed']
     completed_ops = [op for op in user_deletion_ops if op.get('status') == 'completed']
     total_ops = len(user_deletion_ops)

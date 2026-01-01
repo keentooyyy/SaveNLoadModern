@@ -32,9 +32,11 @@ def register_worker(client_id, user_id=None):
 
     # Create or update worker info hash
     worker_info = {
+        # Preserve existing ownership unless a new user_id is provided.
         'user_id': str(user_id) if user_id else existing_info.get('user_id', ''),
         'created_at': existing_info.get('created_at', timezone.now().isoformat()),
         'last_ping': timezone.now().isoformat(),
+        # Track WS status/tokens for realtime comms.
         'ws_connected': existing_info.get('ws_connected', '0'),
         'ws_token': existing_info.get('ws_token', ''),
     }
@@ -83,6 +85,7 @@ def ping_worker(client_id):
             redis_client.hset(f'worker:{client_id}:info', 'username', '')
             redis_client.srem(f'user:{user_id}:workers', client_id)
             try:
+                # Legacy pub/sub cleanup; safe to ignore errors.
                 redis_client.publish(f'worker:{client_id}:notify', 'claim_status_changed')
             except Exception:
                 pass
@@ -94,9 +97,16 @@ def ping_worker(client_id):
 def issue_ws_token(client_id):
     """
     Issue or rotate a WebSocket auth token for the worker.
+    
+    Args:
+        client_id: Worker identifier
+    
+    Returns:
+        str: Token string
     """
     redis_client = get_redis_client()
     token = secrets.token_urlsafe(32)
+    # Store token and timestamp in the worker info hash.
     redis_client.hset(
         f'worker:{client_id}:info',
         mapping={
@@ -110,6 +120,13 @@ def issue_ws_token(client_id):
 def validate_ws_token(client_id, token):
     """
     Validate a WebSocket auth token for a worker.
+    
+    Args:
+        client_id: Worker identifier
+        token: Token string
+    
+    Returns:
+        bool: True if valid, False otherwise
     """
     redis_client = get_redis_client()
     stored = redis_client.hget(f'worker:{client_id}:info', 'ws_token')
@@ -119,6 +136,14 @@ def validate_ws_token(client_id, token):
 def set_worker_ws_status(client_id, is_connected, mark_offline=False):
     """
     Update WebSocket connection status and optionally mark the worker offline immediately.
+    
+    Args:
+        client_id: Worker identifier
+        is_connected: True if WS connected, False otherwise
+        mark_offline: If True, delete heartbeat key immediately
+    
+    Returns:
+        None
     """
     redis_client = get_redis_client()
     now = timezone.now().isoformat()
@@ -127,9 +152,11 @@ def set_worker_ws_status(client_id, is_connected, mark_offline=False):
         'ws_connected': '1' if is_connected else '0',
     }
     if is_connected:
+        # Treat WS connect as online and refresh TTL.
         mapping['last_ws_connect'] = now
         redis_client.setex(f'worker:{client_id}', WORKER_HEARTBEAT_TTL, '1')
     else:
+        # On disconnect, optionally mark offline immediately.
         mapping['last_ws_disconnect'] = now
         if mark_offline:
             redis_client.delete(f'worker:{client_id}')
@@ -200,6 +227,7 @@ def claim_worker(client_id, user_id, username=None):
         redis_client.hset(f'worker:{client_id}:info', 'username', username)
     redis_client.sadd(f'user:{user_id}:workers', client_id)
     
+    # Notify worker about claim status change.
     send_worker_message(
         client_id,
         event_type='claim_status',
@@ -237,6 +265,7 @@ def unclaim_worker(client_id):
     redis_client.hset(f'worker:{client_id}:info', 'user_id', '')
     redis_client.hset(f'worker:{client_id}:info', 'username', '')
     
+    # Notify worker about claim status change.
     send_worker_message(
         client_id,
         event_type='claim_status',
@@ -276,6 +305,7 @@ def get_user_workers(user_id):
             # Clear user_id from worker info (auto-unclaim)
             redis_client.hset(f'worker:{worker_id}:info', 'user_id', '')
             redis_client.hset(f'worker:{worker_id}:info', 'username', '')
+            # Notify worker (if it reconnects) that it's unclaimed.
             send_worker_message(
                 worker_id,
                 event_type='claim_status',
@@ -371,6 +401,7 @@ def get_unclaimed_workers():
                 # Orphaned claim - clean it up
                 redis_client.hset(f'worker:{client_id}:info', 'user_id', '')
                 redis_client.hset(f'worker:{client_id}:info', 'username', '')
+                # Notify worker about unclaim to sync state.
                 send_worker_message(
                     client_id,
                     event_type='claim_status',

@@ -58,7 +58,7 @@ services:
       context: .
       dockerfile: Dockerfile.prod
     container_name: savenload_web_prod
-    command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 1 --worker-class sync --worker-connections 1000 --timeout 120 --max-requests 1000 --max-requests-jitter 50 --access-logfile - --error-logfile -"
+    command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && daphne -b 0.0.0.0 -p 8000 config.asgi:application"
     ports:
       - "8000:8000"
     env_file:

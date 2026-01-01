@@ -226,11 +226,31 @@ class ClientWorkerServiceRclone:
             pass  # Console might be closed, but continue execution
 
     def _build_ws_url(self, client_id: str) -> str:
+        """
+        Build the worker WS URL using the server base URL and auth token.
+        
+        Args:
+            client_id: Worker identifier
+        
+        Returns:
+            str: WebSocket URL
+        """
         parsed = urlparse(self.server_url)
         scheme = 'wss' if parsed.scheme == 'https' else 'ws'
         return f"{scheme}://{parsed.netloc}/ws/worker/{client_id}/?token={self._ws_token}"
 
     def _send_ws_message(self, message_type: str, payload: Dict[str, Any], correlation_id: Optional[str] = None):
+        """
+        Send a JSON message over the worker WS connection (no-op if disconnected).
+        
+        Args:
+            message_type: Event type string
+            payload: Message payload dict
+            correlation_id: Optional correlation ID string
+        
+        Returns:
+            None
+        """
         if not self._ws or not self._ws_connected:
             return
 
@@ -243,15 +263,26 @@ class ClientWorkerServiceRclone:
         }
 
         try:
+            # Serialize and send atomically to avoid interleaving.
             with self._ws_send_lock:
                 self._ws.send(json.dumps(message))
         except Exception:
             pass
 
     def _ws_connect_loop(self, client_id: str):
+        """
+        WS connect/reconnect loop with short backoff.
+        
+        Args:
+            client_id: Worker identifier
+        
+        Returns:
+            None
+        """
         while self.running:
             try:
                 ws_url = self._build_ws_url(client_id)
+                self._safe_console_print(f"[dim]WS connecting to {ws_url}[/dim]")
                 self._ws = websocket.WebSocketApp(
                     ws_url,
                     on_open=self._on_ws_open,
@@ -265,39 +296,94 @@ class ClientWorkerServiceRclone:
 
             self._ws_connected = False
             if self.running:
+                # Simple reconnect delay to avoid tight loops.
                 time.sleep(2)
 
     def _on_ws_open(self, ws):
+        """
+        WS open callback.
+        
+        Args:
+            ws: WebSocketApp instance
+        
+        Returns:
+            None
+        """
         self._ws_connected = True
         self._safe_console_print("[green][OK] WebSocket connected[/green]")
         self._send_ws_message('hello', {'client_id': self._current_client_id})
 
     def _on_ws_close(self, ws, status_code, msg):
+        """
+        WS close callback.
+        
+        Args:
+            ws: WebSocketApp instance
+            status_code: Close status code
+            msg: Close message
+        
+        Returns:
+            None
+        """
         self._ws_connected = False
-        self._safe_console_print("[yellow][!] WebSocket disconnected[/yellow]")
+        self._safe_console_print(f"[yellow][!] WebSocket disconnected code={status_code} msg={msg}[/yellow]")
 
     def _on_ws_error(self, ws, error):
+        """
+        WS error callback.
+        
+        Args:
+            ws: WebSocketApp instance
+            error: Error object or message
+        
+        Returns:
+            None
+        """
         self._ws_connected = False
+        self._safe_console_print(f"[red][ERROR] WebSocket error: {error}[/red]")
 
     def _on_ws_message(self, ws, message):
+        """
+        WS message callback: routes server events to handlers.
+        
+        Args:
+            ws: WebSocketApp instance
+            message: Raw message string
+        
+        Returns:
+            None
+        """
         try:
             data = json.loads(message)
         except Exception:
+            self._safe_console_print("[yellow][!] WebSocket received invalid JSON[/yellow]")
             return
 
         message_type = data.get('type')
         payload = data.get('payload') or {}
 
         if message_type == 'operation':
+            # Server is assigning new work.
             self._handle_operation_message(payload)
         elif message_type == 'claim_status':
+            # Server is notifying claim/unclaim status.
             self._handle_claim_status(payload)
 
     def _handle_operation_message(self, operation: Dict[str, Any]):
+        """
+        Execute a server-sent operation and report completion.
+        
+        Args:
+            operation: Operation payload dict
+        
+        Returns:
+            None
+        """
         operation_id = operation.get('id')
         if not operation_id or operation_id in self._active_operations:
             return
 
+        # Track active ops to prevent duplicates while running.
         self._active_operations.add(operation_id)
         self._send_ws_message('operation_started', {'operation_id': operation_id}, correlation_id=str(operation_id))
         try:
@@ -306,6 +392,15 @@ class ClientWorkerServiceRclone:
             self._active_operations.discard(operation_id)
 
     def _handle_claim_status(self, payload: Dict[str, Any]):
+        """
+        Update local ownership display based on server claim events.
+        
+        Args:
+            payload: Claim status payload dict
+        
+        Returns:
+            None
+        """
         claimed = payload.get('claimed', False)
         linked_user = payload.get('linked_user') or None
 
@@ -753,7 +848,15 @@ class ClientWorkerServiceRclone:
             return self._handle_operation_exception('Open Folder', e)
     
     def register_with_server(self, client_id: str) -> bool:
-        """Register this client with the Django server"""
+        """
+        Register this client with the Django server.
+        
+        Args:
+            client_id: Worker identifier
+        
+        Returns:
+            bool: True on success, False otherwise
+        """
         try:
             response = self.session.post(
                 f"{self.server_url}/api/client/register/",
@@ -772,11 +875,20 @@ class ClientWorkerServiceRclone:
             return False
 
     def _heartbeat_loop(self, client_id: str):
-        """Background thread that continuously sends heartbeats to the server"""
+        """
+        Background thread that continuously sends heartbeats to the server.
+        
+        Args:
+            client_id: Worker identifier
+        
+        Returns:
+            None
+        """
         heartbeat_interval = HEARTBEAT_INTERVAL
 
         while self.running:
             if self._ws_connected:
+                # Keep Redis TTL alive via server-side heartbeat handling.
                 self._send_ws_message('heartbeat', {'client_id': client_id})
 
             for _ in range(heartbeat_interval * 10):
