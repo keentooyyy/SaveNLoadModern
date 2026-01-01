@@ -19,11 +19,10 @@ from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List, Callable
 from urllib.parse import urlparse
 from dotenv import load_dotenv
-from rich.console import Console, Group
+from rich.console import Console
 from rich.panel import Panel
 from rich.align import Align
 from rich.text import Text
-from rich.live import Live
 from rclone_client import RcloneClient, RCLONE_TRANSFERS
 import websocket
 
@@ -126,11 +125,7 @@ class ClientWorkerServiceRclone:
         self._ws_send_lock = threading.Lock()
         self._current_client_id = None
         self._ws_last_error = None
-        self._status_live = None
-        self._status_lock = threading.Lock()
         self._rclone_status_line = None
-        self._info_panel = None
-        self._server_url_panel = None
         self.linked_user = None  # Track ownership status
         self._active_operations = set()
         
@@ -213,7 +208,7 @@ class ClientWorkerServiceRclone:
             Error response dictionary
         """
         error_msg = f'{operation_name} operation failed: {str(exception)}'
-        print(f"Error: {error_msg}")
+        self._safe_console_print(f"Error: {error_msg}")
         return self._create_error_response(error_msg)
     
     def _safe_console_print(self, message: str, style: str = ""):
@@ -317,6 +312,7 @@ class ClientWorkerServiceRclone:
         """
         self._ws_connected = True
         self._ws_last_error = None
+        self._safe_console_print("[green][OK][/green] WebSocket connected")
         self._update_status_panel()
         self._send_ws_message('hello', {'client_id': self._current_client_id})
 
@@ -334,7 +330,12 @@ class ClientWorkerServiceRclone:
         """
         self._ws_connected = False
         self._ws_last_error = f"Disconnected code={status_code} msg={msg}"
+        self._safe_console_print(f"[red][FAIL][/red] WebSocket not connected ({self._ws_last_error})")
         self._update_status_panel()
+        if self.running:
+            self._safe_console_print("[red][FAIL][/red] Exiting because WebSocket disconnected.")
+            self._shutdown(self._current_client_id)
+            sys.exit(1)
 
     def _on_ws_error(self, ws, error):
         """
@@ -349,7 +350,12 @@ class ClientWorkerServiceRclone:
         """
         self._ws_connected = False
         self._ws_last_error = f"Error: {error}"
+        self._safe_console_print(f"[red][FAIL][/red] WebSocket not connected ({self._ws_last_error})")
         self._update_status_panel()
+        if self.running:
+            self._safe_console_print("[red][FAIL][/red] Exiting because WebSocket error occurred.")
+            self._shutdown(self._current_client_id)
+            sys.exit(1)
 
     def _on_ws_message(self, ws, message):
         """
@@ -415,8 +421,11 @@ class ClientWorkerServiceRclone:
 
         if claimed:
             self.linked_user = linked_user or self.linked_user
+            owner = self.linked_user or "Unknown"
+            self._safe_console_print(f"[green][OK][/green] Owned by: {owner}")
         else:
             self.linked_user = None
+            self._safe_console_print("[yellow][!][/yellow] Waiting for Claim")
         self._update_status_panel()
 
     def _build_status_panel(self) -> Panel:
@@ -442,19 +451,7 @@ class ClientWorkerServiceRclone:
         )
 
     def _update_status_panel(self):
-        if not self._status_live or not self._banner_panel or not self._info_panel or not self._server_url_panel:
-            return
-        with self._status_lock:
-            status_group = Group(
-                self._banner_panel,
-                "",
-                self._build_status_panel(),
-                "",
-                self._info_panel,
-                "",
-                self._server_url_panel
-            )
-            self._status_live.update(status_group, refresh=True)
+        return
     
     def check_permissions(self) -> bool:
         """Check if we have necessary permissions to access files"""
@@ -477,7 +474,7 @@ class ClientWorkerServiceRclone:
             remote_ftp_path: Complete remote FTP path (built by server)
             operation_id: Optional operation ID for progress tracking
         """
-        print(f"Backing up save files...")
+        self._safe_console_print("Backing up save files...")
         
         if not os.path.exists(local_save_path):
             return self._create_error_response(
@@ -516,13 +513,13 @@ class ClientWorkerServiceRclone:
                             'No files were transferred. The save directory appears to be empty or contains no valid files to upload.'
                         )
                     
-                    print(f"Upload complete")
+                    self._safe_console_print("Upload complete")
                     return self._create_success_response(
                         message,
                         uploaded_files=uploaded_files
                     )
                 else:
-                    print(f"Upload failed: {message}")
+                    self._safe_console_print(f"Upload failed: {message}")
                     return self._create_error_response(
                         message,
                         uploaded_files=uploaded_files,
@@ -536,7 +533,7 @@ class ClientWorkerServiceRclone:
                         'The save file is empty (0 bytes). There is nothing to save.'
                     )
                 
-                print(f"Uploading single file: {os.path.basename(local_save_path)}")
+                self._safe_console_print(f"Uploading single file: {os.path.basename(local_save_path)}")
                 
                 # Create progress callback using helper
                 progress_callback = self._create_progress_callback(operation_id)
@@ -556,10 +553,10 @@ class ClientWorkerServiceRclone:
                             'No data was transferred. The save file appears to be empty.'
                         )
                     
-                    print(f"Upload complete: {os.path.basename(local_save_path)}")
+                    self._safe_console_print(f"Upload complete: {os.path.basename(local_save_path)}")
                     return self._create_success_response(message)
                 else:
-                    print(f"Upload failed: {message}")
+                    self._safe_console_print(f"Upload failed: {message}")
                     return self._create_error_response(message)
                     
         except Exception as e:
@@ -575,7 +572,7 @@ class ClientWorkerServiceRclone:
             remote_ftp_path: Complete remote FTP path (built by server)
             operation_id: Optional operation ID for progress tracking
         """
-        print(f"Preparing to download save files...")
+        self._safe_console_print("Preparing to download save files...")
         
         try:
             # Detect if remote path includes path_X folder and prepare strip_prefix
@@ -594,7 +591,7 @@ class ClientWorkerServiceRclone:
             try:
                 os.makedirs(local_save_path, exist_ok=True)
             except OSError as e:
-                print(f"Error: Failed to create directory - {str(e)}")
+                self._safe_console_print(f"Error: Failed to create directory - {str(e)}")
                 return self._create_error_response(
                     f'Failed to create directory: {local_save_path} - {str(e)}'
                 )
@@ -606,20 +603,22 @@ class ClientWorkerServiceRclone:
             
             # IMPORTANT: Clear the local directory completely before downloading
             # This ensures a clean restore without old files interfering
-            print(f"Clearing local directory: {local_save_path}")
+            self._safe_console_print(f"Clearing local directory: {local_save_path}")
             try:
                 import shutil
+                deleted_files = 0
+                deleted_dirs = 0
                 for item in os.listdir(local_save_path):
                     item_path = os.path.join(local_save_path, item)
                     if os.path.isfile(item_path) or os.path.islink(item_path):
                         os.unlink(item_path)
-                        print(f"  Deleted file: {item}")
+                        deleted_files += 1
                     elif os.path.isdir(item_path):
                         shutil.rmtree(item_path)
-                        print(f"  Deleted folder: {item}")
-                print(f"Local directory cleared successfully")
+                        deleted_dirs += 1
+                self._safe_console_print(f"Local directory cleared (files={deleted_files}, folders={deleted_dirs})")
             except Exception as e:
-                print(f"Warning: Failed to clear some items from directory: {str(e)}")
+                self._safe_console_print(f"Warning: Failed to clear some items from directory: {str(e)}")
                 # Continue anyway - partial clear is better than nothing
             
             # Create progress callback using helper
@@ -635,13 +634,13 @@ class ClientWorkerServiceRclone:
             )
             
             if success:
-                print(f"Download complete")
+                self._safe_console_print("Download complete")
                 return self._create_success_response(
                     message,
                     downloaded_files=downloaded_files
                 )
             else:
-                print(f"Download failed: {message}")
+                self._safe_console_print(f"Download failed: {message}")
                 return self._create_error_response(
                     message,
                     downloaded_files=downloaded_files,
@@ -658,7 +657,7 @@ class ClientWorkerServiceRclone:
         Args:
             remote_ftp_path: Complete remote FTP path (built by server)
         """
-        print(f"Listing save files...")
+        self._safe_console_print("Listing save files...")
         
         try:
             # Use pre-built remote path from server
@@ -669,7 +668,7 @@ class ClientWorkerServiceRclone:
             if not success:
                 return self._create_error_response(f'Failed to list saves: {message}')
             
-            print(f"Found {len(files)} file(s) and {len(directories)} directory(ies)")
+            self._safe_console_print(f"Found {len(files)} file(s) and {len(directories)} directory(ies)")
             return self._create_success_response(
                 message,
                 files=files,
@@ -686,17 +685,17 @@ class ClientWorkerServiceRclone:
             remote_ftp_path: Complete remote FTP path (built by server)
             operation_id: Optional operation ID for progress tracking
         """
-        print(f"Deleting save folder...")
+        self._safe_console_print("Deleting save folder...")
         
         try:
             # Use pre-built remote path from server
             success, message = self.rclone_client.delete_directory(remote_ftp_path)
             
             if success:
-                print(f"Delete complete")
+                self._safe_console_print("Delete complete")
                 return self._create_success_response(message)
             else:
-                print(f"Delete failed: {message}")
+                self._safe_console_print(f"Delete failed: {message}")
                 return self._create_error_response(message)
                     
         except Exception as e:
@@ -714,12 +713,12 @@ class ClientWorkerServiceRclone:
         path_parts = remote_ftp_path.split('/')
         game_name = path_parts[-1] if len(path_parts) >= 2 else "game"
         
-        print(f"Backing up all saves for {game_name}...")
+        self._safe_console_print(f"Backing up all saves for {game_name}...")
         
         try:
             # Create temp directory for downloads
             temp_dir = tempfile.mkdtemp(prefix='sn_backup_')
-            print(f"Downloading from FTP to temp directory: {temp_dir}")
+            self._safe_console_print(f"Downloading from FTP to temp directory: {temp_dir}")
             
             try:
                 # Create progress callback using helper
@@ -754,7 +753,7 @@ class ClientWorkerServiceRclone:
                 zip_path = downloads_path / zip_filename
                 
                 # Create zip file
-                print(f"Creating zip file: {zip_path}")
+                self._safe_console_print(f"Creating zip file: {zip_path}")
                 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                     for root, dirs, files in os.walk(temp_dir):
                         for file in files:
@@ -766,7 +765,7 @@ class ClientWorkerServiceRclone:
                 # Clean up temp directory
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 
-                print(f"Backup complete: {zip_path}")
+                self._safe_console_print(f"Backup complete: {zip_path}")
                 return self._create_success_response(
                     f'Backup saved to: {zip_path}',
                     zip_path=str(zip_path),
@@ -817,9 +816,9 @@ class ClientWorkerServiceRclone:
                     if create_folders and not os.path.exists(normalized_path):
                         try:
                             os.makedirs(normalized_path, exist_ok=True)
-                            print(f"Created folder: {normalized_path}")
+                            self._safe_console_print(f"Created folder: {normalized_path}")
                         except OSError as e:
-                            print(f"Warning: Failed to create folder {normalized_path}: {str(e)}")
+                            self._safe_console_print(f"Warning: Failed to create folder {normalized_path}: {str(e)}")
                             # Continue anyway - try to open even if creation failed
                     
                     # Check if path exists (file or directory)
@@ -865,11 +864,11 @@ class ClientWorkerServiceRclone:
                                 continue
                     
                     opened_count += 1
-                    print(f"Opened folder: {folder_path}")
+                    self._safe_console_print(f"Opened folder: {folder_path}")
                     
                 except Exception as e:
                     failed_paths.append(f"{path}: {str(e)}")
-                    print(f"Error opening {path}: {str(e)}")
+                    self._safe_console_print(f"Error opening {path}: {str(e)}")
             
             if opened_count == len(save_paths):
                 return self._create_success_response(
@@ -968,11 +967,7 @@ class ClientWorkerServiceRclone:
             except Exception:
                 pass
 
-        if self._status_live:
-            try:
-                self._status_live.stop()
-            except Exception:
-                pass
+        # No live console to stop.
         
         # Unregister from server
         if client_id:
@@ -1000,7 +995,7 @@ class ClientWorkerServiceRclone:
         # Create centered ASCII art banner
         ascii_text = Text(ascii_art, style="bold")
         
-        self._banner_panel = Panel(
+        banner_panel = Panel(
             Align.center(ascii_text),
             border_style="bright_white",
             padding=(1, 2),
@@ -1051,7 +1046,7 @@ class ClientWorkerServiceRclone:
         self._rclone_status_line = f"{rclone_status} {rclone_message}"
         
         # Important message panel
-        self._info_panel = Panel(
+        info_panel = Panel(
             "Do not close this terminal window.\n"
             "The service must remain running to process save/load operations.\n"
             "Press [bold]Ctrl+C[/bold] to stop the service gracefully.",
@@ -1062,26 +1057,19 @@ class ClientWorkerServiceRclone:
         )
         
         # Server URL at the bottom - make it stand out
-        self._server_url_panel = Panel(
+        server_url_panel = Panel(
             Align.center(f"[bold bright_cyan]{self.server_url}[/bold bright_cyan]"),
             title="[bold bright_cyan]Server URL[/bold bright_cyan]",
             border_style="bright_cyan",
             padding=(1, 2),
             width=80
         )
-
-        status_group = Group(
-            self._banner_panel,
-            "",
-            self._build_status_panel(),
-            "",
-            self._info_panel,
-            "",
-            self._server_url_panel
-        )
-
-        self._status_live = Live(status_group, console=self.console, refresh_per_second=4)
-        self._status_live.start()
+        self.console.print(banner_panel)
+        self.console.print(self._build_status_panel())
+        self.console.print()
+        self.console.print(info_panel)
+        self.console.print()
+        self.console.print(server_url_panel)
 
         self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, args=(client_id,), daemon=True)
         self._heartbeat_thread.start()
@@ -1148,17 +1136,17 @@ class ClientWorkerServiceRclone:
         remote_ftp_path = operation.get('remote_ftp_path')  # Pre-built complete FTP path from server
         
         op_type_display = op_type.capitalize()
-        print(f"\nProcessing: {op_type_display} operation")
-        
+        self._safe_console_print(f"\nProcessing: {op_type_display} operation")
+
         # Validate required data based on operation type
         if op_type in ['save', 'load'] and not local_path:
-            print(f"Error: Operation missing local path")
+            self._safe_console_print("Error: Operation missing local path")
             return
-        
+
         if op_type in ['save', 'load', 'list', 'delete', 'backup'] and not remote_ftp_path:
-            print(f"Error: Operation missing remote FTP path")
+            self._safe_console_print("Error: Operation missing remote FTP path")
             return
-        
+
         # Call simplified methods with pre-built remote_ftp_path
         if op_type == 'save':
             result = self.save_game(local_path, remote_ftp_path, operation_id)
@@ -1173,15 +1161,15 @@ class ClientWorkerServiceRclone:
         elif op_type == 'open_folder':
             result = self.open_folder(local_path, operation_id)
         else:
-            print(f"Error: Unknown operation type")
+            self._safe_console_print("Error: Unknown operation type")
             return
-        
+
         if result.get('success'):
             message = result.get('message', 'Operation completed successfully')
-            print(f"Success: {message}")
+            self._safe_console_print(f"Success: {message}")
         else:
             error = result.get('error', result.get('message', 'Unknown error'))
-            print(f"Error: {error}")
+            self._safe_console_print(f"Error: {error}")
         
         result_payload = dict(result)
         result_payload['operation_id'] = operation_id

@@ -101,6 +101,10 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        if (renderWorkers.hasShownSingleAvailableToast === undefined) {
+            renderWorkers.hasShownSingleAvailableToast = false;
+        }
+
         listGroup.innerHTML = '';
         workers.forEach(worker => {
             listGroup.appendChild(createWorkerRow(worker));
@@ -109,12 +113,11 @@ document.addEventListener('DOMContentLoaded', function () {
         setListVisibility(workers.length > 0);
 
         const available = workers.filter(worker => !worker.claimed);
-        if (available.length === 1) {
-            showToast('Auto-connecting to worker...', 'info');
-            const autoButton = listGroup.querySelector('.claim-btn');
-            if (autoButton) {
-                autoButton.click();
-            }
+        if (available.length === 1 && !renderWorkers.hasShownSingleAvailableToast) {
+            showToast('One worker available. Select it to connect.', 'info');
+            renderWorkers.hasShownSingleAvailableToast = true;
+        } else if (available.length !== 1) {
+            renderWorkers.hasShownSingleAvailableToast = false;
         }
     }
 

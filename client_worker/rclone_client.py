@@ -356,7 +356,11 @@ class RcloneClient:
             '--create-empty-src-dirs',  # Copy empty directories from source
         ]
         
-        success, stdout, stderr = self._run_rclone(command, timeout=3600, progress_callback=progress_callback)
+        success, stdout, stderr = self._run_rclone(
+            command,
+            timeout=3600,
+            progress_callback=progress_callback
+        )
         
         # Parse bytes and files transferred from output
         bytes_transferred = self._parse_bytes_transferred(stdout)
@@ -406,7 +410,11 @@ class RcloneClient:
             '--progress',  # Show detailed progress
         ]
         
-        success, stdout, stderr = self._run_rclone(command, timeout=600, progress_callback=progress_callback)
+        success, stdout, stderr = self._run_rclone(
+            command,
+            timeout=600,
+            progress_callback=progress_callback
+        )
         
         # Parse bytes transferred from output
         bytes_transferred = self._parse_bytes_transferred(stdout)
@@ -465,7 +473,11 @@ class RcloneClient:
             '--progress',  # Show detailed progress
         ]
         
-        success, stdout, stderr = self._run_rclone(command, timeout=600, progress_callback=progress_callback)
+        success, stdout, stderr = self._run_rclone(
+            command,
+            timeout=600,
+            progress_callback=progress_callback
+        )
         
         if success:
             return True, "File downloaded successfully"
@@ -523,7 +535,11 @@ class RcloneClient:
                     '--create-empty-src-dirs',
                 ]
                 
-                success, stdout, stderr = self._run_rclone(temp_command, timeout=3600, progress_callback=progress_callback)
+                success, stdout, stderr = self._run_rclone(
+                    temp_command,
+                    timeout=3600,
+                    progress_callback=progress_callback
+                )
                 
                 if not success:
                     import shutil
@@ -610,7 +626,11 @@ class RcloneClient:
                 '--create-empty-src-dirs',
             ]
             
-            success, stdout, stderr = self._run_rclone(command, timeout=3600, progress_callback=progress_callback)
+            success, stdout, stderr = self._run_rclone(
+                command,
+                timeout=3600,
+                progress_callback=progress_callback
+            )
             
             if success:
                 return True, "Directory downloaded successfully", [], []
