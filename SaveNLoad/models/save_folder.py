@@ -9,7 +9,15 @@ from SaveNLoad.utils.path_utils import generate_save_folder_path
 
 
 class SaveFolder(models.Model):
-    """Tracks save folders for user+game combinations on remote storage"""
+    """
+    Tracks save folders for user+game combinations on remote storage.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     
     MAX_SAVE_FOLDERS = 10
     
@@ -31,17 +39,44 @@ class SaveFolder(models.Model):
         ]
     
     def __str__(self):
+        """
+        Return a human-readable identifier for the save folder.
+
+        Args:
+            None
+
+        Returns:
+            Save folder path string.
+        """
         return f"{self.user.username}/{self.game.name}/save_{self.folder_number}"
     
     def save(self, *args, **kwargs):
-        """Override save to auto-populate remote path if missing"""
+        """
+        Override save to autopopulate remote path if missing.
+
+        Args:
+            *args: Positional args passed to Model.save.
+            **kwargs: Keyword args passed to Model.save.
+
+        Returns:
+            None
+        """
         if not self.smb_path:
+            # Ensure remote path is always available for worker operations.
             self.smb_path = generate_save_folder_path(self.user.username, self.game.name, self.folder_number)
         super().save(*args, **kwargs)
     
     @property
     def folder_name(self) -> str:
-        """Get the folder name (e.g., 'save_1')"""
+        """
+        Get the folder name (e.g., 'save_1').
+
+        Args:
+            None
+
+        Returns:
+            Folder name string.
+        """
         return f"save_{self.folder_number}"
     
     @classmethod
@@ -52,6 +87,13 @@ class SaveFolder(models.Model):
         Strategy:
         1. If we have less than MAX_SAVE_FOLDERS, fill available slots (1-10) first
         2. Only when all 10 slots are used, reuse the oldest one
+
+        Args:
+            user: User that owns the save folder.
+            game: Game associated with the save folder.
+
+        Returns:
+            SaveFolder instance to use for the next save.
         """
         # Get all existing folder numbers
         existing_numbers = set(
@@ -65,7 +107,7 @@ class SaveFolder(models.Model):
         if existing_count >= cls.MAX_SAVE_FOLDERS:
             oldest_folder = cls.objects.filter(user=user, game=game).order_by('created_at').first()
             if oldest_folder:
-                # Reset created_at for reuse and update remote path (in case game name changed)
+                # Reset created_at for reuse and refresh smb_path in case game name changed.
                 oldest_folder.created_at = timezone.now()
                 oldest_folder.smb_path = generate_save_folder_path(user.username, game.name, oldest_folder.folder_number)
                 oldest_folder.save(update_fields=['created_at', 'smb_path'])
@@ -93,12 +135,31 @@ class SaveFolder(models.Model):
     
     @classmethod
     def get_latest(cls, user: SimpleUsers, game: Game) -> 'SaveFolder':
-        """Get the most recently created save folder for a user+game"""
+        """
+        Get the most recently created save folder for a user+game.
+
+        Args:
+            user: User that owns the save folder.
+            game: Game associated with the save folder.
+
+        Returns:
+            Most recently created SaveFolder or None.
+        """
         return cls.objects.filter(user=user, game=game).order_by('-created_at').first()
     
     @classmethod
     def get_by_number(cls, user: SimpleUsers, game: Game, folder_number: int) -> 'SaveFolder':
-        """Get a specific save folder by number"""
+        """
+        Get a specific save folder by number.
+
+        Args:
+            user: User that owns the save folder.
+            game: Game associated with the save folder.
+            folder_number: Save folder number (1-10).
+
+        Returns:
+            SaveFolder instance if found, otherwise None.
+        """
         try:
             return cls.objects.get(user=user, game=game, folder_number=folder_number)
         except cls.DoesNotExist:

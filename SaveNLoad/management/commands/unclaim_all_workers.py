@@ -10,6 +10,16 @@ class Command(BaseCommand):
     help = 'Unclaim all workers (nuke command for testing)'
 
     def handle(self, *args, **options):
+        """
+        Unclaim any currently claimed workers in Redis.
+
+        Args:
+            *args: Unused positional arguments from Django.
+            **options: Command options (unused).
+
+        Returns:
+            None
+        """
         online_workers = get_online_workers()
         
         if not online_workers:
@@ -20,6 +30,7 @@ class Command(BaseCommand):
         
         unclaimed_count = 0
         for client_id in online_workers:
+            # Only unclaim workers that are currently bound to a user.
             worker_info = get_worker_info(client_id)
             if worker_info and worker_info.get('user_id'):
                 try:

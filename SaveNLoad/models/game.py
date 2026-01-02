@@ -3,7 +3,15 @@ import os
 
 
 class Game(models.Model):
-    """Game model for managing games and their save file locations"""
+    """
+    Game model for managing games and their save file locations.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     
     name = models.CharField(max_length=255, unique=True)
     # Store cached local image file
@@ -35,12 +43,27 @@ class Game(models.Model):
         ordering = ['name']
     
     def __str__(self):
+        """
+        Return the display name for the model instance.
+
+        Args:
+            None
+
+        Returns:
+            Game name string.
+        """
         return self.name
     
     def get_banner_url(self):
         """
         Returns the banner URL for display.
         Prioritizes local cached file, falls back to original URL if file doesn't exist.
+
+        Args:
+            None
+
+        Returns:
+            Banner URL string (or empty string if none).
         """
         if self.banner and self.banner.name:
             # Check if file actually exists on disk
@@ -73,6 +96,12 @@ class Game(models.Model):
         """
         Remove mappings for paths that are no longer in save_file_locations.
         Call this when save_file_locations is updated.
+
+        Args:
+            None
+
+        Returns:
+            None
         """
         if not self.path_mappings:
             return
@@ -84,6 +113,7 @@ class Game(models.Model):
         paths_to_remove = [path for path in self.path_mappings.keys() if path not in current_paths]
         
         if paths_to_remove:
+            # Remove stale mappings and persist changes.
             for path in paths_to_remove:
                 del self.path_mappings[path]
             self.save(update_fields=['path_mappings', 'updated_at'])
@@ -95,6 +125,12 @@ class Game(models.Model):
         For single path games, path_mappings should remain empty.
         
         This should be called when creating or editing a game.
+
+        Args:
+            None
+
+        Returns:
+            None
         """
         if not self.save_file_locations:
             self.path_mappings = {}
@@ -130,7 +166,7 @@ class Game(models.Model):
         next_index = 1
         
         for path in sorted(new_paths):  # Sort for consistent ordering
-            # Find next available index
+            # Find next available index to avoid collisions.
             while next_index in existing_indices:
                 next_index += 1
             valid_mappings[path] = next_index

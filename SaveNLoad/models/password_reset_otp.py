@@ -10,7 +10,15 @@ from datetime import timedelta
 
 
 class PasswordResetOTP(models.Model):
-    """Stores OTP codes for password reset"""
+    """
+    Stores OTP codes for password reset.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     
     user = models.ForeignKey(SimpleUsers, on_delete=models.CASCADE, related_name='password_reset_otps')
     otp_code = models.CharField(max_length=6, help_text="6-digit OTP code")
@@ -30,28 +38,47 @@ class PasswordResetOTP(models.Model):
         ]
     
     def __str__(self):
+        """
+        Return a human-readable representation for admin/console use.
+
+        Args:
+            None
+
+        Returns:
+            Status string containing username and OTP state.
+        """
         return f"OTP for {self.user.username} ({'used' if self.is_used else 'active'})"
     
     @classmethod
     def generate_otp(cls, user: SimpleUsers, email: str, expiry_minutes: int = 10) -> 'PasswordResetOTP':
-        """Generate a new OTP for password reset - ONLY for registered email addresses"""
+        """
+        Generate a new OTP for password reset (registered emails only).
+
+        Args:
+            user: User requesting the OTP.
+            email: Email address supplied by the requester.
+            expiry_minutes: OTP validity duration in minutes.
+
+        Returns:
+            Newly created PasswordResetOTP instance.
+        """
         # Security: Ensure email matches the user's registered email
         if email.lower() != user.email.lower():
             raise ValueError(f"Email {email} does not match registered email {user.email} for user {user.username}")
         
-        # Generate 6-digit OTP
+        # Generate a 6-digit OTP using cryptographic randomness.
         otp_code = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
         
         # Set expiration time
         expires_at = timezone.now() + timedelta(minutes=expiry_minutes)
         
-        # Invalidate any existing unused OTPs for this user
+        # Invalidate any existing unused OTPs for this user.
         cls.objects.filter(user=user, is_used=False).update(is_used=True)
         
-        # Cleanup expired/used OTPs immediately to prevent database bloat
+        # Cleanup expired/used OTPs immediately to prevent database bloat.
         cls.cleanup_otps()
         
-        # Create new OTP using the user's registered email
+        # Create new OTP using the user's registered email.
         otp = cls.objects.create(
             user=user,
             otp_code=otp_code,
@@ -62,7 +89,15 @@ class PasswordResetOTP(models.Model):
         return otp
     
     def is_valid(self) -> bool:
-        """Check if OTP is still valid (not used and not expired)"""
+        """
+        Check if OTP is still valid (not used and not expired).
+
+        Args:
+            None
+
+        Returns:
+            True if valid, False otherwise.
+        """
         if self.is_used:
             return False
         if timezone.now() > self.expires_at:
@@ -70,15 +105,32 @@ class PasswordResetOTP(models.Model):
         return True
     
     def mark_as_used(self):
-        """Mark OTP as used and cleanup expired/used OTPs"""
+        """
+        Mark OTP as used and cleanup expired/used OTPs.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         self.is_used = True
         self.save(update_fields=['is_used'])
-        # Cleanup expired/used OTPs after marking as used
+        # Cleanup expired/used OTPs after marking as used.
         self.__class__.cleanup_otps()
     
     @classmethod
     def validate_otp(cls, email: str, otp_code: str) -> 'PasswordResetOTP':
-        """Validate OTP code and return the OTP object if valid"""
+        """
+        Validate OTP code and return the OTP object if valid.
+
+        Args:
+            email: Email address supplied by the requester.
+            otp_code: OTP code provided by the requester.
+
+        Returns:
+            PasswordResetOTP instance if valid, otherwise None.
+        """
         # Cleanup expired/used OTPs before validation
         cls.cleanup_otps()
         
@@ -112,11 +164,14 @@ class PasswordResetOTP(models.Model):
         """
         Clean up all expired or used OTPs immediately
         Called automatically during OTP operations to keep database clean
+
+        Args:
+            None
         
         Returns:
             Number of OTPs deleted
         """
-        # Delete all expired or used OTPs immediately
+        # Delete all expired or used OTPs immediately.
         deleted_count, _ = cls.objects.filter(
             Q(is_used=True) | Q(expires_at__lt=timezone.now())
         ).delete()

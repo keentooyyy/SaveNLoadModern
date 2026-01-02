@@ -4,7 +4,15 @@ Moved from operation_queue model to support Redis-based operations
 """
 
 class OperationType:
-    """Operation type constants"""
+    """
+    Operation type constants used across worker and server.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     SAVE = 'save'
     LOAD = 'load'
     LIST = 'list'
@@ -12,6 +20,7 @@ class OperationType:
     BACKUP = 'backup'
     OPEN_FOLDER = 'open_folder'
     
+    # Keep choice tuples in sync with the constants above.
     CHOICES = [
         (SAVE, 'Save'),
         (LOAD, 'Load'),
