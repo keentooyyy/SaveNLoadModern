@@ -2,9 +2,24 @@
  * Worker availability watcher for dashboard/settings.
  * Redirects to worker-required view when no online worker is available.
  */
+/**
+ * Initialize worker status WebSocket and redirect logic.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 document.addEventListener('DOMContentLoaded', function () {
     /**
      * Build WS URL for user worker status updates.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     WebSocket URL string.
      */
     function buildWsUrl() {
         const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -13,6 +28,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /**
      * Redirect to the worker-required URL when no worker is connected.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
      */
     function redirectToWorkerRequired() {
         if (window.WORKER_REQUIRED_URL) {
@@ -24,6 +45,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /**
      * Connect to the worker status socket with basic reconnect.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
      */
     function connectWorkerStatusSocket() {
         if (!window.WebSocket) {
@@ -34,6 +61,15 @@ document.addEventListener('DOMContentLoaded', function () {
         let socket;
         let reconnectTimer;
 
+        /**
+         * Establish a WS connection and rebind event handlers.
+         *
+         * Args:
+         *     None
+         *
+         * Returns:
+         *     None
+         */
         function connect() {
             if (reconnectTimer) {
                 clearTimeout(reconnectTimer);

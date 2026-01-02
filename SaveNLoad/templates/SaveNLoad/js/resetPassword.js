@@ -2,6 +2,15 @@
  * Reset Password Form Handler
  * Uses shared utility functions from utils.js
  */
+/**
+ * Initialize Reset Password form behavior.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 document.addEventListener('DOMContentLoaded', function () {
     'use strict';
 
@@ -13,6 +22,15 @@ document.addEventListener('DOMContentLoaded', function () {
     setupPasswordToggle(document.getElementById('toggleConfirmPassword'), document.getElementById('confirm_password'));
 
     if (resetPasswordForm) {
+        /**
+         * Submit new password and handle validation errors.
+         *
+         * Args:
+         *     e: Submit event.
+         *
+         * Returns:
+         *     None
+         */
         resetPasswordForm.addEventListener('submit', async function (e) {
             e.preventDefault();
 

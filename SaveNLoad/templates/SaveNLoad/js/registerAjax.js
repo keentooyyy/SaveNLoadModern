@@ -1,3 +1,12 @@
+/**
+ * Initialize register form AJAX submission.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 document.addEventListener('DOMContentLoaded', function () {
     const registerForm = document.querySelector('form[action*="register"]');
 
@@ -8,6 +17,15 @@ document.addEventListener('DOMContentLoaded', function () {
     // Clear field errors when user starts typing
     setupFieldErrorClear(['username', 'email', 'password', 'repeatPassword']);
 
+    /**
+     * Submit registration form via AJAX and handle response states.
+     *
+     * Args:
+     *     e: Submit event.
+     *
+     * Returns:
+     *     None
+     */
     registerForm.addEventListener('submit', function (e) {
         e.preventDefault();
 

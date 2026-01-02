@@ -1,8 +1,26 @@
+/**
+ * Wire up logout link behavior once the DOM is ready.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 document.addEventListener('DOMContentLoaded', function () {
     'use strict';
 
     const logoutLink = document.getElementById('sidebarLogoutLink');
     if (logoutLink) {
+        /**
+         * Append client_id to logout URL and clear cached client data.
+         *
+         * Args:
+         *     e: Click event.
+         *
+         * Returns:
+         *     None
+         */
         logoutLink.addEventListener('click', function (e) {
             const clientId = localStorage.getItem('savenload_client_id');
             if (clientId) {

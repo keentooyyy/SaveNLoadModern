@@ -1,6 +1,12 @@
 /**
  * Worker Connection Checker
  * Periodically checks if client worker is connected and redirects if not
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
  */
 (function () {
     'use strict';
@@ -11,6 +17,15 @@
 
     let checkInterval = null;
 
+    /**
+     * Poll the worker status endpoint and react to disconnects.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     function checkWorkerConnection() {
         // Validate API endpoint is defined
         if (!API_ENDPOINT || API_ENDPOINT === 'undefined') {
@@ -44,6 +59,15 @@
     }
 
     // Start checking when page loads
+    /**
+     * Start periodic worker connectivity checks.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     function startWorkerCheck() {
         // Validate API endpoint before starting checks
         if (!API_ENDPOINT || API_ENDPOINT === 'undefined') {
@@ -59,6 +83,15 @@
     }
 
     // Stop checking when page unloads
+    /**
+     * Stop periodic worker connectivity checks.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     function stopWorkerCheck() {
         if (checkInterval) {
             clearInterval(checkInterval);
@@ -77,6 +110,15 @@
     window.addEventListener('beforeunload', stopWorkerCheck);
 
     // Also check on visibility change (when user switches tabs)
+    /**
+     * Re-check worker connectivity when the tab becomes visible.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     document.addEventListener('visibilitychange', function () {
         if (document.visibilityState === 'visible') {
             // Page became visible - check immediately

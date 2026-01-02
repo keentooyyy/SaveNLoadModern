@@ -1,7 +1,15 @@
 // Password visibility toggle for login and register pages
+/**
+ * Initialize password visibility toggles after DOM is ready.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 document.addEventListener('DOMContentLoaded', function () {
-    // Helper function to set up password toggle
-    // Uses shared setupPasswordToggle from utils.js
+    // Uses shared setupPasswordToggle from utils.js.
 
     // Set up toggle for password field (login and register)
     setupPasswordToggle('togglePassword', 'password');

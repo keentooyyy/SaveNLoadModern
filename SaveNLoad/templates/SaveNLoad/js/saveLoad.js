@@ -1,3 +1,12 @@
+/**
+ * Initialize save/load click handlers and polling helpers.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 document.addEventListener('DOMContentLoaded', function () {
     const csrfToken = window.getCsrfToken ? window.getCsrfToken() : null;
 
@@ -7,6 +16,18 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Poll operation status until completion
+    /**
+     * Poll save/load operation status and update progress modal.
+     *
+     * Args:
+     *     operationId: Operation identifier or array of identifiers.
+     *     btn: Button element that triggered the operation.
+     *     originalIcon: Original icon element to restore.
+     *     originalText: Original button text.
+     *
+     * Returns:
+     *     None
+     */
     async function pollOperationStatus(operationId, btn, originalIcon, originalText) {
         // Handle both single operation ID and array of operation IDs
         const isMultiple = Array.isArray(operationId);
@@ -740,6 +761,17 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // Poll load operation status until completion
+    /**
+     * Poll load operation status and update the button state.
+     *
+     * Args:
+     *     operationId: Operation identifier.
+     *     btn: Button element that triggered the load.
+     *     originalIcon: Original icon element to restore.
+     *
+     * Returns:
+     *     None
+     */
     async function pollLoadOperationStatus(operationId, btn, originalIcon) {
         const maxAttempts = 300; // 300 attempts = 5 minutes max (1 second intervals)
         let attempts = 0;

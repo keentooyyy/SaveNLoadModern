@@ -5,7 +5,12 @@
 
 /**
  * Safely clear all children from an element
- * @param {HTMLElement} element 
+ *
+ * Args:
+ *     element: Container element to clear.
+ *
+ * Returns:
+ *     None
  */
 function clearElement(element) {
     if (!element) return;
@@ -16,6 +21,12 @@ function clearElement(element) {
 
 /**
  * Validate if a URL is safe for image loading
+ *
+ * Args:
+ *     url: URL string to validate.
+ *
+ * Returns:
+ *     True if the URL is safe for image loading.
  */
 function isValidImageUrl(url) {
     if (!url || typeof url !== 'string') return false;
@@ -49,8 +60,13 @@ function isValidImageUrl(url) {
 
 /**
  * Update banner preview image
- * @param {string|HTMLElement} bannerPreviewElementOrId - The preview container element or its ID
- * @param {string} bannerUrl - The banner URL to display
+ *
+ * Args:
+ *     bannerPreviewElementOrId: Preview container element or its ID.
+ *     bannerUrl: Banner URL to display.
+ *
+ * Returns:
+ *     None
  */
 function updateBannerPreview(bannerPreviewElementOrId, bannerUrl) {
     // Support both element ID (string) and element object
@@ -100,9 +116,23 @@ function updateBannerPreview(bannerPreviewElementOrId, bannerUrl) {
 
 /**
  * Save Location Manager - handles multiple save location inputs
- * @param {string} containerId - ID of the container element
+ *
+ * Args:
+ *     containerId: ID of the container element.
+ *
+ * Returns:
+ *     None
  */
 class SaveLocationManager {
+    /**
+     * Create a manager bound to the save location container.
+     *
+     * Args:
+     *     containerId: ID of the container element.
+     *
+     * Returns:
+     *     None
+     */
     constructor(containerId) {
         this.containerId = containerId;
         this.container = document.getElementById(containerId);
@@ -110,6 +140,12 @@ class SaveLocationManager {
 
     /**
      * Create a default save location row
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     Row element for a save location.
      */
     createRow() {
         const row = document.createElement('div');
@@ -139,6 +175,12 @@ class SaveLocationManager {
 
     /**
      * Add a new save location input field
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
      */
     addLocation() {
         if (!this.container) {
@@ -154,6 +196,12 @@ class SaveLocationManager {
 
     /**
      * Remove a save location input field
+     *
+     * Args:
+     *     btn: Remove button element that triggered the action.
+     *
+     * Returns:
+     *     None
      */
     removeLocation(btn) {
         const row = btn.closest('.save-location-row');
@@ -165,6 +213,12 @@ class SaveLocationManager {
 
     /**
      * Update visibility of remove buttons (hide if only one location)
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
      */
     updateRemoveButtons() {
         if (!this.container) {
@@ -183,6 +237,12 @@ class SaveLocationManager {
 
     /**
      * Get all save locations from the form
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     Array of save location strings.
      */
     getAllLocations() {
         if (!this.container) {
@@ -203,7 +263,12 @@ class SaveLocationManager {
 
     /**
      * Get duplicate save locations (case-insensitive, slash-normalized)
-     * @returns {string[]} Array of duplicate locations
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     Array of duplicate locations.
      */
     getDuplicateLocations() {
         const locations = this.getAllLocations();
@@ -224,7 +289,12 @@ class SaveLocationManager {
 
     /**
      * Populate save locations in the form
-     * @param {string} saveFileLocation - Newline-separated locations
+     *
+     * Args:
+     *     saveFileLocation: Newline-separated locations.
+     *
+     * Returns:
+     *     None
      */
     populateLocations(saveFileLocation) {
         if (!this.container) {
@@ -259,6 +329,12 @@ class SaveLocationManager {
 
     /**
      * Get save locations as newline-separated string
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     Newline-separated save location string.
      */
     getLocationsAsString() {
         const locations = this.getAllLocations();

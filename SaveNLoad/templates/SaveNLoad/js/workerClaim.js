@@ -1,3 +1,12 @@
+/**
+ * Initialize worker claim UI and WebSocket updates.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 document.addEventListener('DOMContentLoaded', function () {
     // URLs and config from global window object (injected in template)
     const claimUrl = window.CLAIM_WORKER_URL;
@@ -12,6 +21,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /**
      * Show loading state when there is no worker list yet.
+     *
+     * Args:
+     *     isLoading: True to show the loading state.
+     *
+     * Returns:
+     *     None
      */
     function setLoadingState(isLoading) {
         if (!emptyState || !isLoading) {
@@ -25,6 +40,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /**
      * Toggle list vs empty state visibility.
+     *
+     * Args:
+     *     hasWorkers: True when there is at least one worker.
+     *
+     * Returns:
+     *     None
      */
     function setListVisibility(hasWorkers) {
         if (listContainer) {
@@ -40,6 +61,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /**
      * Build a worker list row element.
+     *
+     * Args:
+     *     worker: Worker object from the WS payload.
+     *
+     * Returns:
+     *     DOM element for the worker row.
      */
     function createWorkerRow(worker) {
         const item = document.createElement('div');
@@ -95,6 +122,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /**
      * Render the current worker list from WS payload.
+     *
+     * Args:
+     *     workers: Array of worker objects.
+     *
+     * Returns:
+     *     None
      */
     function renderWorkers(workers) {
         if (!listGroup || !Array.isArray(workers)) {
@@ -123,6 +156,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /**
      * Claim a worker via API and reload on success.
+     *
+     * Args:
+     *     button: Button element that triggered the claim.
+     *
+     * Returns:
+     *     None
      */
     function claimWorker(button) {
         if (!claimUrl) {
@@ -175,6 +214,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /**
      * Build WS URL for UI worker updates.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     WebSocket URL string.
      */
     function buildWsUrl() {
         const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -183,6 +228,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /**
      * Connect to the worker list socket with basic reconnect.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
      */
     function connectWorkersSocket() {
         if (!window.WebSocket) {
@@ -196,6 +247,15 @@ document.addEventListener('DOMContentLoaded', function () {
         let reconnectTimer;
         let hasOpened = false;
 
+        /**
+         * Establish a WS connection and rebind event handlers.
+         *
+         * Args:
+         *     None
+         *
+         * Returns:
+         *     None
+         */
         function connect() {
             if (reconnectTimer) {
                 clearTimeout(reconnectTimer);

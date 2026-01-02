@@ -1,10 +1,28 @@
 // Operation Queue Management
+/**
+ * Operation queue management module wrapper.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 (function () {
     'use strict';
 
     // Uses shared utility functions from utils.js
 
     // Load stats on page load
+    /**
+     * Initialize stats loading and UI handlers.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     document.addEventListener('DOMContentLoaded', function () {
         loadStats();
 
@@ -48,6 +66,15 @@
         }
     });
 
+    /**
+     * Fetch and render operation queue statistics.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     function loadStats() {
         const statsContainer = document.getElementById('operationQueueStats');
         if (!statsContainer) return;
@@ -131,6 +158,15 @@
             });
     }
 
+    /**
+     * Render operation statistics into the UI.
+     *
+     * Args:
+     *     stats: Stats payload from the backend.
+     *
+     * Returns:
+     *     None
+     */
     function displayStats(stats) {
         const statsContainer = document.getElementById('operationQueueStats');
         if (!statsContainer || !stats) return;
@@ -150,6 +186,17 @@
         wrapperDiv.className = 'mb-3';
 
         // Helper function to create stat row
+        /**
+         * Create a label/value row for the stats list.
+         *
+         * Args:
+         *     label: Label text.
+         *     value: Value to display.
+         *     valueClass: CSS class for the value span.
+         *
+         * Returns:
+         *     Row element for the stats list.
+         */
         function createStatRow(label, value, valueClass = 'text-white') {
             const row = document.createElement('div');
             row.className = 'd-flex justify-content-between align-items-center mb-2';
@@ -189,6 +236,16 @@
         statsContainer.appendChild(wrapperDiv);
     }
 
+    /**
+     * Trigger server-side cleanup and refresh stats.
+     *
+     * Args:
+     *     type: Cleanup type string.
+     *     button: Button element to disable during cleanup.
+     *
+     * Returns:
+     *     None
+     */
     function performCleanup(type, button) {
         // Disable button and show loading
         const originalContent = button.cloneNode(true);

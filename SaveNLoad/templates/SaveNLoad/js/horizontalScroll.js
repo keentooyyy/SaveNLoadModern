@@ -1,4 +1,13 @@
 // Horizontal scroll with mouse wheel and arrow buttons
+/**
+ * Initialize horizontal scrolling behavior and button states.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 document.addEventListener('DOMContentLoaded', function() {
     const scrollContainer = document.getElementById('cardsScrollContainer');
     if (!scrollContainer) return;
@@ -7,6 +16,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const scrollRightBtn = document.querySelector('.scroll-right');
 
     // Mouse wheel horizontal scrolling - convert vertical scroll to horizontal
+    /**
+     * Convert vertical wheel input into horizontal scrolling.
+     *
+     * Args:
+     *     e: Wheel event.
+     *
+     * Returns:
+     *     None
+     */
     scrollContainer.addEventListener('wheel', function(e) {
         // Check if user is scrolling vertically (most common case)
         if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
@@ -39,6 +57,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Update arrow button visibility based on scroll position
+    /**
+     * Update arrow button state based on current scroll position.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     function updateArrowButtons() {
         const { scrollLeft, scrollWidth, clientWidth } = scrollContainer;
         const isAtStart = scrollLeft <= 0;

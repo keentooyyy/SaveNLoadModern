@@ -1,3 +1,12 @@
+/**
+ * Initialize available games search, sort, and rendering.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 document.addEventListener('DOMContentLoaded', function () {
     const searchInput = document.getElementById('gameSearchInput');
     const sortSelect = document.getElementById('gameSortSelect');
@@ -15,8 +24,14 @@ document.addEventListener('DOMContentLoaded', function () {
     let isLoading = false;
 
     /**
-     * Update browser URL with current filter state (without reloading)
-     * This allows the filter state to be preserved when the page reloads
+     * Update browser URL with current filter state (without reloading).
+     *
+     * Args:
+     *     searchQuery: Current search string.
+     *     sortBy: Current sort option.
+     *
+     * Returns:
+     *     None
      */
     function updateURLWithFilterState(searchQuery, sortBy) {
         const url = new URL(window.location);
@@ -37,7 +52,13 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /**
-     * Restore filter state from URL parameters on page load
+     * Restore filter state from URL parameters on page load.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
      */
     function restoreFilterStateFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -61,7 +82,13 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /**
-     * Perform AJAX search and sort
+     * Perform AJAX search and sort.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
      */
     function performSearch() {
         if (isLoading) return;
@@ -112,7 +139,13 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /**
-     * Render games in the container
+     * Render games in the container.
+     *
+     * Args:
+     *     games: Array of game objects.
+     *
+     * Returns:
+     *     None
      */
     function renderGames(games) {
         if (!gamesContainer) return;
@@ -188,7 +221,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /**
-     * Create game card element safely
+     * Create game card element safely.
+     *
+     * Args:
+     *     game: Game object to render.
+     *     gameDetailUrl: Optional detail URL string.
+     *     gameDeleteUrl: Optional delete URL string.
+     *
+     * Returns:
+     *     DOM element for the game card.
      */
     function createGameCardElement(game, gameDetailUrl, gameDeleteUrl) {
         const card = document.createElement('div');
@@ -311,7 +352,13 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /**
-     * Show loading state
+     * Show loading state.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
      */
     function showLoadingState() {
         if (!gamesContainer) return;
@@ -347,7 +394,13 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /**
-     * Show error message
+     * Show error message.
+     *
+     * Args:
+     *     message: Error message string.
+     *
+     * Returns:
+     *     None
      */
     function showError(message) {
         if (!gamesContainer) return;
@@ -381,7 +434,13 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /**
-     * Set search query and trigger search
+     * Set search query and trigger search.
+     *
+     * Args:
+     *     query: Search string to apply.
+     *
+     * Returns:
+     *     None
      */
     function setSearchAndTrigger(query) {
         if (searchInput) {
@@ -396,7 +455,13 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /**
-     * Scroll to available games section
+     * Scroll to available games section.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
      */
     function scrollToAvailableGames() {
         const availableGamesSection = document.getElementById('availableGamesSection');

@@ -3,6 +3,15 @@
  * Uses shared utilities from utils.js and gameFormUtils.js
  */
 
+/**
+ * Initialize settings page handlers and game search UI.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 document.addEventListener('DOMContentLoaded', function () {
     const searchInput = document.getElementById('search_input');
     const modalElement = document.getElementById('gameSearchModal');
@@ -20,6 +29,15 @@ document.addEventListener('DOMContentLoaded', function () {
      * Show full-page loading overlay with spinner
      * Creates a semi-transparent overlay that covers the entire page
      * Matches the page's dark theme with primary blue accent color
+     */
+    /**
+     * Show the loading overlay for async operations.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
      */
     function showLoadingOverlay() {
         // Remove existing overlay if present
@@ -73,6 +91,15 @@ document.addEventListener('DOMContentLoaded', function () {
     /**
      * Hide and remove the loading overlay
      */
+    /**
+     * Hide the loading overlay after async operations complete.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     function hideLoadingOverlay() {
         if (loadingOverlay && loadingOverlay.parentNode) {
             loadingOverlay.remove();
@@ -84,28 +111,82 @@ document.addEventListener('DOMContentLoaded', function () {
     const saveLocationManager = new SaveLocationManager('save_locations_container');
 
     // Wrapper functions for backward compatibility with inline handlers
+    /**
+     * Add a new save location input row.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     function addSaveLocation() {
         saveLocationManager.addLocation();
     }
 
+    /**
+     * Remove a save location input row.
+     *
+     * Args:
+     *     btn: Remove button element.
+     *
+     * Returns:
+     *     None
+     */
     function removeSaveLocation(btn) {
         saveLocationManager.removeLocation(btn);
     }
 
+    /**
+     * Toggle visibility of remove buttons based on row count.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     function updateRemoveButtons() {
         saveLocationManager.updateRemoveButtons();
     }
 
+    /**
+     * Collect all save location values from the form.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     Array of save location strings.
+     */
     function getAllSaveLocations() {
         return saveLocationManager.getAllLocations();
     }
 
+    /**
+     * Build a default save location input row.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     Row element for a save location.
+     */
     function createDefaultSaveLocationRow() {
         return saveLocationManager.createRow();
     }
 
     /**
      * Show the search results modal and sync the modal search input with the main search input
+     */
+    /**
+     * Display the add/edit game modal.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
      */
     function showModal() {
         if (!modalElement || !window.bootstrap) return;
@@ -123,6 +204,18 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Update populateForm to use manager
+    /**
+     * Populate the form fields with game data.
+     *
+     * Args:
+     *     id: Game identifier.
+     *     name: Game name string.
+     *     saveFileLocation: Save file location string.
+     *     bannerUrl: Banner URL string.
+     *
+     * Returns:
+     *     None
+     */
     function populateForm(id, name, saveFileLocation, bannerUrl) {
         if (nameInput) nameInput.value = name;
 
@@ -143,6 +236,15 @@ document.addEventListener('DOMContentLoaded', function () {
     /**
      * Display search results in a clean list format matching the app's dark theme
      * Shows game image, title, and save location in a minimalist design
+     */
+    /**
+     * Render search results list in the UI.
+     *
+     * Args:
+     *     games: Array of game objects.
+     *
+     * Returns:
+     *     None
      */
     function displaySearchResults(games) {
         // Clear previous results safely
@@ -261,6 +363,15 @@ document.addEventListener('DOMContentLoaded', function () {
      * Shows a loading overlay during the search request
      * @param {string} query - The search query string
      */
+    /**
+     * Perform backend search for games by query.
+     *
+     * Args:
+     *     query: Search string.
+     *
+     * Returns:
+     *     None
+     */
     async function searchGames(query) {
         if (!searchUrl) {
             console.error('Search URL not configured');
@@ -297,6 +408,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    /**
+     * Debounce and handle search input changes.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     function handleSearchInput() {
         clearTimeout(searchTimeout);
         const query = searchInput.value.trim();
@@ -311,6 +431,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 300);
     }
 
+    /**
+     * Trigger a search based on the main search input.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     function triggerSearch() {
         if (!searchInput) return;
         const query = searchInput.value.trim();
@@ -324,6 +453,15 @@ document.addEventListener('DOMContentLoaded', function () {
     /**
      * Trigger search from the modal search input
      * Syncs the main search input and performs the search
+     */
+    /**
+     * Trigger a search based on the modal search input.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
      */
     function triggerModalSearch() {
         const modalSearchInput = document.getElementById('modal_search_input');
@@ -344,11 +482,29 @@ document.addEventListener('DOMContentLoaded', function () {
         searchGames(query);
     }
 
+    /**
+     * Update banner preview based on input value.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     function handleBannerInput() {
         const bannerUrl = bannerInput.value.trim();
         updateBannerPreview(bannerPreview, bannerUrl);
     }
 
+    /**
+     * Reset form fields and state.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     function clearForm() {
         if (nameInput) nameInput.value = '';
         if (bannerInput) bannerInput.value = '';
@@ -363,6 +519,15 @@ document.addEventListener('DOMContentLoaded', function () {
         clearElement(searchResults);
     }
 
+    /**
+     * Toggle search box visibility based on layout state.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     function toggleSearch() {
         const searchSection = document.getElementById('search_section');
         const toggleBtn = document.getElementById('toggle_search_btn');

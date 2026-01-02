@@ -1,3 +1,12 @@
+/**
+ * Initialize login form AJAX submission.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 document.addEventListener('DOMContentLoaded', function () {
     const loginForm = document.getElementById('loginForm');
 
@@ -11,6 +20,15 @@ document.addEventListener('DOMContentLoaded', function () {
     // Clear field errors when user starts typing
     setupFieldErrorClear(['username', 'password']);
 
+    /**
+     * Submit login form via AJAX and handle response states.
+     *
+     * Args:
+     *     e: Submit event.
+     *
+     * Returns:
+     *     None
+     */
     loginForm.addEventListener('submit', function (e) {
         e.preventDefault();
 

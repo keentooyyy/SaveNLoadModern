@@ -2,6 +2,15 @@
  * Forgot Password Form Handler
  * Uses shared utility functions from utils.js
  */
+/**
+ * Initialize Forgot Password form behavior.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 document.addEventListener('DOMContentLoaded', function () {
     'use strict';
 
@@ -9,6 +18,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const sendOtpBtn = document.getElementById('sendOtpBtn');
 
     if (forgotPasswordForm) {
+        /**
+         * Submit the email to request an OTP.
+         *
+         * Args:
+         *     e: Submit event.
+         *
+         * Returns:
+         *     None
+         */
         forgotPasswordForm.addEventListener('submit', async function (e) {
             e.preventDefault();
 

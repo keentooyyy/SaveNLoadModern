@@ -1,4 +1,13 @@
 // Manage Accounts - Admin feature to manage user accounts
+/**
+ * Manage accounts module wrapper.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 (function () {
     'use strict';
 
@@ -8,6 +17,15 @@
     let paginationInfo = null;
 
     // Load users on page load
+    /**
+     * Initialize manage accounts UI handlers.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     document.addEventListener('DOMContentLoaded', function () {
         // Remove loadUsers() from here - only load when accordion opens
 
@@ -67,6 +85,15 @@
         }
     });
 
+    /**
+     * Fetch users with pagination and optional search.
+     *
+     * Args:
+     *     page: Page number to load.
+     *
+     * Returns:
+     *     None
+     */
     function loadUsers(page) {
         const usersContainer = document.getElementById('usersList');
         if (!usersContainer) return;
@@ -144,6 +171,15 @@
 
     // clearContainer removed - using shared clearElement
 
+    /**
+     * Render the user list and pagination controls.
+     *
+     * Args:
+     *     users: Array of user objects.
+     *
+     * Returns:
+     *     None
+     */
     function displayUsers(users) {
         const usersContainer = document.getElementById('usersList');
         if (!usersContainer) return;
@@ -284,6 +320,15 @@
     }
 
     // Create pagination controls
+    /**
+     * Build pagination controls for the user list.
+     *
+     * Args:
+     *     pagination: Pagination metadata from the backend.
+     *
+     * Returns:
+     *     Pagination container element.
+     */
     function createPaginationControls(pagination) {
         const paginationDiv = document.createElement('div');
         paginationDiv.className = 'd-flex justify-content-between align-items-center mt-3 pt-3';
@@ -418,6 +463,16 @@
     }
 
     // Create progress modal for user deletion
+    /**
+     * Build and show the deletion progress modal.
+     *
+     * Args:
+     *     operationId: Operation identifier.
+     *     username: Username being deleted.
+     *
+     * Returns:
+     *     Modal data object used by the polling loop.
+     */
     function createUserDeletionProgressModal(operationId, username) {
         const modalId = `progressModal_delete_user_${operationId}`;
         const modalBackdrop = document.createElement('div');
@@ -517,6 +572,17 @@
     }
 
     // Poll operation status for user deletion
+    /**
+     * Poll deletion progress and update modal state.
+     *
+     * Args:
+     *     operationId: Operation identifier.
+     *     modalData: Modal data returned by createUserDeletionProgressModal.
+     *     username: Username being deleted.
+     *
+     * Returns:
+     *     None
+     */
     async function pollUserDeletionStatus(operationId, modalData, username) {
         const maxAttempts = 300; // 5 minutes max
         let attempts = 0;
@@ -676,6 +742,16 @@
         }, pollInterval);
     }
 
+    /**
+     * Delete a user after confirmation and track progress if queued.
+     *
+     * Args:
+     *     userId: User identifier.
+     *     username: Username string.
+     *
+     * Returns:
+     *     None
+     */
     async function deleteUser(userId, username) {
         const confirmed = await window.customConfirm(
             `Are you sure you want to DELETE user "${username}"? This will permanently delete the account and all their save data from the server. This action cannot be undone.`
@@ -723,6 +799,16 @@
         }
     }
 
+    /**
+     * Trigger a password reset for a user after confirmation.
+     *
+     * Args:
+     *     userId: User identifier.
+     *     username: Username string.
+     *
+     * Returns:
+     *     None
+     */
     async function resetUserPassword(userId, username) {
         const confirmed = await window.customConfirm(
             `Are you sure you want to reset the password for user "${username}"? `

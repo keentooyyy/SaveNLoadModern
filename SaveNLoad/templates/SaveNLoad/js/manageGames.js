@@ -9,6 +9,16 @@ let loadSaveFoldersRef = null;
 
 // Expose function to open modal programmatically
 // This function is available immediately, but will only work after DOMContentLoaded
+/**
+ * Open the game edit modal and load game details.
+ *
+ * Args:
+ *     gameId: Game identifier to load.
+ *     hideSavesTab: True to hide the saves tab in the modal.
+ *
+ * Returns:
+ *     None
+ */
 window.openGameEditModal = function (gameId, hideSavesTab = false) {
     if (!modalInstance) {
         console.error('Modal not initialized yet. Please wait for page to load.');
@@ -93,6 +103,15 @@ window.openGameEditModal = function (gameId, hideSavesTab = false) {
     }
 };
 
+/**
+ * Initialize Manage Games modal, handlers, and helpers.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 document.addEventListener('DOMContentLoaded', function () {
     const section = document.getElementById('availableGamesSection');
     const modalElement = document.getElementById('gameManageModal');
@@ -124,15 +143,43 @@ document.addEventListener('DOMContentLoaded', function () {
     const manageSaveLocationManager = new SaveLocationManager('manage_save_locations_container');
 
     // Wrapper functions for inline handlers in template
+    /**
+     * Add a new save location input in the manage modal.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     window.addManageSaveLocation = function () {
         manageSaveLocationManager.addLocation();
     };
 
+    /**
+     * Remove a save location input in the manage modal.
+     *
+     * Args:
+     *     btn: Remove button element.
+     *
+     * Returns:
+     *     None
+     */
     window.removeManageSaveLocation = function (btn) {
         manageSaveLocationManager.removeLocation(btn);
     };
 
     // Update loadGame function
+    /**
+     * Fetch game details and populate the edit modal.
+     *
+     * Args:
+     *     detailUrl: Detail endpoint URL.
+     *     hideSavesTab: True to hide the saves tab in the modal.
+     *
+     * Returns:
+     *     None
+     */
     const loadGame = async function (detailUrl, hideSavesTab = false) {
         try {
             const response = await fetch(detailUrl, {
@@ -202,6 +249,15 @@ document.addEventListener('DOMContentLoaded', function () {
     };
     loadGameRef = loadGame; // Store reference
 
+    /**
+     * Persist edits to the current game.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     async function saveGame() {
         if (!currentDetailUrlRef) return;
         if (!csrfToken) {
@@ -281,6 +337,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Uses shared utility functions from utils.js
 
+    /**
+     * Delete the current game and handle queued cleanup operations.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     async function deleteGame() {
         if (!currentDeleteUrlRef || !currentDetailUrlRef) return;
         if (!csrfToken) {
@@ -512,6 +577,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    /**
+     * Format a date string for display.
+     *
+     * Args:
+     *     dateString: ISO date string.
+     *
+     * Returns:
+     *     Formatted date string.
+     */
     function formatDate(dateString) {
         const date = new Date(dateString);
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -527,6 +601,15 @@ document.addEventListener('DOMContentLoaded', function () {
         return `${month}, ${day}, ${year} ${hours}:${minutesStr} ${ampm}`;
     }
 
+    /**
+     * Build a loading UI for the save folders section.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     Loading element for insertion.
+     */
     function createLoadingState() {
         const wrapper = document.createElement('div');
         wrapper.className = 'text-center py-4';
@@ -548,6 +631,15 @@ document.addEventListener('DOMContentLoaded', function () {
         return wrapper;
     }
 
+    /**
+     * Build an error UI for the save folders section.
+     *
+     * Args:
+     *     message: Error message string.
+     *
+     * Returns:
+     *     Error element for insertion.
+     */
     function createErrorMessage(message) {
         const wrapper = document.createElement('div');
         wrapper.className = 'text-center py-4';
@@ -558,6 +650,15 @@ document.addEventListener('DOMContentLoaded', function () {
         return wrapper;
     }
 
+    /**
+     * Fetch and render save folders for a game.
+     *
+     * Args:
+     *     gameId: Game identifier.
+     *
+     * Returns:
+     *     None
+     */
     const loadSaveFolders = async function (gameId) {
         const container = document.getElementById('savesListContainer');
         if (!container) return;
@@ -742,6 +843,17 @@ document.addEventListener('DOMContentLoaded', function () {
     loadSaveFoldersRef = loadSaveFolders; // Store reference
 
     // Shared function to create progress modal matching app aesthetics
+    /**
+     * Create a progress modal for long-running operations.
+     *
+     * Args:
+     *     operationId: Operation identifier.
+     *     title: Modal title string.
+     *     operationType: Type label used in modal content.
+     *
+     * Returns:
+     *     Modal data object with helpers.
+     */
     function createProgressModal(operationId, title, operationType = 'operation') {
         const modalId = `progressModal_${operationId}`;
         const modalBackdrop = document.createElement('div');
@@ -844,6 +956,18 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Shared function to poll operation status
+    /**
+     * Poll operation status and update progress UI.
+     *
+     * Args:
+     *     operationId: Operation identifier.
+     *     modalData: Modal data returned by createProgressModal.
+     *     onComplete: Callback invoked on success.
+     *     onError: Callback invoked on failure.
+     *
+     * Returns:
+     *     None
+     */
     async function pollOperationStatus(operationId, modalData, onComplete, onError) {
         const maxAttempts = 300; // 5 minutes max
         let attempts = 0;
@@ -948,6 +1072,16 @@ document.addEventListener('DOMContentLoaded', function () {
         }, pollInterval);
     }
 
+    /**
+     * Delete a single save folder for a game.
+     *
+     * Args:
+     *     gameId: Game identifier.
+     *     saveFolderNumber: Save folder number to delete.
+     *
+     * Returns:
+     *     None
+     */
     async function deleteSaveFolder(gameId, saveFolderNumber) {
         const csrfInput = document.querySelector('#gameCsrfForm input[name="csrfmiddlewaretoken"]') ||
             document.querySelector('#gameManageForm input[name="csrfmiddlewaretoken"]');
@@ -1010,6 +1144,16 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    /**
+     * Trigger a load operation for a specific save folder.
+     *
+     * Args:
+     *     gameId: Game identifier.
+     *     saveFolderNumber: Save folder number to load.
+     *
+     * Returns:
+     *     None
+     */
     async function loadSelectedSave(gameId, saveFolderNumber) {
         const csrfInput = document.querySelector('#gameCsrfForm input[name="csrfmiddlewaretoken"]');
         const csrfToken = csrfInput ? csrfInput.value : null;
@@ -1253,6 +1397,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const saveGameBtn = document.getElementById('saveGameBtn');
 
     // Function to show/hide edit buttons based on active tab
+    /**
+     * Toggle visibility of edit tab buttons.
+     *
+     * Args:
+     *     show: True to show, False to hide.
+     *
+     * Returns:
+     *     None
+     */
     function toggleEditButtons(show) {
         if (editTabButtons) {
             if (show) {
@@ -1309,6 +1462,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /**
      * Open save file location for a game
+     */
+    /**
+     * Request the worker to open the save location on the client.
+     *
+     * Args:
+     *     gameId: Game identifier.
+     *
+     * Returns:
+     *     None
      */
     async function openSaveLocation(gameId) {
         if (!window.OPEN_SAVE_LOCATION_URL_PATTERN) {
@@ -1459,6 +1621,15 @@ document.addEventListener('DOMContentLoaded', function () {
     /**
      * Backup all saves for a game
      */
+    /**
+     * Trigger a backup operation for all saves of a game.
+     *
+     * Args:
+     *     gameId: Game identifier.
+     *
+     * Returns:
+     *     None
+     */
     async function backupAllSaves(gameId) {
         if (!window.BACKUP_ALL_SAVES_URL_PATTERN) {
             console.error('BACKUP_ALL_SAVES_URL_PATTERN not defined');
@@ -1523,6 +1694,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Helper function to check backup result and show modal with folder location
+    /**
+     * Check backup completion and return the zip path when ready.
+     *
+     * Args:
+     *     operationId: Operation identifier.
+     *
+     * Returns:
+     *     Backup result data or null if not ready.
+     */
     async function checkBackupResult(operationId) {
         try {
             const urlPattern = window.CHECK_OPERATION_STATUS_URL_PATTERN;
@@ -1548,6 +1728,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Show backup complete modal using safe DOM manipulation
+    /**
+     * Show a modal with backup completion details.
+     *
+     * Args:
+     *     zipPath: File path to the backup zip.
+     *
+     * Returns:
+     *     None
+     */
     function showBackupCompleteModal(zipPath) {
         // Remove existing modal if present
         const existingModal = document.getElementById('backupCompleteModal');
@@ -1656,6 +1845,15 @@ document.addEventListener('DOMContentLoaded', function () {
     /**
      * Delete all saves for a game
      */
+    /**
+     * Delete all saves for a game and track the operations.
+     *
+     * Args:
+     *     gameId: Game identifier.
+     *
+     * Returns:
+     *     None
+     */
     async function deleteAllSaves(gameId) {
         if (!window.DELETE_ALL_SAVES_URL_PATTERN) {
             console.error('DELETE_ALL_SAVES_URL_PATTERN not defined');
@@ -1736,6 +1934,16 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Helper function to check if all delete operations are complete
+    /**
+     * Check whether all delete operations have completed.
+     *
+     * Args:
+     *     operationIds: Array of operation identifiers.
+     *     gameId: Game identifier.
+     *
+     * Returns:
+     *     True if all operations completed, False otherwise.
+     */
     async function checkAllOperationsComplete(operationIds, gameId) {
         if (!operationIds || operationIds.length === 0) {
             // Reload page to refresh everything

@@ -2,6 +2,15 @@
  * Account Settings Handler
  * Uses shared utility functions from utils.js
  */
+/**
+ * Initialize account settings form behavior.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 document.addEventListener('DOMContentLoaded', function () {
 
     // Initialize account settings
@@ -17,6 +26,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const accountSettingsCollapse = document.getElementById('accountSettingsCollapse');
 
     if (accountSettingsCollapse) {
+        /**
+         * Update header styles when the accordion opens.
+         *
+         * Args:
+         *     None
+         *
+         * Returns:
+         *     None
+         */
         accountSettingsCollapse.addEventListener('show.bs.collapse', function () {
             if (accountSettingsHeader) accountSettingsHeader.classList.add('active');
             if (accountSettingsChevron) {
@@ -24,6 +42,15 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
+        /**
+         * Reset header styles when the accordion closes.
+         *
+         * Args:
+         *     None
+         *
+         * Returns:
+         *     None
+         */
         accountSettingsCollapse.addEventListener('hide.bs.collapse', function () {
             if (accountSettingsHeader) accountSettingsHeader.classList.remove('active');
             if (accountSettingsChevron) {
@@ -34,6 +61,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Handle account settings form
     if (accountSettingsForm) {
+        /**
+         * Validate inputs and submit account settings updates.
+         *
+         * Args:
+         *     e: Submit event.
+         *
+         * Returns:
+         *     None
+         */
         accountSettingsForm.addEventListener('submit', async function (e) {
             e.preventDefault();
 

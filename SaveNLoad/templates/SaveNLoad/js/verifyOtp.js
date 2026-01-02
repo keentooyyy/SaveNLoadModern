@@ -2,10 +2,28 @@
  * Verify OTP Form Handler
  * Uses shared utility functions from utils.js
  */
+/**
+ * Initialize OTP verification and resend flows.
+ *
+ * Args:
+ *     None
+ *
+ * Returns:
+ *     None
+ */
 document.addEventListener('DOMContentLoaded', function () {
     'use strict';
 
     // Clear input and focus - local helper function
+    /**
+     * Clear OTP input and refocus for retry.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     function clearAndFocusInput() {
         if (otpInput) {
             otpInput.value = '';
@@ -13,7 +31,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Show loading indicator in the input field
+    /**
+     * Show or hide a loading state in the OTP input.
+     *
+     * Args:
+     *     isLoading: True to show loading state, False to restore.
+     *
+     * Returns:
+     *     None
+     */
     function showLoadingState(isLoading) {
         const otpInput = document.getElementById('otp_code');
         if (!otpInput) return;
@@ -49,6 +75,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Function to check OTP length and handle auto-submit
+    /**
+     * Auto-submit when a 6-digit OTP is present.
+     *
+     * Args:
+     *     None
+     *
+     * Returns:
+     *     None
+     */
     function checkOtpLength() {
         const otpCode = otpInput?.value.trim() || '';
 
@@ -65,6 +100,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Only allow numbers in OTP input
     if (otpInput) {
+        /**
+         * Enforce numeric input and trigger auto-submit when complete.
+         *
+         * Args:
+         *     e: Input event.
+         *
+         * Returns:
+         *     None
+         */
         otpInput.addEventListener('input', function (e) {
             e.target.value = e.target.value.replace(/[^0-9]/g, '');
             // Check if all 6 digits are entered
@@ -72,6 +116,15 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         // Also check on paste events
+        /**
+         * Normalize pasted OTP input to digits only.
+         *
+         * Args:
+         *     e: Paste event.
+         *
+         * Returns:
+         *     None
+         */
         otpInput.addEventListener('paste', function (e) {
             setTimeout(() => {
                 e.target.value = e.target.value.replace(/[^0-9]/g, '');
@@ -81,6 +134,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (verifyOtpForm) {
+        /**
+         * Submit OTP verification request and handle success/error states.
+         *
+         * Args:
+         *     e: Submit event.
+         *
+         * Returns:
+         *     None
+         */
         verifyOtpForm.addEventListener('submit', async function (e) {
             e.preventDefault();
 
@@ -157,6 +219,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (resendOtpBtn) {
+        /**
+         * Request a new OTP code and reset the input UI.
+         *
+         * Args:
+         *     e: Click event.
+         *
+         * Returns:
+         *     None
+         */
         resendOtpBtn.addEventListener('click', async function (e) {
             e.preventDefault();
 
