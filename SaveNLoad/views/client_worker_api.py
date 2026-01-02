@@ -2,8 +2,9 @@
 API endpoints for client worker registration and communication
 """
 from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+
 from SaveNLoad.models import SimpleUsers
 from SaveNLoad.services.redis_worker_service import (
     register_worker,
@@ -12,7 +13,6 @@ from SaveNLoad.services.redis_worker_service import (
     claim_worker as redis_claim_worker,
     unclaim_worker as redis_unclaim_worker,
     is_worker_online,
-    get_unclaimed_workers,
     get_workers_snapshot,
     issue_ws_token,
 )

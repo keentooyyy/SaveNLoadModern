@@ -1,21 +1,20 @@
+import json
+from datetime import timedelta
+
+from django.db.models import Subquery, OuterRef, F
+from django.db.models.functions import Lower
+from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.utils import timezone
-from django.db.models import Max, Subquery, OuterRef, F
-from django.db.models.functions import Lower
-from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from datetime import timedelta
-import json
-from SaveNLoad.views.custom_decorators import login_required, get_current_user, client_worker_required
-from SaveNLoad.views.api_helpers import check_admin_or_error, json_response_success, get_game_save_locations
-from SaveNLoad.views.rawg_api import get_popular_games
-from SaveNLoad.models import SimpleUsers, Game
-from SaveNLoad.models.operation_constants import OperationType
-from SaveNLoad.services.redis_operation_service import OperationStatus
-from SaveNLoad.services.redis_worker_service import get_user_workers, get_workers_snapshot
+
+from SaveNLoad.models import Game
 from SaveNLoad.models.save_folder import SaveFolder
+from SaveNLoad.services.redis_worker_service import get_user_workers, get_workers_snapshot
 from SaveNLoad.utils.image_utils import get_image_url_or_fallback
+from SaveNLoad.views.api_helpers import check_admin_or_error, get_game_save_locations
+from SaveNLoad.views.custom_decorators import login_required, get_current_user, client_worker_required
 
 
 def format_last_played(last_played):

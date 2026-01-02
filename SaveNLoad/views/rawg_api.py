@@ -1,5 +1,7 @@
-import requests
 from typing import List, Dict, Optional
+
+import requests
+
 from SaveNLoad.utils.api_utils import handle_http_error, handle_request_exception, filter_dlc_games
 from SaveNLoad.utils.env_utils import get_env_with_default
 

@@ -1,7 +1,9 @@
+from functools import wraps
+
+from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
-from django.http import JsonResponse
-from functools import wraps
+
 from SaveNLoad.models import SimpleUsers
 from SaveNLoad.services.redis_worker_service import get_user_workers
 
@@ -66,7 +68,6 @@ def client_worker_required(view_func):
         
         # Check for active worker owned by this user
         # 6-second timeout matches is_online default
-        from django.utils import timezone
         # Check if user has any online workers
         worker_ids = get_user_workers(user.id)
         has_worker = len(worker_ids) > 0

@@ -2,10 +2,10 @@
 Input sanitization utilities to prevent XSS and SQL injection attacks
 """
 import re
-import html
-from django.utils.html import escape
-from django.core.validators import validate_email
+
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
+from django.utils.html import escape
 
 
 def sanitize_username(username):

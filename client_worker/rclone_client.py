@@ -31,6 +31,9 @@ class RcloneClient:
             remote_name: Name of the rclone remote (from rclone.conf)
             rclone_path: Path to rclone executable (default: ./rclone/rclone.exe)
             config_path: Path to rclone config file (default: ./rclone/rclone.conf)
+
+        Returns:
+            None
         """
         # Determine rclone executable path
         if rclone_path:
@@ -66,6 +69,9 @@ class RcloneClient:
             timeout: Optional timeout in seconds
             silent: If True, don't print output (still captures it)
             progress_callback: Optional callback(current, total, message) for progress updates
+
+        Returns:
+            Tuple of (success, stdout, stderr)
         """
         log_file = None
         try:
@@ -96,6 +102,9 @@ class RcloneClient:
             def parse_progress(line: str) -> Optional[Tuple[int, int, str]]:
                 """Parse rclone progress from output line
                 
+                Args:
+                    line: Single stdout line from rclone.
+
                 Returns: (current, total, message) or None if no progress found
                 """
                 # Pattern 1: "Transferred: 105 / 109, 96%" (file count)
@@ -152,7 +161,7 @@ class RcloneClient:
                         if line_stripped and not silent:
                             print(f"  {line_stripped}")
             
-            # Start reading stdout in a thread to show raw output immediately
+            # Stream stdout in a separate thread so progress can be reported while rclone runs.
             stdout_thread = threading.Thread(target=read_stdout, daemon=True)
             stdout_thread.start()
             
@@ -181,7 +190,7 @@ class RcloneClient:
             # Wait for stdout reading thread to finish
             stdout_thread.join(timeout=2)
             
-            # Read final log file content to check completion status
+            # Read final log file content to check completion status.
             log_content = ""
             try:
                 with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
@@ -219,8 +228,13 @@ class RcloneClient:
     
     def _normalize_path(self, path: str) -> str:
         """
-        Normalize a path by converting backslashes to forward slashes and stripping
-        Returns: Normalized path string
+        Normalize a path by converting backslashes to forward slashes and stripping.
+
+        Args:
+            path: Path string to normalize.
+
+        Returns:
+            Normalized path string.
         """
         return path.replace('\\', '/').strip('/')
     
@@ -251,6 +265,9 @@ class RcloneClient:
         - "Transferred: 17.725 MiB / 17.725 MiB" (with data)
         - "Transferred: 1.234 KiB / 1.234 KiB"
         
+        Args:
+            output: Combined rclone output text.
+
         Returns:
             Total bytes transferred (0 if empty or not found)
         """
@@ -301,6 +318,9 @@ class RcloneClient:
         - "Transferred: 0 B / 0 B" (bytes)
         - "Transferred: 1 / 1, 100%" (files)
         
+        Args:
+            output: Combined rclone output text.
+
         Returns:
             Total files transferred (0 if not found)
         """
@@ -425,65 +445,6 @@ class RcloneClient:
             error_msg = stderr.strip() or stdout.strip() or "Upload failed"
             return False, error_msg, bytes_transferred
     
-    def download_save(self, username: str, game_name: str, remote_filename: str,
-                     local_file_path: str, folder_number: int, 
-                     remote_path_custom: Optional[str] = None, path_index: Optional[int] = None,
-                     progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str]:
-        """Download a save file - rclone handles everything (retries, resume, etc.)
-        
-        Args:
-            username: Username for path organization
-            game_name: Game name for path organization
-            remote_filename: Remote filename (relative path)
-            local_file_path: Local file path
-            folder_number: Save folder number
-            remote_path_custom: Optional custom remote path
-            path_index: Optional path index (1-based) to create path_1, path_2 subfolders
-        
-        Returns:
-            Tuple of (success, message)
-        """
-        # Build remote path using helper
-        remote_path = self._build_remote_path_with_index(
-            username=username,
-            game_name=game_name,
-            folder_number=folder_number,
-            remote_path_custom=remote_path_custom,
-            path_index=path_index,
-            additional_path=remote_filename
-        )
-        remote_full = self._build_remote_path(remote_path)
-        
-        # Create local directory if needed
-        local_dir = os.path.dirname(local_file_path)
-        if local_dir:
-            try:
-                os.makedirs(local_dir, exist_ok=True)
-            except OSError as e:
-                return False, f"Failed to create directory: {local_dir} - {str(e)}"
-        
-        # Let rclone handle everything - retries, resume, connection management
-        # Note: rclone 'copy' command always overwrites existing files (default behavior)
-        # This is desired for load operations - we want to replace local saves with server saves
-        command = [
-            'copy',
-            remote_full,
-            local_file_path,
-            '--stats', '1s',  # Show stats every second
-            '--progress',  # Show detailed progress
-        ]
-        
-        success, stdout, stderr = self._run_rclone(
-            command,
-            timeout=600,
-            progress_callback=progress_callback
-        )
-        
-        if success:
-            return True, "File downloaded successfully"
-        else:
-            error_msg = stderr.strip() or stdout.strip() or "Download failed"
-            return False, error_msg
     
     def download_directory(self, remote_ftp_path: str, local_dir: str,
                           transfers: int = RCLONE_TRANSFERS, progress_callback: Optional[Callable[[int, int, str], None]] = None,
@@ -495,6 +456,7 @@ class RcloneClient:
             remote_ftp_path: Complete remote FTP path (e.g., "username/game/save_1" or "username/game/save_1/path_1")
             local_dir: Local directory path
             transfers: Number of parallel transfers (default: 10)
+            progress_callback: Optional callback(current, total, message) for progress updates
             strip_path_prefix: Optional path prefix to strip from source (e.g., "path_1" to avoid creating path_1 subfolder)
         
         Returns:
@@ -511,7 +473,7 @@ class RcloneClient:
         remote_full = self._build_remote_path(normalized_path)
         base_path = normalized_path
         
-        # If we need to strip path_X prefix, use temp directory workaround
+        # If we need to strip path_X prefix, use temp directory workaround.
         if strip_path_prefix:
             # PROBLEM: Wildcard /* doesn't work with FTP servers
             # SOLUTION: Copy to temp directory, then move contents to final destination
@@ -651,6 +613,7 @@ class RcloneClient:
         # Normalize and build full remote path
         normalized_path = self._normalize_path(remote_ftp_path)
         remote_full = self._build_remote_path(normalized_path)
+        base_path = normalized_path
         
         # Use lsjson for structured output
         command = [
@@ -708,44 +671,6 @@ class RcloneClient:
         
         return True, files, directories, f"Found {len(files)} file(s) and {len(directories)} directory(ies)"
     
-    def create_directory(self, username: str, game_name: str, folder_number: int,
-                        remote_dir_path: str, remote_path_custom: Optional[str] = None,
-                        path_index: Optional[int] = None) -> Tuple[bool, str]:
-        """Create directory - rclone handles everything
-        
-        Args:
-            username: Username for path organization
-            game_name: Game name for path organization
-            folder_number: Save folder number
-            remote_dir_path: Remote directory path (relative)
-            remote_path_custom: Optional custom remote path
-        
-        Returns:
-            Tuple of (success, message)
-        """
-        # Build remote path using helper
-        remote_path = self._build_remote_path_with_index(
-            username=username,
-            game_name=game_name,
-            folder_number=folder_number,
-            remote_path_custom=remote_path_custom,
-            path_index=path_index,
-            additional_path=remote_dir_path
-        )
-        remote_full = self._build_remote_path(remote_path)
-        
-        # Let rclone handle it
-        command = ['mkdir', remote_full]
-        
-        success, stdout, stderr = self._run_rclone(command, timeout=30)
-        
-        if success:
-            return True, "Directory created"
-        else:
-            error_msg = stderr.strip().lower()
-            if 'exists' in error_msg or 'already' in error_msg:
-                return True, "Directory already exists"
-            return False, stderr.strip() or "Failed to create directory"
     
     def delete_file(self, remote_path: str) -> Tuple[bool, str]:
         """Delete a file - rclone handles everything
@@ -833,6 +758,9 @@ class RcloneClient:
         - Remote configuration is valid
         - Connection to remote server is working
         
+        Args:
+            None
+
         Returns:
             Tuple of (success, message)
         """

@@ -12,6 +12,15 @@ class Command(BaseCommand):
     help = 'Creates a default admin user from environment variables (DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD)'
 
     def add_arguments(self, parser):
+        """
+        Register CLI arguments for the management command.
+
+        Args:
+            parser: ArgumentParser instance used by Django.
+
+        Returns:
+            None
+        """
         parser.add_argument(
             '--update',
             action='store_true',
@@ -19,6 +28,16 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        """
+        Create or update the default admin user from environment variables.
+
+        Args:
+            *args: Unused positional arguments from Django.
+            **options: Command options, including the update flag.
+
+        Returns:
+            None
+        """
         # Get admin credentials from environment variables
         admin_username = os.getenv('DEFAULT_ADMIN_USERNAME')
         admin_email = os.getenv('DEFAULT_ADMIN_EMAIL')
@@ -37,7 +56,7 @@ class Command(BaseCommand):
             print('DEFAULT_ADMIN_PASSWORD environment variable is not set')
             return
 
-        # Check if database tables exist (migrations may not have been run)
+        # Guard against missing tables when migrations haven't run yet.
         try:
             # Try a simple query to check if table exists
             SimpleUsers.objects.first()
@@ -53,12 +72,12 @@ class Command(BaseCommand):
                 # Re-raise if it's a different database error
                 raise
 
-        # Check if admin user already exists
+        # Avoid duplicate admin accounts by checking username first.
         try:
             existing_user = SimpleUsers.objects.get(username=admin_username)
             
             if options['update']:
-                # Update existing user
+                # Update existing user with new credentials and role.
                 existing_user.email = admin_email
                 existing_user.set_password(admin_password)
                 existing_user.role = UserRole.ADMIN
@@ -73,7 +92,7 @@ class Command(BaseCommand):
             # User doesn't exist, create new admin
             pass
 
-        # Check if email is already taken by another user
+        # Prevent email collisions with a different user.
         try:
             existing_email = SimpleUsers.objects.get(email=admin_email)
             print(f'Email "{admin_email}" is already registered to user "{existing_email.username}"')
@@ -82,7 +101,7 @@ class Command(BaseCommand):
             # Email is available
             pass
 
-        # Create new admin user
+        # Create new admin user when no conflicts were found.
         try:
             admin_user = SimpleUsers.objects.create(
                 username=admin_username,

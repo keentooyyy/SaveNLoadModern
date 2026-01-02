@@ -1,20 +1,21 @@
 """
 Common helper functions for API endpoints
 """
+import json
+import os
+
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.utils import timezone
+
 from SaveNLoad.models import Game
 from SaveNLoad.services.redis_worker_service import (
     get_user_workers,
     is_worker_online
 )
-from SaveNLoad.views.custom_decorators import get_current_user
 from SaveNLoad.utils.image_utils import get_image_url_or_fallback
-from django.utils import timezone
-from datetime import timedelta
-import json
-import os
+from SaveNLoad.views.custom_decorators import get_current_user
 
 
 def delete_game_banner_file(game):
@@ -560,8 +561,7 @@ def cleanup_operations_by_status(status, no_items_message, success_message_templ
         success_message_template: Template for success message (e.g., "Deleted {count} completed operation(s)")
     """
     from SaveNLoad.utils.redis_client import get_redis_client
-    from SaveNLoad.services.redis_operation_service import OperationStatus
-    
+
     redis_client = get_redis_client()
     
     # Get all operations with the specified status

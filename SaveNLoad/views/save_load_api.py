@@ -2,10 +2,13 @@
 API endpoints for save/load operations
 These endpoints are used by the client worker to perform save/load operations
 """
-from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
-from SaveNLoad.views.custom_decorators import login_required, get_current_user
+
+from SaveNLoad.models.save_folder import SaveFolder
+from SaveNLoad.services.redis_operation_service import create_operation
+from SaveNLoad.utils.datetime_utils import calculate_progress_percentage, to_isoformat
+from SaveNLoad.utils.path_utils import generate_game_directory_path, generate_save_folder_path
+from SaveNLoad.utils.string_utils import transform_path_error_message
 from SaveNLoad.views.api_helpers import (
     parse_json_body,
     get_game_or_error,
@@ -21,19 +24,7 @@ from SaveNLoad.views.api_helpers import (
     json_response_error,
     json_response_success
 )
-from SaveNLoad.utils.string_utils import transform_path_error_message
-from SaveNLoad.utils.datetime_utils import calculate_progress_percentage, to_isoformat
-from SaveNLoad.utils.model_utils import filter_by_user_and_game
-from SaveNLoad.utils.path_utils import generate_game_directory_path, generate_save_folder_path
-from SaveNLoad.models.save_folder import SaveFolder
-from SaveNLoad.models import Game
-from SaveNLoad.services.redis_operation_service import create_operation
-import json
-import zipfile
-import tempfile
-import io
-from pathlib import Path
-from django.conf import settings
+from SaveNLoad.views.custom_decorators import login_required, get_current_user
 
 
 def _build_full_remote_path(username: str, game_name: str, save_folder_number: int, 
@@ -333,8 +324,7 @@ def check_operation_status(request, operation_id):
     If the user was deleted (CASCADE), the deletion was successful.
     """
     from SaveNLoad.services.redis_operation_service import get_operation, OperationStatus
-    from SaveNLoad.models import SimpleUsers
-    
+
     user = get_current_user(request)
     
     # Get operation from Redis

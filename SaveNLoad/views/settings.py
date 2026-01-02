@@ -1,8 +1,15 @@
-from django.shortcuts import render, redirect
+import os
+from urllib.parse import urlparse
+
+from django.core.files import File
+from django.db import models
 from django.http import JsonResponse
+from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
-from SaveNLoad.views.custom_decorators import login_required, get_current_user, client_worker_required
+
+from SaveNLoad.models import Game
+from SaveNLoad.utils.image_utils import download_image_from_url, get_image_url_or_fallback
 from SaveNLoad.views.api_helpers import (
     parse_json_body,
     get_game_or_error,
@@ -15,14 +22,8 @@ from SaveNLoad.views.api_helpers import (
     cleanup_operations_by_status,
     cleanup_operations_by_age
 )
+from SaveNLoad.views.custom_decorators import login_required, get_current_user, client_worker_required
 from SaveNLoad.views.rawg_api import search_games as rawg_search_games
-from SaveNLoad.models import Game
-from SaveNLoad.utils.image_utils import download_image_from_url, get_image_url_or_fallback
-from django.core.files import File
-from urllib.parse import urlparse
-import json
-import os
-from django.db import models
 
 
 @login_required

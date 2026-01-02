@@ -1,11 +1,9 @@
 from django.shortcuts import render, redirect
 from django.urls import reverse
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.utils.html import escape
+from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 
 from SaveNLoad.models import SimpleUsers, UserRole
-from SaveNLoad.views.custom_decorators import login_required, get_current_user, client_worker_required
 from SaveNLoad.views.api_helpers import (
     redirect_if_logged_in,
     json_response_with_redirect,
@@ -14,6 +12,7 @@ from SaveNLoad.views.api_helpers import (
     json_response_success,
     parse_json_body
 )
+from SaveNLoad.views.custom_decorators import login_required, get_current_user
 from SaveNLoad.views.input_sanitizer import (
     sanitize_username,
     sanitize_email,

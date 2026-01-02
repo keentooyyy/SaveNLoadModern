@@ -43,6 +43,15 @@ HEARTBEAT_INTERVAL = 5  # Heartbeat interval in seconds (WebSocket keepalive)
 _single_instance_handle = None  # Hold mutex/lock handle so it stays alive for process lifetime.
 
 def _show_single_instance_message():
+    """
+    Print a single-instance warning and pause if a console is attached.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     # Keep the user-facing text in one place for both UI and console output.
     message = "SaveNLoad Client Worker is already running. Close the existing instance before starting a new one."
     try:
@@ -54,6 +63,15 @@ def _show_single_instance_message():
         pass
 
 def _set_console_title(title: str):
+    """
+    Set the terminal window title on the current platform.
+
+    Args:
+        title: Window title to set.
+
+    Returns:
+        None
+    """
     # Windows console title defaults to the exe path; override for readability.
     if platform.system() == 'Windows':
         try:
@@ -72,7 +90,16 @@ def _set_console_title(title: str):
             except Exception:
                 pass
 
-def _ensure_single_instance(mutex_name: str, lock_name: str) -> bool:
+def _ensure_single_instance(lock_name: str) -> bool:
+    """
+    Acquire a single-instance lock for this worker.
+
+    Args:
+        lock_name: Unique lock name (used for lockfile path).
+
+    Returns:
+        True if the lock was acquired, False if another instance is running.
+    """
     global _single_instance_handle
     # Cross-platform lockfile; OS-specific locking API under the hood.
     # mutex_name is kept for compatibility with existing call sites.
@@ -86,6 +113,7 @@ def _ensure_single_instance(mutex_name: str, lock_name: str) -> bool:
         else:
             import fcntl
             fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Keep the handle open for the process lifetime to retain the lock.
         _single_instance_handle = lock_file
         return True
     except Exception:
@@ -102,6 +130,9 @@ class ClientWorkerServiceRclone:
         Args:
             server_url: Base URL of the Django server
             remote_name: Name of rclone remote (default: 'ftp')
+
+        Returns:
+            None
         """
         # Add http:// scheme if missing
         if not server_url.startswith(('http://', 'https://')):
@@ -138,7 +169,18 @@ class ClientWorkerServiceRclone:
         # WebSocket connection is established after registration.
     
     def _update_progress(self, operation_id: int, current: int, total: int, message: str = ''):
-        """Send progress update to server"""
+        """
+        Send progress update to server.
+
+        Args:
+            operation_id: Server operation ID to correlate progress updates.
+            current: Current progress value.
+            total: Total progress value.
+            message: Optional human-readable progress message.
+
+        Returns:
+            None
+        """
         self._send_ws_message(
             'progress',
             {
@@ -218,6 +260,9 @@ class ClientWorkerServiceRclone:
         Args:
             message: Message to print
             style: Optional rich style string
+
+        Returns:
+            None
         """
         try:
             if style:
@@ -438,6 +483,15 @@ class ClientWorkerServiceRclone:
         self._update_status_panel()
 
     def _build_status_panel(self) -> Panel:
+        """
+        Build the status panel shown in the console UI.
+
+        Args:
+            None
+
+        Returns:
+            Panel to render in the console UI.
+        """
         ws_line = "[green][OK][/green] WebSocket connected" if self._ws_connected else "[red][FAIL][/red] WebSocket not connected"
         if not self._ws_connected and self._ws_last_error:
             ws_line = f"{ws_line} ({self._ws_last_error})"
@@ -460,10 +514,27 @@ class ClientWorkerServiceRclone:
         )
 
     def _update_status_panel(self):
+        """
+        No-op placeholder for future status updates.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         return
     
     def check_permissions(self) -> bool:
-        """Check if we have necessary permissions to access files"""
+        """
+        Check if we have necessary permissions to access user files.
+
+        Args:
+            None
+
+        Returns:
+            True if basic access checks pass, False otherwise.
+        """
         try:
             test_path = Path.home() / 'Documents'
             if test_path.exists():
@@ -482,6 +553,9 @@ class ClientWorkerServiceRclone:
             local_save_path: Local path to save files  
             remote_ftp_path: Complete remote FTP path (built by server)
             operation_id: Optional operation ID for progress tracking
+
+        Returns:
+            Response dict with success flag and message or error.
         """
         self._safe_console_print("Backing up save files...")
         
@@ -580,6 +654,9 @@ class ClientWorkerServiceRclone:
             local_save_path: Local path to restore files to
             remote_ftp_path: Complete remote FTP path (built by server)
             operation_id: Optional operation ID for progress tracking
+
+        Returns:
+            Response dict with success flag and message or error.
         """
         self._safe_console_print("Preparing to download save files...")
         
@@ -665,6 +742,9 @@ class ClientWorkerServiceRclone:
         
         Args:
             remote_ftp_path: Complete remote FTP path (built by server)
+
+        Returns:
+            Response dict with files, directories, and status.
         """
         self._safe_console_print("Listing save files...")
         
@@ -686,13 +766,15 @@ class ClientWorkerServiceRclone:
         except Exception as e:
             return self._handle_operation_exception('List', e)
     
-    def delete_save_folder(self, remote_ftp_path: str, operation_id: Optional[int] = None) -> Dict[str, Any]:
+    def delete_save_folder(self, remote_ftp_path: str) -> Dict[str, Any]:
         """
         Delete save folder from pre-built remote FTP path
         
         Args:
             remote_ftp_path: Complete remote FTP path (built by server)
-            operation_id: Optional operation ID for progress tracking
+
+        Returns:
+            Response dict with success flag and message or error.
         """
         self._safe_console_print("Deleting save folder...")
         
@@ -717,6 +799,9 @@ class ClientWorkerServiceRclone:
         Args:
             remote_ftp_path: Complete remote base path (built by server, e.g., "username/gamename")
             operation_id: Optional operation ID for progress tracking
+
+        Returns:
+            Response dict with zip path on success.
         """
         # Extract game name from path for zip filename
         path_parts = remote_ftp_path.split('/')
@@ -789,11 +874,18 @@ class ClientWorkerServiceRclone:
         except Exception as e:
             return self._handle_operation_exception('Backup', e)
     
-    def open_folder(self, local_path: str, operation_id: Optional[int] = None) -> Dict[str, Any]:
+    def open_folder(self, local_path: str) -> Dict[str, Any]:
         """
-        Open save file location folder(s) in file explorer
-        Creates folders if they don't exist before opening
-        local_path contains JSON with paths and create_folders flag
+        Open one or more save paths in the OS file explorer.
+        
+        Args:
+            local_path: Single path string or JSON object string:
+                {"paths": ["/path/one", "/path/two"], "create_folders": true}
+
+        Returns:
+            Response dict with success flag and message or error.
+
+        If create_folders is true, missing directories are created before opening.
         """
         import json
         
@@ -917,6 +1009,7 @@ class ClientWorkerServiceRclone:
                 # API returns {data: {client_id, linked_user}}
                 response_data = data_obj = data.get('data', {}) if 'data' in data else data
                 self.linked_user = response_data.get('linked_user')
+                # WebSocket auth depends on this token.
                 self._ws_token = response_data.get('ws_token')
                 return bool(self._ws_token)
             return False
@@ -946,7 +1039,15 @@ class ClientWorkerServiceRclone:
                 time.sleep(0.1)
     
     def unregister_from_server(self, client_id: str) -> bool:
-        """Unregister this client from the Django server"""
+        """
+        Unregister this client from the Django server.
+
+        Args:
+            client_id: Worker identifier.
+
+        Returns:
+            True on success, False otherwise.
+        """
         try:
             response = self.session.post(
                 f"{self.server_url}/api/client/unregister/",
@@ -957,7 +1058,15 @@ class ClientWorkerServiceRclone:
             return False
     
     def _shutdown(self, client_id: Optional[str] = None):
-        """Perform graceful shutdown - cleanup and unregister from server"""
+        """
+        Perform graceful shutdown - cleanup and unregister from server.
+
+        Args:
+            client_id: Optional worker identifier to unregister.
+
+        Returns:
+            None
+        """
         if not self.running:
             return  # Already shutting down
         
@@ -984,7 +1093,15 @@ class ClientWorkerServiceRclone:
         self._safe_console_print("[green]Shutdown complete.[/green]")
     
     def run(self):
-        """Run the service (WebSocket mode)"""
+        """
+        Run the service (WebSocket mode).
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         # ASCII art banner using rich
         ascii_art = """  $$$$$$\\  $$\\       $$$$$$\\ $$$$$$$$\\ $$\\   $$\\ $$$$$$$$\\
   $$  __$$\\ $$ |      \\_$$  _|$$  _____|$$$\\  $$ |\\__$$  __|
@@ -1077,6 +1194,7 @@ class ClientWorkerServiceRclone:
         self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, args=(client_id,), daemon=True)
         self._heartbeat_thread.start()
 
+        # Start WebSocket connection loop after registration and status checks.
         self._ws_thread = threading.Thread(target=self._ws_connect_loop, args=(client_id,), daemon=True)
         self._ws_thread.start()
 
@@ -1098,7 +1216,15 @@ class ClientWorkerServiceRclone:
                 self._shutdown(client_id)
     
     def _process_operation(self, operation: Dict[str, Any]):
-        """Process a pending operation from the server"""
+        """
+        Process a pending operation from the server.
+
+        Args:
+            operation: Operation payload dict.
+
+        Returns:
+            None
+        """
         op_type = operation.get('type')
         operation_id = operation.get('id')
         local_path = operation.get('local_save_path')
@@ -1124,11 +1250,11 @@ class ClientWorkerServiceRclone:
         elif op_type == 'list':
             result = self.list_saves(remote_ftp_path)
         elif op_type == 'delete':
-            result = self.delete_save_folder(remote_ftp_path, operation_id)
+            result = self.delete_save_folder(remote_ftp_path)
         elif op_type == 'backup':
             result = self.backup_all_saves(remote_ftp_path, operation_id)
         elif op_type == 'open_folder':
-            result = self.open_folder(local_path, operation_id)
+            result = self.open_folder(local_path)
         else:
             self._safe_console_print("Error: Unknown operation type")
             return
@@ -1146,7 +1272,15 @@ class ClientWorkerServiceRclone:
 
 
 def main():
-    """Main entry point"""
+    """
+    Main entry point.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     import argparse
     
     server_url = os.getenv('SAVENLOAD_SERVER_URL', '').strip()
@@ -1161,7 +1295,7 @@ def main():
 
     _set_console_title("SaveNLoad Client Worker")
 
-    if not _ensure_single_instance("Global\\SaveNLoadClientWorker", "savenload_client_worker"):
+    if not _ensure_single_instance("savenload_client_worker"):
         sys.exit(1)
 
     if not args.server:
