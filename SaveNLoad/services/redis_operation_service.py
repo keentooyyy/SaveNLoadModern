@@ -2,11 +2,14 @@
 Redis-based operation queue service
 Handles operation creation, queuing, and status management
 """
-from SaveNLoad.utils.redis_client import get_redis_client
-from SaveNLoad.services.ws_worker_service import send_worker_message
-from django.utils import timezone
 import json
 import uuid
+
+from django.utils import timezone
+
+from SaveNLoad.services.ws_worker_service import send_worker_message
+from SaveNLoad.utils.redis_client import get_redis_client
+
 
 # Operation status constants
 class OperationStatus:
@@ -170,6 +173,9 @@ def mark_operation_in_progress(operation_id):
     
     Args:
         operation_id: Operation identifier
+
+    Returns:
+        None
     """
     redis_client = get_redis_client()
     # Mark start time and status.
@@ -184,6 +190,9 @@ def complete_operation(operation_id, result_data=None):
     Args:
         operation_id: Operation identifier
         result_data: Optional result data dict
+
+    Returns:
+        None
     """
     redis_client = get_redis_client()
     
@@ -208,6 +217,9 @@ def fail_operation(operation_id, error_message):
     Args:
         operation_id: Operation identifier
         error_message: Error message string
+
+    Returns:
+        None
     """
     redis_client = get_redis_client()
     
@@ -266,6 +278,9 @@ def update_operation_progress(operation_id, current=None, total=None, message=No
         current: Current progress count
         total: Total items
         message: Progress message
+
+    Returns:
+        None
     """
     redis_client = get_redis_client()
     

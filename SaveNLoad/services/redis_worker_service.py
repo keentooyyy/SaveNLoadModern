@@ -2,14 +2,16 @@
 Redis-based worker management service
 Handles worker registration, heartbeat, claiming, and online status
 """
-from SaveNLoad.utils.redis_client import get_redis_client
+import secrets
+
+from django.utils import timezone
+
 from SaveNLoad.services.ws_worker_service import (
     send_worker_message,
     send_ui_workers_update,
     send_ui_user_worker_status,
 )
-from django.utils import timezone
-import secrets
+from SaveNLoad.utils.redis_client import get_redis_client
 
 # Worker heartbeat TTL (10 seconds - worker pings every 5s, so this allows 1 missed ping)
 WORKER_HEARTBEAT_TTL = 10
@@ -373,7 +375,10 @@ def is_worker_online(client_id):
 def get_online_workers():
     """
     Get all online workers
-    
+
+    Args:
+        None
+
     Returns:
         list of client_ids
     """
@@ -442,7 +447,10 @@ def has_online_worker(user_id):
 def get_unclaimed_workers():
     """
     Get all online workers that are not claimed by any user
-    
+
+    Args:
+        None
+
     Returns:
         list of client_ids
     """
@@ -472,6 +480,9 @@ def get_workers_snapshot():
     """
     Get a snapshot of all online workers with claim status.
     
+    Args:
+        None
+
     Returns:
         list of worker dicts
     """

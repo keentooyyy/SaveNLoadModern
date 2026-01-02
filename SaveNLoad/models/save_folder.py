@@ -3,8 +3,9 @@ Save Folder model for tracking save folders on remote storage
 """
 from django.db import models
 from django.utils import timezone
-from SaveNLoad.models.user import SimpleUsers
+
 from SaveNLoad.models.game import Game
+from SaveNLoad.models.user import SimpleUsers
 from SaveNLoad.utils.path_utils import generate_save_folder_path
 
 

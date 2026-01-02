@@ -2,10 +2,12 @@
 Django management command to create a default admin user from environment variables
 Usage: python manage.py seed_admin
 """
+import os
+
 from django.core.management.base import BaseCommand
 from django.db import IntegrityError, OperationalError, ProgrammingError
+
 from SaveNLoad.models.user import SimpleUsers, UserRole
-import os
 
 
 class Command(BaseCommand):

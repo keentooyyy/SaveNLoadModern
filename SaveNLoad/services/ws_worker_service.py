@@ -1,8 +1,9 @@
 import re
 import uuid
-from django.utils import timezone
+
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.utils import timezone
 
 
 def build_worker_message(event_type, payload=None, correlation_id=None):
@@ -83,7 +84,10 @@ def send_worker_message(client_id, event_type, payload=None, correlation_id=None
 def ui_workers_group_name():
     """
     Group name for UI clients that want worker list updates.
-    
+
+    Args:
+        None
+
     Returns:
         str: Group name
     """

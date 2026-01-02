@@ -1,4 +1,7 @@
+import os
+
 from django.utils import timezone
+
 from SaveNLoad.services.redis_operation_service import (
     complete_operation as redis_complete_operation,
     fail_operation as redis_fail_operation,
@@ -7,7 +10,6 @@ from SaveNLoad.services.redis_operation_service import (
     get_operations_by_user,
 )
 from SaveNLoad.utils.string_utils import transform_path_error_message
-import os
 
 
 def process_operation_completion(operation_id, payload):

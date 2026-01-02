@@ -1,12 +1,14 @@
 """
 Password Reset OTP model for storing one-time passwords
 """
+import secrets
+from datetime import timedelta
+
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
+
 from SaveNLoad.models.user import SimpleUsers
-import secrets
-from datetime import timedelta
 
 
 class PasswordResetOTP(models.Model):
