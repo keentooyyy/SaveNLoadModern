@@ -19,30 +19,49 @@ def login_required(view_func):
     
     Note: All session validation, user_id validation, and database checks
     are handled by get_current_user() to avoid code duplication.
+
+    Args:
+        view_func: View function to wrap.
+
+    Returns:
+        Wrapped view function.
     """
+
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
+        """
+        Enforce authentication and attach user to the request.
+
+        Args:
+            request: Django request object.
+            *args: Positional arguments forwarded to the view.
+            **kwargs: Keyword arguments forwarded to the view.
+
+        Returns:
+            HttpResponse from the wrapped view or redirect/JsonResponse on failure.
+        """
         # Check if this is an AJAX request
         # Check multiple indicators to reliably detect AJAX requests
         is_ajax = (
-            request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
-            request.META.get('HTTP_CONTENT_TYPE', '').startswith('application/json') or
-            request.META.get('HTTP_ACCEPT', '').startswith('application/json') or
-            request.path.startswith('/api/')
+                request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
+                request.META.get('HTTP_CONTENT_TYPE', '').startswith('application/json') or
+                request.META.get('HTTP_ACCEPT', '').startswith('application/json') or
+                request.path.startswith('/api/')
         )
-        
+
         # Use get_current_user() to handle all validation logic
         user = get_current_user(request)
-        
+
         if not user:
             # User not authenticated - return appropriate response
             if is_ajax:
                 return JsonResponse({'error': 'Not authenticated. Please log in.', 'requires_login': True}, status=401)
             return redirect(reverse('SaveNLoad:login'))
-        
+
         # User is authenticated - attach to request and proceed
         request.user = user
         return view_func(request, *args, **kwargs)
+
     return wrapper
 
 
@@ -50,12 +69,30 @@ def client_worker_required(view_func):
     """
     Decorator to ensure client worker is connected before allowing access.
     Checks if the current user owns any active workers.
+
+    Args:
+        view_func: View function to wrap.
+
+    Returns:
+        Wrapped view function.
     """
+
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
+        """
+        Enforce worker availability before proceeding.
+
+        Args:
+            request: Django request object.
+            *args: Positional arguments forwarded to the view.
+            **kwargs: Keyword arguments forwarded to the view.
+
+        Returns:
+            HttpResponse from the wrapped view or redirect/JsonResponse on failure.
+        """
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or \
                   request.META.get('HTTP_CONTENT_TYPE', '').startswith('application/json')
-        
+
         # Check authentication first
         user = get_current_user(request)
         if not user:
@@ -65,27 +102,25 @@ def client_worker_required(view_func):
                     'requires_login': True
                 }, status=401)
             return redirect(reverse('SaveNLoad:login'))
-        
+
         # Check for active worker owned by this user
         # 6-second timeout matches is_online default
         # Check if user has any online workers
         worker_ids = get_user_workers(user.id)
         has_worker = len(worker_ids) > 0
-        
+
         if not has_worker:
-                if is_ajax:
-                    return JsonResponse({
-                        'error': 'Client worker not connected. Please ensure the client worker is running and claimed.',
-                        'requires_worker': True
-                    }, status=503)
+            if is_ajax:
+                return JsonResponse({
+                    'error': 'Client worker not connected. Please ensure the client worker is running and claimed.',
+                    'requires_worker': True
+                }, status=503)
 
-                return redirect(reverse('worker_required'))
-        
+            return redirect(reverse('worker_required'))
+
         return view_func(request, *args, **kwargs)
+
     return wrapper
-
-
-
 
 
 def get_current_user(request):
@@ -113,13 +148,13 @@ def get_current_user(request):
     # Check if session exists
     if not hasattr(request, 'session'):
         return None
-    
+
     # Get user_id from session
     user_id = request.session.get('user_id')
-    
+
     if not user_id:
         return None
-    
+
     # Validate user_id is a valid integer (prevent type confusion attacks)
     try:
         user_id = int(user_id)
@@ -127,12 +162,12 @@ def get_current_user(request):
         # Invalid user_id type - clear session and return None
         request.session.flush()
         return None
-    
+
     # Validate user_id is positive (prevent negative IDs or zero)
     if user_id <= 0:
         request.session.flush()
         return None
-    
+
     # Get user from database - verify it still exists
     try:
         user = SimpleUsers.objects.get(id=user_id)

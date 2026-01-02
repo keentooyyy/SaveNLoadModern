@@ -21,7 +21,17 @@ def sort_by_field(items: list, field: str, reverse: bool = False, case_insensiti
     Returns:
         Sorted list (stable sort - items with equal primary values maintain consistent order)
     """
+    # Use a stable tuple key to preserve consistent ordering.
     def get_sort_key(item):
+        """
+        Build a multi-key tuple for stable sorting.
+
+        Args:
+            item: Dict or object to sort.
+
+        Returns:
+            Tuple of (primary_value, secondary_value).
+        """
         # Primary sort value
         if isinstance(item, dict):
             primary_value = item.get(field)
@@ -65,6 +75,15 @@ def sort_by_dict_lookup(items: list, lookup_dict: dict, key_func=None, reverse: 
     """
     if key_func is None:
         def key_func(item):
+            """
+            Default key selector for lookup_dict (id field).
+
+            Args:
+                item: Dict or object to inspect.
+
+            Returns:
+                Item identifier used as lookup key.
+            """
             if isinstance(item, dict):
                 return item.get('id')
             else:
@@ -73,6 +92,15 @@ def sort_by_dict_lookup(items: list, lookup_dict: dict, key_func=None, reverse: 
     # Use tuple for multi-key sorting: (lookup_value, name)
     # This ensures stable sorting when lookup values are equal
     def get_sort_key(item):
+        """
+        Build a multi-key tuple for stable sorting.
+
+        Args:
+            item: Dict or object to sort.
+
+        Returns:
+            Tuple of (lookup_value, secondary_value).
+        """
         lookup_value = lookup_dict.get(key_func(item))
         # Use title/name as secondary sort for stability (prefer 'title', fallback to 'name')
         if isinstance(item, dict):
@@ -109,7 +137,16 @@ def filter_none_values(items: list, field: str = None):
 
 
 def _get_field_value(item, field: str):
-    """Helper to get field value from dict or object"""
+    """
+    Helper to get field value from dict or object.
+
+    Args:
+        item: Dict or object to inspect.
+        field: Field name to retrieve.
+
+    Returns:
+        Field value or None.
+    """
     if isinstance(item, dict):
         return item.get(field)
     else:

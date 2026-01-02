@@ -25,7 +25,10 @@ class WorkerConsumer(JsonWebsocketConsumer):
     def connect(self):
         """
         Handle WS connect and register worker into a group.
-        
+
+        Args:
+            None
+
         Returns:
             None
         """
@@ -191,9 +194,12 @@ class WorkerConsumer(JsonWebsocketConsumer):
     def _get_token(self):
         """
         Extract WS auth token from the query string.
-        
+
+        Args:
+            None
+
         Returns:
-            str or None
+            Token string or None.
         """
         query_string = self.scope.get('query_string', b'')
         try:

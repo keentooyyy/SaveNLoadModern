@@ -8,6 +8,15 @@ class SavenloadConfig(AppConfig):
     _cleanup_lock = threading.Lock()
 
     def ready(self):
+        """
+        Start background listener for Redis keyspace notifications.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         # Start background thread to listen for Redis keyspace notifications
         # Real-time cleanup: when worker heartbeat expires, automatically unclaim the worker
         with self._cleanup_lock:
@@ -16,7 +25,15 @@ class SavenloadConfig(AppConfig):
             self._cleanup_thread_started = True
             
             def realtime_cleanup_listener():
-                """Background thread that listens for Redis keyspace notifications for real-time cleanup"""
+                """
+                Listen for Redis keyspace events to unclaim offline workers.
+
+                Args:
+                    None
+
+                Returns:
+                    None
+                """
                 from SaveNLoad.services.redis_worker_service import unclaim_worker
                 from SaveNLoad.utils.redis_client import get_redis_client
                 import redis

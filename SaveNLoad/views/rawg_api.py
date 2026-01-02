@@ -9,6 +9,15 @@ RAWG_BASE_URL = "https://api.rawg.io/api/games"
 
 
 def _get_rawg_api_key():
+    """
+    Fetch the RAWG API key from environment variables.
+
+    Args:
+        None
+
+    Returns:
+        API key string or None.
+    """
     api_key = get_env_with_default('RAWG')
     if not api_key:
         print("RAWG API key not found. Please set the RAWG environment variable.")
@@ -17,6 +26,16 @@ def _get_rawg_api_key():
 
 
 def _fetch_rawg_data(params, context_label):
+    """
+    Execute a RAWG API request and return the parsed JSON payload.
+
+    Args:
+        params: Query parameters dict.
+        context_label: Label used in error messages.
+
+    Returns:
+        Parsed JSON dict or None on error.
+    """
     try:
         response = requests.get(RAWG_BASE_URL, params=params, timeout=10)
         response.raise_for_status()
@@ -37,6 +56,12 @@ def get_popular_games(limit: int = 10) -> List[Dict]:
     Fetch popular games from RAWG API.
     Returns a list of games with title and cover image.
     Requires RAWG API key in RAWG environment variable.
+
+    Args:
+        limit: Max number of games to return.
+
+    Returns:
+        List of game dicts.
     """
     api_key = _get_rawg_api_key()
     if not api_key:
@@ -81,6 +106,12 @@ def search_game(query: str) -> Optional[Dict]:
     Search for a specific game by name.
     Returns the best matching game with title and cover image.
     Requires RAWG API key in RAWG environment variable.
+
+    Args:
+        query: Game title query string.
+
+    Returns:
+        Game dict or None.
     """
     api_key = _get_rawg_api_key()
     if not api_key:
@@ -118,6 +149,13 @@ def search_games(query: str, limit: int = 10) -> List[Dict]:
     Search RAWG for multiple games by name.
     Returns a list of base games (no DLCs) with id, title, and image.
     Requires RAWG API key in RAWG environment variable.
+
+    Args:
+        query: Game title query string.
+        limit: Max number of games to return.
+
+    Returns:
+        List of game dicts.
     """
     api_key = _get_rawg_api_key()
     if not api_key:
@@ -186,4 +224,3 @@ def search_games(query: str, limit: int = 10) -> List[Dict]:
             break
     
     return games
-

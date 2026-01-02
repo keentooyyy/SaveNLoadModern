@@ -17,6 +17,9 @@ def handle_http_error(e: requests.exceptions.HTTPError, api_name: str = "API") -
     Args:
         e: HTTPError exception
         api_name: Name of the API (for error messages)
+
+    Returns:
+        None
     """
     if hasattr(e, 'response') and e.response is not None:
         if e.response.status_code == 401:
@@ -38,6 +41,9 @@ def handle_request_exception(e: Exception, api_name: str = "API") -> None:
     Args:
         e: Exception
         api_name: Name of the API
+
+    Returns:
+        None
     """
     print(f"Error fetching from {api_name}: {e}")
     if hasattr(e, 'response') and e.response is not None:

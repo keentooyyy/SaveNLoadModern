@@ -12,10 +12,15 @@ _thread_local = threading.local()
 def get_redis_client():
     """
     Get Redis client instance (thread-safe, reuses connection per thread)
-    Returns: redis.Redis client instance
+
+    Args:
+        None
+
+    Returns:
+        redis.Redis client instance
     """
     if not hasattr(_thread_local, 'redis_client'):
-        # Create Redis connection
+        # Create Redis connection per thread for reuse.
         if settings.REDIS_PASSWORD:
             _thread_local.redis_client = redis.Redis(
                 host=settings.REDIS_HOST,
@@ -49,7 +54,12 @@ def get_redis_client():
 def get_redis_pubsub():
     """
     Get Redis Pub/Sub instance for subscribing to channels
-    Returns: redis.client.PubSub instance
+
+    Args:
+        None
+
+    Returns:
+        redis.client.PubSub instance
     """
     client = get_redis_client()
     return client.pubsub()

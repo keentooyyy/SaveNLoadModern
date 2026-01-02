@@ -12,6 +12,12 @@ def sanitize_username(username):
     """
     Sanitize username input to prevent XSS and injection attacks.
     Allows only alphanumeric characters, underscores, and hyphens.
+
+    Args:
+        username: Raw username string.
+
+    Returns:
+        Sanitized username or None.
     """
     if not username:
         return None
@@ -36,6 +42,12 @@ def sanitize_email(email):
     """
     Sanitize email input to prevent XSS attacks.
     Validates email format and escapes special characters.
+
+    Args:
+        email: Raw email string.
+
+    Returns:
+        Sanitized email or None.
     """
     if not email:
         return None
@@ -63,6 +75,13 @@ def sanitize_string(text, max_length=None):
     """
     Sanitize general string input to prevent XSS attacks.
     Escapes HTML special characters.
+
+    Args:
+        text: Raw text string.
+        max_length: Optional maximum length.
+
+    Returns:
+        Sanitized string or None.
     """
     if not text:
         return None
@@ -87,6 +106,12 @@ def validate_username_format(username):
     """
     Validate username format - alphanumeric, underscore, hyphen only.
     Length between 3 and 150 characters.
+
+    Args:
+        username: Username string to validate.
+
+    Returns:
+        True if valid, False otherwise.
     """
     if not username:
         return False
@@ -105,6 +130,12 @@ def validate_password_strength(password):
     """
     Validate password strength.
     Returns (is_valid, error_message)
+
+    Args:
+        password: Raw password string.
+
+    Returns:
+        Tuple of (is_valid, error_message).
     """
     if not password:
         return False, 'Password is required.'
