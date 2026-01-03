@@ -420,8 +420,9 @@ class RcloneClient:
         except OSError as e:
             return False, f"Failed to create directory: {local_dir} - {str(e)}", [], []
         
-        # Normalize remote path
+        # Normalize and build full remote path
         base_path = self._normalize_path(remote_ftp_path)
+        remote_full = self._build_remote_path(base_path)
         
         # If we need to strip path_X prefix, use temp directory workaround.
         if strip_path_prefix:
@@ -556,10 +557,8 @@ class RcloneClient:
         Returns:
             Tuple of (success, files_list, directories_list, message)
         """
-        # Normalize and build full remote path
-        normalized_path = self._normalize_path(remote_ftp_path)
-        remote_full = self._build_remote_path(normalized_path)
-        base_path = normalized_path
+        # Normalize remote path
+        base_path = self._normalize_path(remote_ftp_path)
         
         rc_success, rc_items, rc_error = self._rc_list(base_path)
         if not rc_success:
