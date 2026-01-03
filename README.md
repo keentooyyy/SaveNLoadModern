@@ -601,7 +601,7 @@ If FTP operations fail:
 5. **Check Permissions**: Verify FTP user account has Read/Write permissions on the FTP directory
 6. **Check Rclone**: Ensure `rclone.exe` is in `client_worker/rclone/` directory
 7. **Check Rclone Config**: Verify FTP remote is configured correctly using `rclone.exe config show ftp` or reconfigure with `rclone.exe config`
-8. **Test FTP Connection**: Test FTP connection manually using an FTP client or rclone command line
+8. **Test FTP Connection**: Test FTP connection manually using an FTP client or rclone rc
 9. **Check Logs**: Review client worker output for detailed errors
 
 > **Note:** FTP issues are client worker issues, not Django backend issues. The Django backend only manages the operation queue.

@@ -205,27 +205,29 @@ document.addEventListener('DOMContentLoaded', function () {
                         .map(([id, status]) => status.progress);
 
                     if (activeOperations.length > 0) {
-                        // Calculate aggregated progress
-                        let totalCurrent = 0;
-                        let totalTotal = 0;
+                        let percentSum = 0;
+                        let percentCount = 0;
                         let latestMessage = '';
 
                         activeOperations.forEach(progress => {
-                            if (progress.current !== undefined && progress.total !== undefined) {
-                                totalCurrent += progress.current || 0;
-                                totalTotal += progress.total || 0;
+                            let percent = null;
+                            if (progress.percentage !== undefined && progress.percentage !== null) {
+                                percent = progress.percentage;
+                            } else if (progress.current !== undefined && progress.total !== undefined && progress.total > 0) {
+                                percent = Math.round((progress.current / progress.total) * 100);
+                            }
+                            if (percent !== null && !Number.isNaN(percent)) {
+                                percentSum += percent;
+                                percentCount += 1;
                             }
                             if (progress.message) {
                                 latestMessage = progress.message;
                             }
                         });
 
-                        // Update progress bar with aggregated data
-                        if (totalTotal > 0) {
-                            const percentage = Math.round((totalCurrent / totalTotal) * 100);
+                        if (percentCount > 0) {
+                            const percentage = Math.round(percentSum / percentCount);
                             updateProgress({
-                                current: totalCurrent,
-                                total: totalTotal,
                                 percentage: percentage,
                                 message: latestMessage
                             });

@@ -1,20 +1,21 @@
 """
 Rclone-based File Transfer Client for SaveNLoad
-Uses rclone CLI for fast, reliable file transfers supporting multiple protocols
+Uses rclone rc API for fast, reliable file transfers supporting multiple protocols
 """
 import os
 import subprocess
-import json
 import threading
-import tempfile
 import time
-import re
+import atexit
+import requests
 from pathlib import Path
-from typing import Optional, List, Tuple, Callable
+from typing import Optional, List, Tuple, Callable, Dict, Any
 
 # Rclone configuration constants
 # Number of parallel file transfers for rclone operations
 RCLONE_TRANSFERS = 10
+RCLONE_RC_HOST = "127.0.0.1"
+RCLONE_RC_PORT = 5572
 
 
 class RcloneClient:
@@ -59,172 +60,217 @@ class RcloneClient:
             raise FileNotFoundError(f"rclone config not found at: {self.config_path}")
         
         self.remote_name = remote_name
-    
-    def _run_rclone(self, command: List[str], timeout: Optional[int] = None, silent: bool = False,
-                   progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str, str]:
-        """Run rclone command and return success, stdout, stderr
-        
-        Args:
-            command: rclone command arguments
-            timeout: Optional timeout in seconds
-            silent: If True, don't print output (still captures it)
-            progress_callback: Optional callback(current, total, message) for progress updates
+        self._rc_url = f"http://{RCLONE_RC_HOST}:{RCLONE_RC_PORT}"
+        self._rcd_process = None
+        self._rcd_owned = False
+        self._rc_ready = False
+        self._rc_lock = threading.Lock()
+        self._rc_last_error = None
 
-        Returns:
-            Tuple of (success, stdout, stderr)
-        """
-        log_file = None
+        atexit.register(self._shutdown_rcd)
+
+    def _shutdown_rcd(self):
+        """Shutdown rclone rcd if this instance started it."""
+        if not self._rcd_owned or not self._rcd_process:
+            return
         try:
-            # Create temporary log file for rclone output
-            log_fd, log_file = tempfile.mkstemp(suffix='.log', prefix='rclone_', text=True)
-            os.close(log_fd)  # Close the file descriptor, we'll open it separately for reading
-            
-            # Build full command with config and log file
-            full_cmd = [
-                str(self.rclone_exe),
-                '--config', str(self.config_path),
-                '--log-file', log_file,
-            ] + command
-            
-            # Run rclone - show stdout in real-time, use log file for completion check
-            process = subprocess.Popen(
-                full_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
-            
-            stdout_lines = []
-            last_progress = {'current': 0, 'total': 0, 'message': ''}
-            
-            def parse_progress(line: str) -> Optional[Tuple[int, int, str]]:
-                """Parse rclone progress from output line
-                
-                Args:
-                    line: Single stdout line from rclone.
+            if self._rc_ready:
+                self._rc_post("core/quit", {"exitCode": 0}, timeout=2)
+        except Exception:
+            pass
+        try:
+            if self._rcd_process.poll() is None:
+                self._rcd_process.terminate()
+        except Exception:
+            pass
 
-                Returns: (current, total, message) or None if no progress found
-                """
-                # Pattern 1: "Transferred: 105 / 109, 96%" (file count)
-                file_count_match = re.search(r'Transferred:\s+(\d+)\s+/\s+(\d+),?\s*(\d+)%?', line)
-                if file_count_match:
-                    current = int(file_count_match.group(1))
-                    total = int(file_count_match.group(2))
-                    percentage = int(file_count_match.group(3)) if file_count_match.group(3) else 0
-                    message = f"{percentage}% - {current}/{total} files"
-                    return (current, total, message)
-                
-                # Pattern 2: "Transferred: 17.725 MiB / 17.725 MiB, 100%, 2.532 MiB/s, ETA 0s" (bytes)
-                byte_match = re.search(r'Transferred:\s+[\d.]+\s+\w+\s+/\s+[\d.]+\s+\w+,\s+(\d+)%', line)
-                if byte_match:
-                    percentage = int(byte_match.group(1))
-                    # Extract speed if available
-                    speed_match = re.search(r'([\d.]+\s+\w+/s)', line)
-                    speed = speed_match.group(1) if speed_match else ''
-                    message = f"{percentage}%{f' @ {speed}' if speed else ''}"
-                    # Use percentage to estimate current/total if we don't have file count
-                    if last_progress['total'] > 0:
-                        current = int((percentage / 100) * last_progress['total'])
-                        return (current, last_progress['total'], message)
-                    else:
-                        # No file count yet, use percentage as current with 100 as total
-                        return (percentage, 100, message)
-                
-                return None
-            
-            # Read and print stdout in real-time (raw rclone output)
-            def read_stdout():
-                for line in iter(process.stdout.readline, ''):
-                    if line:
-                        line_stripped = line.rstrip()
-                        stdout_lines.append(line)
-                        
-                        # Parse progress if callback provided
-                        if progress_callback:
-                            progress = parse_progress(line_stripped)
-                            if progress:
-                                current, total, message = progress
-                                # Only update if progress changed (avoid spam)
-                                if (current != last_progress['current'] or 
-                                    total != last_progress['total'] or 
-                                    message != last_progress['message']):
-                                    last_progress['current'] = current
-                                    last_progress['total'] = total
-                                    last_progress['message'] = message
-                                    try:
-                                        progress_callback(current, total, message)
-                                    except Exception:
-                                        pass  # Don't fail on progress callback errors
-                        
-                        if line_stripped and not silent:
-                            print(f"  {line_stripped}")
-            
-            # Stream stdout in a separate thread so progress can be reported while rclone runs.
-            stdout_thread = threading.Thread(target=read_stdout, daemon=True)
-            stdout_thread.start()
-            
-            # Monitor log file for completion while process runs
-            last_position = 0
-            while process.poll() is None:
-                # Check log file for completion indicators
+    def _rc_post(self, command: str, params: Dict[str, Any], timeout: Optional[int] = None) -> Tuple[bool, Dict[str, Any], str]:
+        """Send a POST to the rclone rc endpoint."""
+        url = f"{self._rc_url}/{command.lstrip('/')}"
+        try:
+            response = requests.post(url, json=params or {}, timeout=timeout or 30)
+            if response.status_code >= 400:
                 try:
-                    with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-                        f.seek(last_position)
-                        log_content = f.read()
-                        last_position = f.tell()
-                        
-                        # Check for completion in log (rclone writes completion status to log)
-                        if log_content:
-                            # Look for common completion indicators in log
-                            log_lower = log_content.lower()
-                            if 'error' in log_lower or 'failed' in log_lower:
-                                # Error detected in log, but let process finish naturally
-                                pass
-                except (IOError, OSError):
-                    pass  # File might not be ready yet
-                
-                time.sleep(0.1)  # Small delay to avoid busy waiting
-            
-            # Wait for stdout reading thread to finish
-            stdout_thread.join(timeout=2)
-            
-            # Read final log file content to check completion status.
-            log_content = ""
-            try:
-                with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    log_content = f.read()
-            except (IOError, OSError):
-                pass
-            
-            # Wait for process to finish
-            process.wait(timeout=timeout)
-            
-            # Determine success from return code and log file
-            success = process.returncode == 0
-            
-            # Combine stdout and log content
-            all_output = ''.join(stdout_lines)
-            if log_content and log_content not in all_output:
-                all_output += log_content
-            
-            return success, all_output, ""
-            
-        except subprocess.TimeoutExpired:
-            if 'process' in locals() and process:
-                process.kill()
-                process.wait()
-            return False, ''.join(stdout_lines) if 'stdout_lines' in locals() else "", "Command timed out"
+                    error_data = response.json()
+                    return False, {}, error_data.get("error", f"RC error {response.status_code}")
+                except Exception:
+                    return False, {}, f"RC error {response.status_code}: {response.text}"
+            if not response.text:
+                return True, {}, ""
+            return True, response.json(), ""
         except Exception as e:
-            return False, "", str(e)
-        finally:
-            # Clean up log file
-            if log_file and os.path.exists(log_file):
+            return False, {}, str(e)
+
+    def _rc_ping(self) -> bool:
+        """Check if the rc endpoint is alive."""
+        success, _, _ = self._rc_post("rc/noop", {}, timeout=2)
+        return success
+
+    def _ensure_rcd(self) -> bool:
+        """Ensure rclone rcd is running and reachable."""
+        if self._rc_ready:
+            return True
+
+        with self._rc_lock:
+            if self._rc_ready:
+                return True
+
+            if self._rc_ping():
+                self._rc_ready = True
+                return True
+
+            if self._rcd_process and self._rcd_process.poll() is None:
+                if self._rc_ping():
+                    self._rc_ready = True
+                    return True
+
+            command = [
+                str(self.rclone_exe),
+                'rcd',
+                '--config', str(self.config_path),
+                '--rc-addr', f"{RCLONE_RC_HOST}:{RCLONE_RC_PORT}",
+                '--rc-no-auth',
+            ]
+            try:
+                self._rcd_process = subprocess.Popen(
+                    command,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                self._rcd_owned = True
+            except Exception as e:
+                self._rc_last_error = f"Failed to start rclone rcd: {e}"
+                return False
+
+            for _ in range(50):
+                if self._rc_ping():
+                    self._rc_ready = True
+                    return True
+                time.sleep(0.1)
+
+            self._rc_last_error = "Timed out waiting for rclone rcd to start"
+            return False
+
+    def _rc_call(self, command: str, params: Dict[str, Any], timeout: Optional[int] = None) -> Tuple[bool, Dict[str, Any], str]:
+        """Call an rclone rc command."""
+        if not self._ensure_rcd():
+            error = self._rc_last_error or "RC server is not available"
+            return False, {}, error
+        return self._rc_post(command, params, timeout=timeout)
+
+    def _format_bytes(self, value: float) -> str:
+        """Format bytes into a human-readable string."""
+        units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"]
+        size = float(value)
+        for unit in units:
+            if size < 1024 or unit == units[-1]:
+                return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} {unit}"
+            size /= 1024
+        return f"{int(value)} B"
+
+    def _build_progress(self, stats: Dict[str, Any]) -> Tuple[int, int, str]:
+        """Convert rc stats to a progress tuple."""
+        transfers = int(stats.get("transfers") or 0)
+        total_transfers = int(stats.get("totalTransfers") or 0)
+        bytes_done = int(stats.get("bytes") or 0)
+        total_bytes = int(stats.get("totalBytes") or 0)
+        speed = float(stats.get("speed") or 0)
+
+        if total_transfers > 0:
+            percent = int((transfers / total_transfers) * 100) if total_transfers else 0
+            message = f"{percent}% - {transfers}/{total_transfers} files"
+            if speed:
+                message += f" @ {self._format_bytes(speed)}/s"
+            return transfers, total_transfers, message
+
+        if total_bytes > 0:
+            percent = int((bytes_done / total_bytes) * 100) if total_bytes else 0
+            message = f"{percent}% - {self._format_bytes(bytes_done)}/{self._format_bytes(total_bytes)}"
+            if speed:
+                message += f" @ {self._format_bytes(speed)}/s"
+            return bytes_done, total_bytes, message
+
+        message = f"{transfers} files"
+        if speed:
+            message += f" @ {self._format_bytes(speed)}/s"
+        return transfers, total_transfers, message
+
+    def _run_rc_job(self, command: str, params: Dict[str, Any], timeout: Optional[int],
+                    progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str, Dict[str, Any]]:
+        """Run an rc command as an async job and poll for completion."""
+        payload = dict(params or {})
+        payload["_async"] = True
+
+        success, data, error = self._rc_call(command, payload, timeout=10)
+        if not success:
+            return False, error, {}
+
+        job_id = data.get("jobid")
+        if job_id is None:
+            return False, "RC did not return a job id", {}
+
+        group_name = f"job/{job_id}"
+        start_time = time.time()
+        last_progress = {"current": None, "total": None, "message": None}
+        last_stats: Dict[str, Any] = {}
+
+        while True:
+            status_success, status_data, status_error = self._rc_call("job/status", {"jobid": job_id}, timeout=10)
+            if not status_success:
+                return False, status_error, last_stats
+
+            stats_success, stats_data, _ = self._rc_call("core/stats", {"group": group_name, "short": True}, timeout=10)
+            if stats_success:
+                last_stats = stats_data
+                if progress_callback:
+                    current, total, message = self._build_progress(stats_data)
+                    if (current != last_progress["current"] or
+                        total != last_progress["total"] or
+                        message != last_progress["message"]):
+                        last_progress["current"] = current
+                        last_progress["total"] = total
+                        last_progress["message"] = message
+                        try:
+                            progress_callback(current, total, message)
+                        except Exception:
+                            pass
+
+            if status_data.get("finished"):
+                error_text = status_data.get("error") or ""
+                success_flag = bool(status_data.get("success"))
                 try:
-                    os.remove(log_file)
+                    self._rc_call("core/stats-delete", {"group": group_name}, timeout=5)
                 except Exception:
                     pass
+                return success_flag, error_text, last_stats
+
+            if timeout is not None and (time.time() - start_time) > timeout:
+                return False, "Command timed out", last_stats
+
+            time.sleep(0.2)
+
+    def _split_local_path(self, path: str) -> Tuple[str, str]:
+        """Split a local path into (fs, remote) for rc file operations."""
+        path_obj = Path(path).resolve()
+        anchor = path_obj.anchor or os.sep
+        try:
+            relative = path_obj.relative_to(anchor).as_posix()
+        except ValueError:
+            relative = path_obj.name
+        return anchor, relative
+
+    def _rc_list(self, remote_path: str) -> Tuple[bool, List[Dict[str, Any]], str]:
+        """List a remote path using rc operations/list."""
+        params = {
+            "fs": f"{self.remote_name}:",
+            "remote": remote_path,
+            "opt": {"recurse": True},
+        }
+        success, data, error = self._rc_call("operations/list", params, timeout=60)
+        if not success:
+            return False, [], error
+        return True, data.get("list", []) or [], ""
+    
     
     def _normalize_path(self, path: str) -> str:
         """
@@ -257,89 +303,6 @@ class RcloneClient:
         else:
             return f"{self.remote_name}:"
     
-    def _parse_bytes_transferred(self, output: str) -> int:
-        """Parse total bytes transferred from rclone output
-        
-        Looks for patterns like:
-        - "Transferred: 0 B / 0 B" (empty)
-        - "Transferred: 17.725 MiB / 17.725 MiB" (with data)
-        - "Transferred: 1.234 KiB / 1.234 KiB"
-        
-        Args:
-            output: Combined rclone output text.
-
-        Returns:
-            Total bytes transferred (0 if empty or not found)
-        """
-        if not output:
-            return 0
-        
-        # Pattern: "Transferred: X.XXX Unit / Y.YYY Unit"
-        # We want the second value (total transferred)
-        pattern = r'Transferred:\s+[\d.]+\s+(\w+)\s+/\s+([\d.]+)\s+(\w+)'
-        matches = re.findall(pattern, output)
-        
-        if not matches:
-            # Try simpler pattern: "Transferred: 0 B / 0 B"
-            simple_pattern = r'Transferred:\s+(\d+)\s+B\s+/\s+(\d+)\s+B'
-            simple_matches = re.findall(simple_pattern, output)
-            if simple_matches:
-                # Return the second value (total)
-                return int(simple_matches[-1][1])
-            return 0
-        
-        # Get the last match (most recent stats)
-        last_match = matches[-1]
-        unit = last_match[2].upper()
-        value = float(last_match[1])
-        
-        # Convert to bytes
-        multipliers = {
-            'B': 1,
-            'KB': 1024,
-            'KIB': 1024,
-            'MB': 1024 * 1024,
-            'MIB': 1024 * 1024,
-            'GB': 1024 * 1024 * 1024,
-            'GIB': 1024 * 1024 * 1024,
-        }
-        
-        multiplier = multipliers.get(unit, 1)
-        return int(value * multiplier)
-    
-    def _parse_files_transferred(self, output: str) -> int:
-        """Parse total files transferred from rclone output
-        
-        Looks for patterns like:
-        - "Transferred: 1 / 1, 100%" (file count)
-        - "Transferred: 5 / 10, 50%" (file count)
-        
-        This is different from bytes transferred - rclone shows both:
-        - "Transferred: 0 B / 0 B" (bytes)
-        - "Transferred: 1 / 1, 100%" (files)
-        
-        Args:
-            output: Combined rclone output text.
-
-        Returns:
-            Total files transferred (0 if not found)
-        """
-        if not output:
-            return 0
-        
-        # Pattern: "Transferred: X / Y, Z%" where X and Y are integers (file count)
-        # This pattern appears when rclone shows file transfer count (not bytes)
-        pattern = r'Transferred:\s+(\d+)\s+/\s+(\d+),?\s*\d*%?'
-        matches = re.findall(pattern, output)
-        
-        if not matches:
-            return 0
-        
-        # Get the last match (most recent stats) - return the first number (files transferred)
-        # The second number is total files checked/processed
-        last_match = matches[-1]
-        files_transferred = int(last_match[0])
-        return files_transferred
     
     def upload_directory(self, local_dir: str, remote_ftp_path: str,
                         transfers: int = RCLONE_TRANSFERS, progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str, List[str], List[dict], int, int]:
@@ -362,36 +325,29 @@ class RcloneClient:
         normalized_path = self._normalize_path(remote_ftp_path)
         remote_full = self._build_remote_path(normalized_path)
         
-        # Let rclone handle everything - parallel transfers, retries, resume
-        # Note: rclone 'copy' command always overwrites existing files (default behavior)
-        # This is desired for save games - we want the latest save to replace the old one
-        command = [
-            'copy',
-            local_dir,
-            remote_full,
-            '--transfers', str(transfers),
-            '--checkers', str(transfers * 2),  # More checkers for faster file discovery
-            '--stats', '1s',  # Show stats every second
-            '--progress',  # Show detailed progress for each file
-            '--create-empty-src-dirs',  # Copy empty directories from source
-        ]
-        
-        success, stdout, stderr = self._run_rclone(
-            command,
+        # Use rc API for progress and stats.
+        rc_success, rc_error, rc_stats = self._run_rc_job(
+            "sync/copy",
+            {
+                "srcFs": local_dir,
+                "dstFs": remote_full,
+                "createEmptySrcDirs": True,
+                "_config": {
+                    "Transfers": transfers,
+                    "Checkers": transfers * 2,
+                }
+            },
             timeout=3600,
             progress_callback=progress_callback
         )
-        
-        # Parse bytes and files transferred from output
-        bytes_transferred = self._parse_bytes_transferred(stdout)
-        files_transferred = self._parse_files_transferred(stdout)
-        
-        if success:
-            # Parse output to get file list (rclone doesn't provide this directly, but we can infer from stats)
+
+        if rc_success:
+            bytes_transferred = int(rc_stats.get("bytes") or 0)
+            files_transferred = int(rc_stats.get("transfers") or 0)
             return True, "Directory uploaded successfully", [], [], bytes_transferred, files_transferred
-        else:
-            error_msg = stderr.strip() or stdout.strip() or "Upload failed"
-            return False, error_msg, [], [], bytes_transferred, files_transferred
+        
+        error_msg = rc_error or "Upload failed"
+        return False, error_msg, [], [], 0, 0
     
     def upload_save(self, local_file_path: str, remote_ftp_path: str,
                    remote_filename: Optional[str] = None,
@@ -417,33 +373,29 @@ class RcloneClient:
         # Build complete remote path with filename
         normalized_path = self._normalize_path(remote_ftp_path)
         remote_path_with_file = f"{normalized_path}/{remote_filename}"
-        remote_full = self._build_remote_path(remote_path_with_file)
-        
-        # Let rclone handle everything - retries, resume, connection management
-        # Note: rclone 'copy' command always overwrites existing files (default behavior)
-        # This is desired for save games - we want the latest save to replace the old one
-        command = [
-            'copy',
-            local_file_path,
-            remote_full,
-            '--stats', '1s',  # Show stats every second
-            '--progress',  # Show detailed progress
-        ]
-        
-        success, stdout, stderr = self._run_rclone(
-            command,
+        # Use rc API for progress and stats.
+        src_fs, src_remote = self._split_local_path(local_file_path)
+        dst_fs = f"{self.remote_name}:"
+        dst_remote = self._normalize_path(remote_path_with_file)
+
+        rc_success, rc_error, rc_stats = self._run_rc_job(
+            "operations/copyfile",
+            {
+                "srcFs": src_fs,
+                "srcRemote": src_remote,
+                "dstFs": dst_fs,
+                "dstRemote": dst_remote,
+            },
             timeout=600,
             progress_callback=progress_callback
         )
-        
-        # Parse bytes transferred from output
-        bytes_transferred = self._parse_bytes_transferred(stdout)
-        
-        if success:
+
+        if rc_success:
+            bytes_transferred = int(rc_stats.get("bytes") or 0)
             return True, "File uploaded successfully", bytes_transferred
-        else:
-            error_msg = stderr.strip() or stdout.strip() or "Upload failed"
-            return False, error_msg, bytes_transferred
+        
+        error_msg = rc_error or "Upload failed"
+        return False, error_msg, 0
     
     
     def download_directory(self, remote_ftp_path: str, local_dir: str,
@@ -468,10 +420,8 @@ class RcloneClient:
         except OSError as e:
             return False, f"Failed to create directory: {local_dir} - {str(e)}", [], []
         
-        # Normalize and build full remote path
-        normalized_path = self._normalize_path(remote_ftp_path)
-        remote_full = self._build_remote_path(normalized_path)
-        base_path = normalized_path
+        # Normalize remote path
+        base_path = self._normalize_path(remote_ftp_path)
         
         # If we need to strip path_X prefix, use temp directory workaround.
         if strip_path_prefix:
@@ -486,27 +436,25 @@ class RcloneClient:
             
             try:
                 # Copy directory directly (no wildcard) - this will create path_X subfolder in temp
-                temp_command = [
-                    'copy',
-                    remote_full,  # Copy path_X directory
-                    temp_dir,     # To temp directory
-                    '--transfers', str(transfers),
-                    '--checkers', str(transfers * 2),
-                    '--stats', '1s',
-                    '--progress',
-                    '--create-empty-src-dirs',
-                ]
-                
-                success, stdout, stderr = self._run_rclone(
-                    temp_command,
+                rc_success, rc_error, _ = self._run_rc_job(
+                    "sync/copy",
+                    {
+                        "srcFs": remote_full,
+                        "dstFs": temp_dir,
+                        "createEmptySrcDirs": True,
+                        "_config": {
+                            "Transfers": transfers,
+                            "Checkers": transfers * 2,
+                        }
+                    },
                     timeout=3600,
                     progress_callback=progress_callback
                 )
                 
-                if not success:
+                if not rc_success:
                     import shutil
                     shutil.rmtree(temp_dir, ignore_errors=True)
-                    error_msg = stderr.strip() or stdout.strip() or "Download failed"
+                    error_msg = rc_error or "Download failed"
                     return False, error_msg, [], []
                 
                 # Step 2: Move files from temp/path_X/ to local_dir/
@@ -577,27 +525,25 @@ class RcloneClient:
                 return False, f"Error during multi-path copy: {str(e)}", [], []
         else:
             # Normal copy for single paths
-            command = [
-                'copy',
-                remote_full,
-                local_dir,
-                '--transfers', str(transfers),
-                '--checkers', str(transfers * 2),
-                '--stats', '1s',
-                '--progress',
-                '--create-empty-src-dirs',
-            ]
-            
-            success, stdout, stderr = self._run_rclone(
-                command,
+            rc_success, rc_error, _ = self._run_rc_job(
+                "sync/copy",
+                {
+                    "srcFs": remote_full,
+                    "dstFs": local_dir,
+                    "createEmptySrcDirs": True,
+                    "_config": {
+                        "Transfers": transfers,
+                        "Checkers": transfers * 2,
+                    }
+                },
                 timeout=3600,
                 progress_callback=progress_callback
             )
             
-            if success:
+            if rc_success:
                 return True, "Directory downloaded successfully", [], []
             else:
-                error_msg = stderr.strip() or stdout.strip() or "Download failed"
+                error_msg = rc_error or "Download failed"
                 return False, error_msg, [], []
     
     def list_saves(self, remote_ftp_path: str) -> Tuple[bool, List[dict], List[str], str]:
@@ -615,28 +561,11 @@ class RcloneClient:
         remote_full = self._build_remote_path(normalized_path)
         base_path = normalized_path
         
-        # Use lsjson for structured output
-        command = [
-            'lsjson',
-            remote_full,
-            '--recursive',
-        ]
-        
-        success, stdout, stderr = self._run_rclone(command, timeout=60)
-        
-        if not success:
-            # Try without recursive to see if path exists
-            check_cmd = ['lsjson', remote_full]
-            check_success, _, _ = self._run_rclone(check_cmd, timeout=30)
-            if not check_success:
-                return False, [], [], f"Path not found: {base_path}"
-            return False, [], [], f"List failed: {stderr.strip() or 'Unknown error'}"
-        
-        # Parse JSON output
-        try:
-            items = json.loads(stdout) if stdout.strip() else []
-        except json.JSONDecodeError:
-            return False, [], [], "Failed to parse rclone output"
+        rc_success, rc_items, rc_error = self._rc_list(base_path)
+        if not rc_success:
+            error_msg = rc_error or f"Path not found: {base_path}"
+            return False, [], [], error_msg
+        items = rc_items
         
         files = []
         directories = set()
@@ -681,18 +610,19 @@ class RcloneClient:
         Returns:
             Tuple of (success, message)
         """
-        remote_full = self._build_remote_path(remote_path)
-        command = ['deletefile', remote_full]
+        normalized_path = self._normalize_path(remote_path)
+        rc_success, _, rc_error = self._rc_call(
+            "operations/deletefile",
+            {"fs": f"{self.remote_name}:", "remote": normalized_path},
+            timeout=60
+        )
         
-        success, stdout, stderr = self._run_rclone(command, timeout=60)
-        
-        if success:
+        if rc_success:
             return True, "File deleted"
-        else:
-            error_msg = stderr.strip() or stdout.strip() or "Delete failed"
-            if 'not found' in error_msg.lower() or 'does not exist' in error_msg.lower():
-                return True, "File already deleted"
-            return False, error_msg
+        error_msg = rc_error or "Delete failed"
+        if 'not found' in error_msg.lower() or 'does not exist' in error_msg.lower():
+            return True, "File already deleted"
+        return False, error_msg
     
     def delete_directory(self, remote_path: str) -> Tuple[bool, str]:
         """
@@ -709,45 +639,32 @@ class RcloneClient:
         Returns:
             Tuple of (success, message)
         """
-        remote_full = self._build_remote_path(remote_path)
+        normalized_path = self._normalize_path(remote_path)
         
-        # Step 1: Try purge first (deletes directory and all contents)
-        command = ['purge', remote_full]
-        success, stdout, stderr = self._run_rclone(command, timeout=300, silent=True)
+        rc_success, rc_error, _ = self._run_rc_job(
+            "operations/purge",
+            {"fs": f"{self.remote_name}:", "remote": normalized_path},
+            timeout=300
+        )
         
-        if success:
-            # Step 2: Try rmdir to ensure empty directory is removed (some FTP servers need this)
-            # rmdir will fail if directory has contents, but succeed if it's empty or doesn't exist
-            # This cleans up any empty folders that purge might have left behind
-            rmdir_command = ['rmdir', remote_full]
-            rmdir_success, rmdir_stdout, rmdir_stderr = self._run_rclone(rmdir_command, timeout=60, silent=True)
-            
-            # rmdir failure is OK if it's because directory doesn't exist or has contents
-            # We only care if purge succeeded - rmdir is just cleanup
+        if rc_success:
+            self._rc_call("operations/rmdir", {"fs": f"{self.remote_name}:", "remote": normalized_path}, timeout=60)
             return True, "Directory deleted"
-        else:
-            error_text = (stderr + stdout).lower()
-            # Check for any variation of "not found" or "does not exist" errors
-            not_found_patterns = [
-                'not found',
-                'does not exist',
-                'directory not found',
-                'file does not exist',
-                'failed to list',
-                'error listing'
-            ]
-            if any(pattern in error_text for pattern in not_found_patterns):
-                # Directory doesn't exist - try rmdir anyway to clean up any empty parent dirs
-                rmdir_command = ['rmdir', remote_full]
-                self._run_rclone(rmdir_command, timeout=60, silent=True)
-                return True, "Directory already deleted"
-            
-            # Not a "not found" error, show the actual output
-            for line in stdout.split('\n'):
-                if line.strip():
-                    print(f"  {line.strip()}")
-            error_msg = stderr.strip() or stdout.strip() or "Delete failed"
-            return False, error_msg
+        
+        error_text = (rc_error or "").lower()
+        not_found_patterns = [
+            'not found',
+            'does not exist',
+            'directory not found',
+            'file does not exist',
+            'failed to list',
+            'error listing'
+        ]
+        if any(pattern in error_text for pattern in not_found_patterns):
+            self._rc_call("operations/rmdir", {"fs": f"{self.remote_name}:", "remote": normalized_path}, timeout=60)
+            return True, "Directory already deleted"
+        error_msg = rc_error or "Delete failed"
+        return False, error_msg
     
     def check_status(self) -> Tuple[bool, str]:
         """
@@ -765,26 +682,14 @@ class RcloneClient:
             Tuple of (success, message)
         """
         try:
-            # Test connection by listing root directory (quick operation)
-            # Use a short timeout since this is just a status check
-            remote_full = self._build_remote_path('')
-            command = ['lsd', remote_full]
-            
-            success, stdout, stderr = self._run_rclone(command, timeout=10, silent=True)
-            
-            if success:
+            rc_success, _, rc_error = self._rc_call(
+                "operations/fsinfo",
+                {"fs": f"{self.remote_name}:"},
+                timeout=10
+            )
+            if rc_success:
                 return True, f"Rclone connected ({self.remote_name})"
-            else:
-                # Check if it's a connection error or just empty directory
-                error_text = (stderr + stdout).lower()
-                if 'connection' in error_text or 'timeout' in error_text or 'refused' in error_text:
-                    return False, f"Rclone connection failed ({self.remote_name})"
-                elif 'not found' in error_text or 'does not exist' in error_text:
-                    # Directory doesn't exist but connection works
-                    return True, f"Rclone connected ({self.remote_name})"
-                else:
-                    # Other error, but connection might still work
-                    return True, f"Rclone connected ({self.remote_name})"
+            return False, rc_error or f"Rclone connection failed ({self.remote_name})"
         except Exception as e:
             return False, f"Rclone status check failed: {str(e)}"
 
