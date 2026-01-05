@@ -212,6 +212,17 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true;
     resetStatus();
     try {
+      const clientId = window.localStorage.getItem('savenload_client_id');
+      if (clientId) {
+        try {
+          await apiPost('/api/client/unclaim/', { client_id: clientId });
+          window.localStorage.removeItem('savenload_client_id');
+        } catch (err: any) {
+          error.value = err?.message || 'Failed to unclaim worker. Please try again.';
+          notify.error(error.value);
+          throw err;
+        }
+      }
       const data = await apiPost('/auth/logout', {});
       user.value = null;
       message.value = data?.message || 'Logged out.';

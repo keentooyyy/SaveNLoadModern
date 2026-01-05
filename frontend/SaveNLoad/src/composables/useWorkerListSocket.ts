@@ -2,6 +2,8 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { buildWsUrl } from '@/utils/ws';
 
+const API_BASE = import.meta.env.VITE_API_BASE;
+
 export type WorkerSnapshot = {
   client_id: string;
   claimed: boolean;
@@ -30,8 +32,26 @@ export const useWorkerListSocket = (options: WorkerListOptions = {}) => {
   let socket: WebSocket | null = null;
   let reconnectTimer: number | null = null;
   let hasOpened = false;
+  let shouldReconnect = true;
+
+  const fetchWsToken = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/auth/ws-token/`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        return null;
+      }
+      return data?.token || null;
+    } catch {
+      return null;
+    }
+  };
 
   const closeSocket = () => {
+    shouldReconnect = false;
     if (reconnectTimer) {
       window.clearTimeout(reconnectTimer);
       reconnectTimer = null;
@@ -53,9 +73,14 @@ export const useWorkerListSocket = (options: WorkerListOptions = {}) => {
     }
   };
 
-  const connect = () => {
+  const connect = async () => {
     if (!window.WebSocket) {
       supportsWebSocket.value = false;
+      return;
+    }
+
+    const token = await fetchWsToken();
+    if (!token) {
       return;
     }
 
@@ -64,7 +89,7 @@ export const useWorkerListSocket = (options: WorkerListOptions = {}) => {
       reconnectTimer = null;
     }
 
-    const wsUrl = buildWsUrl('/ws/ui/workers/');
+    const wsUrl = buildWsUrl('/ws/ui/workers/', { token });
     socket = new WebSocket(wsUrl);
 
     socket.addEventListener('open', () => {
@@ -80,7 +105,9 @@ export const useWorkerListSocket = (options: WorkerListOptions = {}) => {
         window.location.reload();
         return;
       }
-      reconnectTimer = window.setTimeout(connect, 3000);
+      if (shouldReconnect) {
+        reconnectTimer = window.setTimeout(connect, 3000);
+      }
     });
 
     socket.addEventListener('error', error => {

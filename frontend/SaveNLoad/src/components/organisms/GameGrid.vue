@@ -35,7 +35,15 @@
       </div>
     </div>
     <div id="availableGamesContainer" class="row g-4">
+      <div v-if="loading" class="col-12">
+        <div class="d-flex justify-content-center py-5">
+          <div class="spinner-border text-light" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      </div>
       <div
+        v-else
         v-for="game in games"
         :key="game.id"
         class="col-12 col-sm-6 col-md-4 col-lg-3 col-xxl-2 game-item"
@@ -45,11 +53,16 @@
           :footer="game.footer"
           :image="game.image"
           card-height="320px"
+          card-padding="1rem"
+          title-size="1rem"
+          title-margin-bottom="0.25rem"
+          footer-size="0.875rem"
           title-tag="h5"
           :show-actions="true"
+          @click="emit('open', game)"
         />
       </div>
-      <div v-if="!games.length" class="col-12">
+      <div v-if="!loading && !games.length" class="col-12">
         <div class="text-center py-5">
           <p class="text-white-50 mb-2">No games available</p>
         </div>
@@ -64,10 +77,11 @@ import GameCard from '@/components/molecules/GameCard.vue';
 import TextInput from '@/components/atoms/TextInput.vue';
 
 defineProps({
-  games: { type: Array, default: () => [] }
+  games: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false }
 });
 
-const emit = defineEmits(['search']);
+const emit = defineEmits(['search', 'open']);
 const searchQuery = defineModel<string>('search', { default: '' });
 const sortBy = defineModel<string>('sort', { default: 'name_asc' });
 
@@ -137,4 +151,5 @@ onBeforeUnmount(() => {
 .pointer-events-none {
   pointer-events: none;
 }
+
 </style>

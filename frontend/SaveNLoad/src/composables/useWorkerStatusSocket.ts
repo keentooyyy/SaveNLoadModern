@@ -2,6 +2,8 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { buildWsUrl } from '@/utils/ws';
 
+const API_BASE = import.meta.env.VITE_API_BASE;
+
 type WorkerStatusMessage = {
   type?: string;
   payload?: {
@@ -20,8 +22,26 @@ export const useWorkerStatusSocket = (options: WorkerStatusOptions = {}) => {
 
   let socket: WebSocket | null = null;
   let reconnectTimer: number | null = null;
+  let shouldReconnect = true;
+
+  const fetchWsToken = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/auth/ws-token/`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        return null;
+      }
+      return data?.token || null;
+    } catch {
+      return null;
+    }
+  };
 
   const closeSocket = () => {
+    shouldReconnect = false;
     if (reconnectTimer) {
       window.clearTimeout(reconnectTimer);
       reconnectTimer = null;
@@ -47,8 +67,13 @@ export const useWorkerStatusSocket = (options: WorkerStatusOptions = {}) => {
     }
   };
 
-  const connect = () => {
+  const connect = async () => {
     if (!window.WebSocket) {
+      return;
+    }
+
+    const token = await fetchWsToken();
+    if (!token) {
       return;
     }
 
@@ -57,7 +82,7 @@ export const useWorkerStatusSocket = (options: WorkerStatusOptions = {}) => {
       reconnectTimer = null;
     }
 
-    const wsUrl = buildWsUrl('/ws/ui/worker-status/');
+    const wsUrl = buildWsUrl('/ws/ui/worker-status/', { token });
     socket = new WebSocket(wsUrl);
 
     socket.addEventListener('open', () => {
@@ -68,7 +93,9 @@ export const useWorkerStatusSocket = (options: WorkerStatusOptions = {}) => {
 
     socket.addEventListener('close', () => {
       socketOpen.value = false;
-      reconnectTimer = window.setTimeout(connect, 3000);
+      if (shouldReconnect) {
+        reconnectTimer = window.setTimeout(connect, 3000);
+      }
     });
 
     socket.addEventListener('error', error => {

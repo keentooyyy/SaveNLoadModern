@@ -1,8 +1,10 @@
 from typing import Dict, Optional
 
 from django.conf import settings
-
 from django.apps import apps
+from urllib.parse import parse_qs
+
+from SaveNLoad.services.ws_ui_token_service import validate_ui_ws_token
 
 
 def _parse_cookies(headers) -> Dict[str, str]:
@@ -31,6 +33,21 @@ def get_ws_user(scope) -> Optional[object]:
     Returns:
         SimpleUsers or None
     """
+    query_string = scope.get('query_string', b'')
+    try:
+        parsed = parse_qs(query_string.decode('utf-8'))
+    except Exception:
+        parsed = {}
+    ws_token = (parsed.get('token') or [None])[0]
+    if ws_token:
+        user_id = validate_ui_ws_token(ws_token)
+        if user_id:
+            user_model = apps.get_model('SaveNLoad', 'SimpleUsers')
+            try:
+                return user_model.objects.get(id=user_id)
+            except user_model.DoesNotExist:
+                return None
+
     cookies = _parse_cookies(scope.get('headers'))
     access_name = settings.AUTH_ACCESS_COOKIE_NAME
     refresh_name = settings.AUTH_REFRESH_COOKIE_NAME

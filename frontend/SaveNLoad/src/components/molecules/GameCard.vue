@@ -1,13 +1,19 @@
 <template>
-  <div class="card border-0 shadow h-100 game-card">
+  <div class="card border-0 shadow h-100 game-card" role="button" @click="emit('click')">
     <div
       v-if="image"
-      class="card-img-wrapper position-relative overflow-hidden bg-body game-card-img-wrapper"
-      :style="{ '--card-height': cardHeight }"
+      class="card-img-wrapper position-relative overflow-hidden bg-body game-card-img-wrapper rounded-1"
+      :style="{
+        '--card-height': cardHeight,
+        '--card-padding': cardPadding,
+        '--card-title-size': titleSize,
+        '--card-title-mb': titleMarginBottom,
+        '--card-footer-size': footerSize
+      }"
     >
       <img :src="image" class="card-img-top w-100 h-100 game-card-img object-fit-cover" :alt="title" />
-      <div class="position-absolute bottom-0 start-0 end-0 p-2 game-card-overlay">
-        <component :is="titleTag" class="card-title text-white fw-bold mb-0 game-card-title">
+      <div class="position-absolute bottom-0 start-0 end-0 game-card-overlay">
+        <component :is="titleTag" class="card-title text-white fw-bold game-card-title">
           {{ title }}
         </component>
         <small v-if="footer" class="text-white-50 d-flex align-items-center mb-2 game-card-footer-text">
@@ -15,10 +21,10 @@
           {{ footer }}
         </small>
         <div v-if="showActions" class="d-flex gap-2 mt-2">
-          <button class="btn btn-sm btn-success flex-fill">
+          <button class="btn btn-sm btn-success flex-fill" @click.stop>
             <i class="fas fa-upload me-1"></i> Save
           </button>
-          <button class="btn btn-sm btn-primary flex-fill">
+          <button class="btn btn-sm btn-primary flex-fill" @click.stop>
             <i class="fas fa-download me-1"></i> Quick Load
           </button>
         </div>
@@ -33,10 +39,10 @@
         <component :is="titleTag" class="card-title text-white mb-2">{{ title }}</component>
         <p v-if="footer" class="text-white-50 mb-3 small">{{ footer }}</p>
         <div v-if="showActions" class="d-flex gap-2 justify-content-center">
-          <button class="btn btn-sm btn-success">
+          <button class="btn btn-sm btn-success" @click.stop>
             <i class="fas fa-upload me-1"></i> Save
           </button>
-          <button class="btn btn-sm btn-primary">
+          <button class="btn btn-sm btn-primary" @click.stop>
             <i class="fas fa-download me-1"></i> Quick Load
           </button>
         </div>
@@ -46,11 +52,17 @@
 </template>
 
 <script setup lang="ts">
+const emit = defineEmits(['click']);
+
 defineProps({
   title: { type: String, default: '' },
   footer: { type: String, default: '' },
   image: { type: String, default: '' },
   cardHeight: { type: String, default: '180px' },
+  cardPadding: { type: String, default: '0.5rem' },
+  titleSize: { type: String, default: '0.9rem' },
+  titleMarginBottom: { type: String, default: '0' },
+  footerSize: { type: String, default: '0.75rem' },
   titleTag: { type: String, default: 'h6' },
   showActions: { type: Boolean, default: false }
 });
@@ -77,6 +89,7 @@ defineProps({
 .game-card-overlay {
   background: linear-gradient(to top, var(--black-opacity-80) 0%, var(--black-opacity-40) 50%, transparent 100%);
   transition: opacity 0.3s ease;
+  padding: var(--card-padding, 0.5rem);
 }
 
 .game-card:hover .game-card-overlay {
@@ -93,6 +106,7 @@ defineProps({
 
 .game-card-title {
   font-size: var(--card-title-size, 0.9rem);
+  margin-bottom: var(--card-title-mb, 0);
 }
 
 .game-card-footer-text {

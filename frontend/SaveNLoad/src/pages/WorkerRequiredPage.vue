@@ -1,5 +1,5 @@
 <template>
-  <AppLayout>
+  <BareLayout>
     <div class="container d-flex align-items-center justify-content-center min-vh-80">
       <div class="text-center w-100 max-width-600">
         <div class="mb-4">
@@ -67,21 +67,22 @@
         </button>
       </div>
     </div>
-  </AppLayout>
+  </BareLayout>
 </template>
 
 <script setup lang="ts">
-import AppLayout from '@/layouts/AppLayout.vue';
-import { computed, ref, watch } from 'vue';
+import BareLayout from '@/layouts/BareLayout.vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useWorkerListSocket } from '@/composables/useWorkerListSocket';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 const router = useRouter();
-const { workers, supportsWebSocket } = useWorkerListSocket({ reloadOnClose: true });
+const { workers, supportsWebSocket } = useWorkerListSocket({ reloadOnClose: false });
 
 const claimingId = ref<string | null>(null);
 const hasShownSingleAvailableToast = ref(false);
+const hasLoadedSnapshot = ref(false);
 
 const hasWorkers = computed(() => workers.value.length > 0);
 const availableWorkers = computed(() => workers.value.filter(worker => !worker.claimed));
@@ -121,6 +122,22 @@ const ensureCsrf = async () => {
   return getCookie('csrftoken');
 };
 
+const fetchWorkersSnapshot = async () => {
+  if (hasLoadedSnapshot.value) {
+    return;
+  }
+  hasLoadedSnapshot.value = true;
+  try {
+    const response = await fetch(`${API_BASE}/api/client/unpaired/`, { credentials: 'include' });
+    const data = await response.json().catch(() => null);
+    if (response.ok && data?.workers) {
+      workers.value = data.workers;
+    }
+  } catch {
+    // Ignore snapshot errors; WS can still update later.
+  }
+};
+
 const claimWorker = async (clientId: string) => {
   if (claimingId.value) {
     return;
@@ -151,6 +168,11 @@ const claimWorker = async (clientId: string) => {
     }
 
     notify.success(data?.message || 'Worker claimed successfully.');
+    try {
+      window.localStorage.setItem('savenload_client_id', clientId);
+    } catch {
+      // Ignore storage errors (private mode, etc.)
+    }
     await router.push('/dashboard');
   } catch (error: any) {
     notify.error(error?.message || 'An error occurred. Please try again.');
@@ -175,6 +197,13 @@ watch(availableWorkers, (available) => {
 watch(supportsWebSocket, (supported) => {
   if (!supported) {
     notify.error('WebSockets are not available in this browser.');
+    fetchWorkersSnapshot();
+  }
+});
+
+onMounted(async () => {
+  if (!workers.value.length) {
+    await fetchWorkersSnapshot();
   }
 });
 </script>

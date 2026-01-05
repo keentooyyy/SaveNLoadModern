@@ -12,9 +12,14 @@
       </div>
     </div>
     <div class="d-flex gap-2 overflow-x-auto pb-2 cards-scroll-container scrollbar-thin">
-      <div v-if="items.length" class="d-flex gap-2">
+      <div v-if="loading" class="d-flex justify-content-center align-items-center w-100 py-3">
+        <div class="spinner-border text-light" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+      </div>
+      <div v-else-if="items.length" class="d-flex gap-2">
         <div v-for="item in items" :key="item.id" class="flex-shrink-0 recent-game-card recent-game-card-width">
-          <GameCard :title="item.title" :footer="item.footer" :image="item.image" />
+          <GameCard :title="item.title" :footer="item.footer" :image="item.image" @click="emit('select', item)" />
         </div>
       </div>
       <div v-else class="flex-shrink-0 w-100">
@@ -29,8 +34,11 @@
 <script setup lang="ts">
 import GameCard from '@/components/molecules/GameCard.vue';
 
+const emit = defineEmits(['select']);
+
 defineProps({
-  items: { type: Array, default: () => [] }
+  items: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false }
 });
 </script>
 

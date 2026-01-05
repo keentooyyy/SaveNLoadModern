@@ -22,6 +22,7 @@ from SaveNLoad.utils.jwt_utils import (
     revoke_refresh_token,
     revoke_all_refresh_tokens
 )
+from SaveNLoad.services.ws_ui_token_service import issue_ui_ws_token
 from SaveNLoad.views.input_sanitizer import (
     sanitize_username,
     sanitize_email,
@@ -389,3 +390,14 @@ class LogoutView(APIView):
         _clear_cookie(response, settings.AUTH_REFRESH_COOKIE_NAME)
         _clear_cookie(response, settings.AUTH_RESET_COOKIE_NAME)
         return response
+
+
+class WsTokenView(APIView):
+    def post(self, request):
+        from SaveNLoad.views.custom_decorators import get_current_user
+        user = get_current_user(request)
+        if not user:
+            return _json_error('Not authenticated.', http_status=status.HTTP_401_UNAUTHORIZED)
+
+        token = issue_ui_ws_token(user.id)
+        return Response({'token': token}, status=status.HTTP_200_OK)
