@@ -145,12 +145,46 @@ const onReset = async (user: UserItem) => {
   await store.resetUserPassword(user.id);
 };
 
+const waitForDeletion = async (operationId: string) => {
+  const maxAttempts = 20;
+  const delayMs = 2000;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const data = await store.checkOperationStatus(operationId);
+      if (data?.completed || data?.status === 'completed') {
+        return true;
+      }
+      if (data?.failed || data?.status === 'failed') {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  return false;
+};
+
 const onDelete = async (user: UserItem) => {
   if (!window.confirm(`Delete user ${user.username}? This cannot be undone.`)) {
     return;
   }
-  await store.deleteUser(user.id);
-  loadUsers(pagination.value.page);
+  loading.value = true;
+  error.value = '';
+  try {
+    const data = await store.deleteUser(user.id);
+    const operationId = data?.operation_id;
+    if (operationId) {
+      await waitForDeletion(operationId);
+    }
+    await loadUsers(pagination.value.page);
+  } catch (err: any) {
+    error.value = err?.message || 'Failed to delete user.';
+  } finally {
+    loading.value = false;
+  }
 };
 
 onMounted(() => {

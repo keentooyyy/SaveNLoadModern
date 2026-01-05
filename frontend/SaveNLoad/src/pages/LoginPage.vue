@@ -49,11 +49,13 @@ import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
 import { useAuthStore } from '@/stores/auth';
+import { useDashboardStore } from '@/stores/dashboard';
 import IconButton from '@/components/atoms/IconButton.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
 import TextInput from '@/components/atoms/TextInput.vue';
 
 const store = useAuthStore();
+const dashboardStore = useDashboardStore();
 const router = useRouter();
 
 const form = reactive({
@@ -72,7 +74,19 @@ const onSubmit = async () => {
       password: form.password,
       rememberMe: form.rememberMe
     });
-    await router.push('/dashboard');
+    try {
+      await dashboardStore.loadDashboard();
+      await router.push('/dashboard');
+    } catch (err: any) {
+      if (err?.status === 503) {
+        await router.push('/worker-required');
+        return;
+      }
+      if (err?.status === 401) {
+        return;
+      }
+      await router.push('/dashboard');
+    }
   } catch {
     // handled by store
   }

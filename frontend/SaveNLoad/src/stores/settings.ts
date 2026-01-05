@@ -153,6 +153,16 @@ export const useSettingsStore = defineStore('settings', () => {
     return data;
   };
 
+  const checkOperationStatus = async (operationId: string) => {
+    const data = await apiGet(`/operations/${operationId}/status/`);
+    if (!data?.success && data?.error) {
+      const error = new Error(data.error);
+      (error as any).status = 400;
+      throw error;
+    }
+    return data;
+  };
+
   const queueStats = async () => {
     return apiGet('/operations/queue/stats/');
   };
@@ -186,6 +196,7 @@ export const useSettingsStore = defineStore('settings', () => {
     listUsers,
     resetUserPassword,
     deleteUser,
+    checkOperationStatus,
     queueStats,
     cleanupQueue,
     updateAccount,

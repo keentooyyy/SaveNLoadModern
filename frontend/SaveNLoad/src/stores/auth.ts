@@ -82,6 +82,7 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref('');
   const fieldErrors = ref<FieldErrors | null>(null);
   const otpEmail = ref('');
+  const isLoggingOut = ref(false);
 
   const resetStatus = () => {
     message.value = '';
@@ -211,6 +212,7 @@ export const useAuthStore = defineStore('auth', () => {
   const logout = async () => {
     loading.value = true;
     resetStatus();
+    isLoggingOut.value = true;
     try {
       const clientId = window.localStorage.getItem('savenload_client_id');
       if (clientId) {
@@ -234,6 +236,7 @@ export const useAuthStore = defineStore('auth', () => {
       throw err;
     } finally {
       loading.value = false;
+      isLoggingOut.value = false;
     }
   };
 
@@ -244,6 +247,7 @@ export const useAuthStore = defineStore('auth', () => {
     error,
     fieldErrors,
     otpEmail,
+    isLoggingOut,
     initCsrf,
     resetStatus,
     login,

@@ -3,15 +3,32 @@
     <div class="d-flex align-items-center justify-content-between mb-2">
       <h6 class="text-white mb-0 fs-6 fw-medium">Recently played games</h6>
       <div class="d-flex gap-2">
-        <button class="btn btn-outline-light btn-sm" type="button" aria-label="Scroll left">
+        <button
+          class="btn btn-outline-light btn-sm"
+          type="button"
+          aria-label="Scroll left"
+          :disabled="!canScrollLeft"
+          @click="scrollLeft"
+        >
           <i class="fas fa-chevron-left"></i>
         </button>
-        <button class="btn btn-outline-light btn-sm" type="button" aria-label="Scroll right">
+        <button
+          class="btn btn-outline-light btn-sm"
+          type="button"
+          aria-label="Scroll right"
+          :disabled="!canScrollRight"
+          @click="scrollRight"
+        >
           <i class="fas fa-chevron-right"></i>
         </button>
       </div>
     </div>
-    <div class="d-flex gap-2 overflow-x-auto pb-2 cards-scroll-container scrollbar-thin">
+    <div
+      ref="scrollContainer"
+      class="d-flex gap-2 overflow-x-auto pb-2 cards-scroll-container scrollbar-thin"
+      @scroll="updateScrollState"
+      @wheel="handleWheel"
+    >
       <div v-if="loading" class="d-flex justify-content-center align-items-center w-100 py-3">
         <div class="spinner-border text-light" role="status">
           <span class="visually-hidden">Loading...</span>
@@ -32,14 +49,83 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import GameCard from '@/components/molecules/GameCard.vue';
 
 const emit = defineEmits(['select']);
 
-defineProps({
+const props = defineProps({
   items: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false }
 });
+
+const scrollContainer = ref<HTMLElement | null>(null);
+const canScrollLeft = ref(false);
+const canScrollRight = ref(false);
+
+const updateScrollState = () => {
+  const el = scrollContainer.value;
+  if (!el) {
+    canScrollLeft.value = false;
+    canScrollRight.value = false;
+    return;
+  }
+
+  const maxScrollLeft = el.scrollWidth - el.clientWidth;
+  canScrollLeft.value = el.scrollLeft > 1;
+  canScrollRight.value = maxScrollLeft - el.scrollLeft > 1;
+};
+
+const scrollByAmount = (direction: -1 | 1) => {
+  const el = scrollContainer.value;
+  if (!el) {
+    return;
+  }
+  const amount = Math.max(200, Math.floor(el.clientWidth * 0.8));
+  el.scrollBy({ left: amount * direction, behavior: 'smooth' });
+};
+
+const scrollLeft = () => scrollByAmount(-1);
+const scrollRight = () => scrollByAmount(1);
+
+const handleWheel = (event: WheelEvent) => {
+  const el = scrollContainer.value;
+  if (!el) {
+    return;
+  }
+
+  const maxScrollLeft = el.scrollWidth - el.clientWidth;
+  if (maxScrollLeft <= 0) {
+    return;
+  }
+
+  if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
+    return;
+  }
+
+  event.preventDefault();
+  el.scrollLeft += event.deltaY;
+};
+
+const handleResize = () => {
+  updateScrollState();
+};
+
+onMounted(() => {
+  updateScrollState();
+  window.addEventListener('resize', handleResize);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize);
+});
+
+watch(
+  () => [props.items.length, props.loading],
+  () => {
+    requestAnimationFrame(() => updateScrollState());
+  }
+);
 </script>
 
 <style scoped>

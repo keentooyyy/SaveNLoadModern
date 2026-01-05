@@ -12,15 +12,44 @@
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body bg-primary saves-modal-body">
-          <div class="saves-actions">
-            <button class="btn btn-info text-white btn-sm" type="button" @click="emit('open-location')">
-              <i class="fas fa-folder-open me-2"></i>
-              <span class="saves-action-label">Open Save Location</span>
-            </button>
-            <div class="d-flex gap-2">
+          <div class="row g-2 pb-3 mb-3 align-items-stretch d-lg-none">
+            <div class="col-12 col-md-4">
+              <button class="btn btn-info text-white btn-sm w-100 text-center h-100 saves-action-btn" type="button" @click="emit('open-location')">
+                <i class="fas fa-folder-open me-2"></i>
+                <span class="saves-action-label">Open Save Location</span>
+              </button>
+            </div>
+            <div v-if="!loading && saveFolders.length" class="col-12 col-md-4">
               <button
-                v-if="!loading && saveFolders.length"
-                class="btn btn-secondary text-white btn-sm"
+                class="btn btn-secondary text-white btn-sm w-100 text-center h-100 saves-action-btn"
+                type="button"
+                @click="emit('backup-all')"
+              >
+                <i class="fas fa-download me-2"></i>
+                <span class="saves-action-label">Backup All Saves</span>
+              </button>
+            </div>
+            <div v-if="!loading && saveFolders.length" class="col-12 col-md-4">
+              <button
+                class="btn btn-danger text-white btn-sm w-100 text-center h-100 saves-action-btn"
+                type="button"
+                @click="emit('delete-all')"
+              >
+                <i class="fas fa-trash me-2"></i>
+                <span class="saves-action-label">Delete All Saves</span>
+              </button>
+            </div>
+          </div>
+          <div class="d-none d-lg-flex align-items-stretch justify-content-between gap-2 pb-3 mb-3">
+            <div class="flex-grow-0" style="min-width: 220px;">
+              <button class="btn btn-info text-white btn-sm w-100 text-center h-100 saves-action-btn" type="button" @click="emit('open-location')">
+                <i class="fas fa-folder-open me-2"></i>
+                <span class="saves-action-label">Open Save Location</span>
+              </button>
+            </div>
+            <div v-if="!loading && saveFolders.length" class="d-flex gap-2 align-items-stretch saves-actions-right">
+              <button
+                class="btn btn-secondary text-white btn-sm w-100 text-center h-100 saves-action-btn"
                 type="button"
                 @click="emit('backup-all')"
               >
@@ -28,8 +57,7 @@
                 <span class="saves-action-label">Backup All Saves</span>
               </button>
               <button
-                v-if="!loading && saveFolders.length"
-                class="btn btn-danger text-white btn-sm"
+                class="btn btn-danger text-white btn-sm w-100 text-center h-100 saves-action-btn"
                 type="button"
                 @click="emit('delete-all')"
               >
@@ -60,12 +88,12 @@
               :key="folder.folder_number"
               class="list-group-item bg-primary text-white border-secondary transition-bg list-group-item-hover saves-item"
             >
-              <div class="d-flex justify-content-between align-items-center">
+              <div class="d-flex justify-content-between align-items-center saves-item-row">
                 <div class="saves-item-main">
                   <h6 class="mb-1 text-white">Save {{ folder.folder_number }}</h6>
                   <small class="text-white-50">{{ formatDate(folder.created_at) }}</small>
                 </div>
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 saves-item-actions">
                   <button class="btn btn-sm btn-secondary text-white" type="button" @click="emit('load', folder)">
                     <i class="fas fa-download me-1"></i>
                     Load
@@ -155,14 +183,6 @@ const formatDate = (value: string) => {
   padding: 1.25rem 1.4rem 1.4rem;
 }
 
-.saves-actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding-bottom: 0.75rem;
-  margin-bottom: 1rem;
-}
-
 .saves-list {
   display: grid;
   gap: 0.65rem;
@@ -180,27 +200,52 @@ const formatDate = (value: string) => {
   padding: 0.9rem 1.4rem 1.2rem;
 }
 
-@media (max-width: 767.98px) {
-  .saves-actions {
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: wrap;
+@media (min-width: 768px) {
+  .saves-action-btn {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
   }
+}
 
+@media (min-width: 992px) {
+  .saves-actions-right {
+    flex: 0 0 auto;
+    min-width: 360px;
+  }
+}
+
+@media (max-width: 575.98px) {
   .saves-modal-body {
     padding: 1rem;
   }
+}
 
-  .saves-action-label {
-    display: none;
+@media (max-width: 375px) {
+  .saves-item-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
   }
 
-  .saves-actions .btn {
-    padding: 0.35rem 0.55rem;
+  .saves-item-main {
+    width: 100%;
   }
 
-  .saves-actions .btn i {
-    margin-right: 0 !important;
+  .saves-item-main h6 {
+    font-size: 1rem;
+  }
+
+  .saves-item-main small {
+    font-size: 0.85rem;
+  }
+
+  .saves-item-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .saves-item-actions .btn {
+    width: 100%;
   }
 }
 </style>
