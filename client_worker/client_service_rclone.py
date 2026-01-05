@@ -145,6 +145,11 @@ class ClientWorkerServiceRclone:
                 path = rest[len(host):] if len(rest) > len(host) else ''
                 server_url = f'{scheme}://{host}:8001{path}'
         self.server_url = server_url.rstrip('/')
+        self.ws_port = int(os.getenv('SAVENLOAD_WS_PORT', '8001'))
+        self.ui_port = int(os.getenv('SAVENLOAD_UI_PORT', '8000'))
+        parsed_ui = urlparse(self.server_url)
+        ui_host = parsed_ui.hostname or parsed_ui.netloc
+        self.ui_url = f"{parsed_ui.scheme}://{ui_host}:{self.ui_port}{parsed_ui.path}".rstrip('/')
         self.session = requests.Session()
         self.running = False
         self._heartbeat_thread = None
@@ -285,7 +290,9 @@ class ClientWorkerServiceRclone:
         parsed = urlparse(self.server_url)
         scheme = 'wss' if parsed.scheme == 'https' else 'ws'
         path_prefix = parsed.path.rstrip('/')
-        return f"{scheme}://{parsed.netloc}{path_prefix}/ws/worker/{client_id}/?token={self._ws_token}"
+        host = parsed.hostname or parsed.netloc
+        netloc = f"{host}:{self.ws_port}" if host else parsed.netloc
+        return f"{scheme}://{netloc}{path_prefix}/ws/worker/{client_id}/?token={self._ws_token}"
 
     def _send_ws_message(self, message_type: str, payload: Dict[str, Any], correlation_id: Optional[str] = None):
         """
@@ -1202,8 +1209,8 @@ class ClientWorkerServiceRclone:
         
         # Server URL at the bottom - make it stand out
         server_url_panel = Panel(
-            Align.center(f"[bold bright_cyan]{self.server_url}[/bold bright_cyan]"),
-            title="[bold bright_cyan]Server URL[/bold bright_cyan]",
+            Align.center(f"[bold bright_cyan]{self.ui_url}[/bold bright_cyan]"),
+            title="[bold bright_cyan]Web UI[/bold bright_cyan]",
             border_style="bright_cyan",
             padding=(1, 2),
             width=80
@@ -1222,9 +1229,9 @@ class ClientWorkerServiceRclone:
         self._ws_thread = threading.Thread(target=self._ws_connect_loop, args=(client_id,), daemon=True)
         self._ws_thread.start()
 
-        # Open browser to server URL for convenience (so user can login and claim)
+        # Open browser to web UI for convenience (so user can login and claim)
         try:
-            webbrowser.open(self.server_url)
+            webbrowser.open(self.ui_url)
         except Exception:
             pass
         

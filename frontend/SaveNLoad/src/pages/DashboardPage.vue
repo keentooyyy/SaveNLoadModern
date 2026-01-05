@@ -8,6 +8,8 @@
         v-model:sort="sortBy"
         :games="games"
         :loading="gamesLoading"
+        :saving-id="savingGameId"
+        :loading-id="loadingGameId"
         @search="onSearch"
         @open="onOpenGame"
         @save="onSaveGame"
@@ -15,7 +17,17 @@
       />
     </div>
   </AppLayout>
-  <GameSavesModal :title="selectedGameTitle" />
+  <GameSavesModal
+    :title="selectedGameTitle"
+    :save-folders="saveFolders"
+    :loading="saveFoldersLoading"
+    :error="saveFoldersError"
+    @load="onLoadSaveFolder"
+    @delete="onDeleteSaveFolder"
+    @backup-all="onBackupAllSaves"
+    @delete-all="onDeleteAllSaves"
+    @open-location="onOpenSaveLocation"
+  />
   <OperationProgressModal
     :open="operationModal.open"
     :title="operationModal.title"
@@ -30,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import PageHeader from '@/components/organisms/PageHeader.vue';
 import RecentList from '@/components/organisms/RecentList.vue';
@@ -39,7 +51,6 @@ import GameSavesModal from '@/components/organisms/GameSavesModal.vue';
 import OperationProgressModal from '@/components/organisms/OperationProgressModal.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useDashboardStore } from '@/stores/dashboard';
-import { useWorkerStatusSocket } from '@/composables/useWorkerStatusSocket';
 
 const router = useRouter();
 const store = useDashboardStore();
@@ -52,6 +63,12 @@ const recentGames = computed(() => store.recentGames);
 const recentLoading = computed(() => store.loading && recentGames.value.length === 0);
 const gamesLoading = computed(() => store.loading && games.value.length === 0);
 const selectedGameTitle = ref('');
+const selectedGameId = ref<number | null>(null);
+const saveFolders = ref<any[]>([]);
+const saveFoldersLoading = ref(false);
+const saveFoldersError = ref('');
+const savingGameId = ref<number | null>(null);
+const loadingGameId = ref<number | null>(null);
 
 const operationModal = reactive({
   open: false,
@@ -140,7 +157,12 @@ const calculatePercent = (progress: any) => {
   return null;
 };
 
-const pollOperations = async (operationIds: string[], label: string, detail: string) => {
+const pollOperations = async (
+  operationIds: string[],
+  label: string,
+  detail: string,
+  onSuccess?: () => void | Promise<void>
+) => {
   const ids = operationIds.filter(Boolean);
   if (ids.length === 0) {
     return;
@@ -200,6 +222,13 @@ const pollOperations = async (operationIds: string[], label: string, detail: str
               // Ignore refresh errors to avoid blocking success flow.
             }
           }
+          if (onSuccess) {
+            try {
+              await onSuccess();
+            } catch {
+              // Ignore refresh errors to avoid blocking success flow.
+            }
+          }
           successCloseTimer = window.setTimeout(() => {
             if (operationModal.open && operationModal.variant === 'success') {
               closeOperationModal();
@@ -242,11 +271,6 @@ const pollOperations = async (operationIds: string[], label: string, detail: str
   }
 };
 
-useWorkerStatusSocket({
-  onWorkerUnavailable: async () => {
-    await router.push('/worker-required');
-  }
-});
 
 const onSearch = async ({ query, sort }: { query: string; sort: string }) => {
   try {
@@ -263,6 +287,16 @@ const scrollToAvailableGames = () => {
   }
 };
 
+const resetDashboardFilters = async () => {
+  searchQuery.value = '';
+  sortBy.value = 'name_asc';
+  try {
+    await store.loadDashboard();
+  } catch {
+    // Ignore refresh errors to avoid blocking navigation.
+  }
+};
+
 const onRecentSelect = async (item: { title?: string }) => {
   const query = item?.title?.trim() || '';
   if (!query) {
@@ -276,8 +310,10 @@ const onRecentSelect = async (item: { title?: string }) => {
   scrollToAvailableGames();
 };
 
-const onOpenGame = (game: { title?: string }) => {
+const onOpenGame = (game: { id: number; title?: string }) => {
   selectedGameTitle.value = game?.title || '';
+  selectedGameId.value = game?.id || null;
+  loadSaveFolders();
   const modalEl = document.getElementById('gameSavesModal');
   const bootstrapModal = (window as any)?.bootstrap?.Modal?.getOrCreateInstance(modalEl);
   if (bootstrapModal) {
@@ -287,29 +323,143 @@ const onOpenGame = (game: { title?: string }) => {
 
 const onSaveGame = async (game: { id: number; title?: string }) => {
   try {
+    savingGameId.value = game.id;
     const data = await store.saveGame(game.id);
     const operationIds = normalizeOperationIds(data);
-    await pollOperations(operationIds, 'Saving game', `Saving ${game?.title || 'game'}...`);
+    await pollOperations(
+      operationIds,
+      'Saving game',
+      `Saving ${game?.title || 'game'}...`,
+      () => store.touchRecentGame(game.id)
+    );
   } catch (err: any) {
     await handleAuthError(err);
+  } finally {
+    if (savingGameId.value === game.id) {
+      savingGameId.value = null;
+    }
   }
 };
 
 const onQuickLoadGame = async (game: { id: number; title?: string }) => {
   try {
+    loadingGameId.value = game.id;
     const data = await store.loadGame(game.id);
     const operationIds = normalizeOperationIds(data);
     await pollOperations(operationIds, 'Loading game', `Loading ${game?.title || 'game'}...`);
+  } catch (err: any) {
+    await handleAuthError(err);
+  } finally {
+    if (loadingGameId.value === game.id) {
+      loadingGameId.value = null;
+    }
+  }
+};
+
+const loadSaveFolders = async () => {
+  if (!selectedGameId.value) {
+    saveFolders.value = [];
+    saveFoldersError.value = '';
+    return;
+  }
+  saveFoldersLoading.value = true;
+  saveFoldersError.value = '';
+  saveFolders.value = [];
+  try {
+    const data = await store.listSaveFolders(selectedGameId.value);
+    saveFolders.value = data?.save_folders || [];
+  } catch (err: any) {
+    saveFoldersError.value = err?.message || 'Failed to load saves.';
+  } finally {
+    saveFoldersLoading.value = false;
+  }
+};
+
+const onLoadSaveFolder = async (folder: { folder_number: number }) => {
+  if (!selectedGameId.value) {
+    return;
+  }
+  try {
+    const data = await store.loadGameSaveFolder(selectedGameId.value, folder.folder_number);
+    const operationIds = normalizeOperationIds(data);
+    await pollOperations(operationIds, 'Loading game', `Loading save ${folder.folder_number}...`);
+  } catch (err: any) {
+    await handleAuthError(err);
+  }
+};
+
+const onDeleteSaveFolder = async (folder: { folder_number: number }) => {
+  if (!selectedGameId.value) {
+    return;
+  }
+  if (!window.confirm(`Delete save ${folder.folder_number}? This cannot be undone.`)) {
+    return;
+  }
+  try {
+    const data = await store.deleteSaveFolder(selectedGameId.value, folder.folder_number);
+    const operationIds = normalizeOperationIds(data);
+    await pollOperations(
+      operationIds,
+      'Deleting save',
+      `Deleting save ${folder.folder_number}...`,
+      loadSaveFolders
+    );
+  } catch (err: any) {
+    await handleAuthError(err);
+  }
+};
+
+const onBackupAllSaves = async () => {
+  if (!selectedGameId.value) {
+    return;
+  }
+  try {
+    const data = await store.backupAllSaves(selectedGameId.value);
+    const operationIds = normalizeOperationIds(data);
+    await pollOperations(operationIds, 'Backing up saves', 'Creating backup...');
+  } catch (err: any) {
+    await handleAuthError(err);
+  }
+};
+
+const onDeleteAllSaves = async () => {
+  if (!selectedGameId.value) {
+    return;
+  }
+  if (!window.confirm('Delete all saves for this game? This cannot be undone.')) {
+    return;
+  }
+  try {
+    const data = await store.deleteAllSaves(selectedGameId.value);
+    const operationIds = normalizeOperationIds(data);
+    await pollOperations(operationIds, 'Deleting saves', 'Deleting all saves...', loadSaveFolders);
+  } catch (err: any) {
+    await handleAuthError(err);
+  }
+};
+
+const onOpenSaveLocation = async () => {
+  if (!selectedGameId.value) {
+    return;
+  }
+  try {
+    await store.openSaveLocation(selectedGameId.value);
+    notify.success('Save Location Opened.');
   } catch (err: any) {
     await handleAuthError(err);
   }
 };
 
 onMounted(async () => {
+  window.addEventListener('dashboard:reset', resetDashboardFilters);
   try {
     await store.loadDashboard();
   } catch (err: any) {
     await handleAuthError(err);
   }
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('dashboard:reset', resetDashboardFilters);
 });
 </script>

@@ -30,6 +30,7 @@
             to="/dashboard"
             class="sidebar-nav-link d-flex align-items-center text-white text-decoration-none px-3 py-2 rounded"
             :class="{ active: isActive('/dashboard') }"
+            @click="onDashboardClick"
           >
             <i class="fas fa-home me-2"></i>
             <span class="flex-grow-1">Home</span>
@@ -88,6 +89,12 @@ const normalizeVersion = (raw: string) => {
 };
 
 const isActive = (path: string) => route.path === path;
+
+const onDashboardClick = () => {
+  if (isActive('/dashboard')) {
+    window.dispatchEvent(new CustomEvent('dashboard:reset'));
+  }
+};
 
 const onLogout = async () => {
   try {

@@ -21,11 +21,25 @@
           {{ footer }}
         </small>
         <div v-if="showActions" class="d-flex gap-2 mt-2">
-          <button class="btn btn-sm btn-success flex-fill" @click.stop="emit('save')">
-            <i class="fas fa-upload me-1"></i> Save
+          <button
+            class="btn btn-sm btn-success flex-fill"
+            type="button"
+            :disabled="saving"
+            @click.stop="emit('save')"
+          >
+            <i v-if="saving" class="fas fa-spinner fa-spin me-1"></i>
+            <i v-else class="fas fa-upload me-1"></i>
+            Save
           </button>
-          <button class="btn btn-sm btn-primary flex-fill" @click.stop="emit('load')">
-            <i class="fas fa-download me-1"></i> Quick Load
+          <button
+            class="btn btn-sm btn-primary flex-fill"
+            type="button"
+            :disabled="loading"
+            @click.stop="emit('load')"
+          >
+            <i v-if="loading" class="fas fa-spinner fa-spin me-1"></i>
+            <i v-else class="fas fa-download me-1"></i>
+            Quick Load
           </button>
         </div>
       </div>
@@ -39,11 +53,15 @@
         <component :is="titleTag" class="card-title text-white mb-2">{{ title }}</component>
         <p v-if="footer" class="text-white-50 mb-3 small">{{ footer }}</p>
         <div v-if="showActions" class="d-flex gap-2 justify-content-center">
-          <button class="btn btn-sm btn-success" @click.stop="emit('save')">
-            <i class="fas fa-upload me-1"></i> Save
+          <button class="btn btn-sm btn-success" type="button" :disabled="saving" @click.stop="emit('save')">
+            <i v-if="saving" class="fas fa-spinner fa-spin me-1"></i>
+            <i v-else class="fas fa-upload me-1"></i>
+            Save
           </button>
-          <button class="btn btn-sm btn-primary" @click.stop="emit('load')">
-            <i class="fas fa-download me-1"></i> Quick Load
+          <button class="btn btn-sm btn-primary" type="button" :disabled="loading" @click.stop="emit('load')">
+            <i v-if="loading" class="fas fa-spinner fa-spin me-1"></i>
+            <i v-else class="fas fa-download me-1"></i>
+            Quick Load
           </button>
         </div>
       </div>
@@ -64,7 +82,9 @@ defineProps({
   titleMarginBottom: { type: String, default: '0' },
   footerSize: { type: String, default: '0.75rem' },
   titleTag: { type: String, default: 'h6' },
-  showActions: { type: Boolean, default: false }
+  showActions: { type: Boolean, default: false },
+  saving: { type: Boolean, default: false },
+  loading: { type: Boolean, default: false }
 });
 </script>
 

@@ -25,14 +25,8 @@ import AccountSettingsPanel from '@/components/organisms/AccountSettingsPanel.vu
 import GameSearchModal from '@/components/organisms/GameSearchModal.vue';
 import ManageGameModal from '@/components/organisms/ManageGameModal.vue';
 import { useRouter } from 'vue-router';
-import { useWorkerStatusSocket } from '@/composables/useWorkerStatusSocket';
 
 const isAdmin = ref(true);
 const router = useRouter();
 
-useWorkerStatusSocket({
-  onWorkerUnavailable: async () => {
-    await router.push('/worker-required');
-  }
-});
 </script>

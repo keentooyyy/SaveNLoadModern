@@ -120,6 +120,33 @@ async function apiPost(path: string, body: Record<string, unknown>) {
   return data;
 }
 
+async function apiDelete(path: string) {
+  const csrfToken = await ensureCsrf();
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'DELETE',
+    headers: {
+      'X-CSRFToken': csrfToken
+    },
+    credentials: 'include'
+  });
+
+  let data: any = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    const error = new Error(data?.error || data?.message || 'Request failed');
+    (error as any).status = response.status;
+    (error as any).data = data;
+    throw error;
+  }
+
+  return data;
+}
+
 export const useDashboardStore = defineStore('dashboard', () => {
   const user = ref<DashboardUser | null>(null);
   const isAdmin = ref(false);
@@ -200,6 +227,45 @@ export const useDashboardStore = defineStore('dashboard', () => {
     }
   };
 
+  const loadGameSaveFolder = async (gameId: number, folderNumber: number) => {
+    operationLoading.value = true;
+    error.value = '';
+    try {
+      const data = await apiPost(`/games/${gameId}/load/`, { save_folder_number: folderNumber });
+      const message = data?.message || 'Load queued.';
+      if (!message.toLowerCase().includes('operations queued')) {
+        notify.success(message);
+      }
+      return data;
+    } catch (err: any) {
+      error.value = err?.message || 'Failed to load game.';
+      notify.error(error.value);
+      throw err;
+    } finally {
+      operationLoading.value = false;
+    }
+  };
+
+  const listSaveFolders = async (gameId: number) => {
+    return apiGet(`/games/${gameId}/save-folders/`);
+  };
+
+  const deleteSaveFolder = async (gameId: number, folderNumber: number) => {
+    return apiDelete(`/games/${gameId}/save-folders/${folderNumber}/delete/`);
+  };
+
+  const backupAllSaves = async (gameId: number) => {
+    return apiPost(`/games/${gameId}/backup-all-saves/`, {});
+  };
+
+  const deleteAllSaves = async (gameId: number) => {
+    return apiDelete(`/games/${gameId}/delete-all-saves/`);
+  };
+
+  const openSaveLocation = async (gameId: number) => {
+    return apiPost(`/games/${gameId}/open-save-location/`, {});
+  };
+
   const checkOperationStatus = async (operationId: string) => {
     const data = await apiGet(`/operations/${operationId}/status/`);
     if (!data?.success && data?.error) {
@@ -208,6 +274,31 @@ export const useDashboardStore = defineStore('dashboard', () => {
       throw error;
     }
     return data;
+  };
+
+  const touchRecentGame = (gameId: number) => {
+    const nowIso = new Date().toISOString();
+    const footer = 'Last played just now';
+    const source = games.value.find((game) => game.id === gameId)
+      || recentGames.value.find((game) => game.id === gameId);
+    if (!source) {
+      return;
+    }
+
+    const updated = {
+      ...source,
+      footer,
+      last_played_timestamp: nowIso
+    };
+
+    recentGames.value = [
+      updated,
+      ...recentGames.value.filter((game) => game.id !== gameId)
+    ].slice(0, 10);
+
+    games.value = games.value.map((game) => (
+      game.id === gameId ? { ...game, footer, last_played_timestamp: nowIso } : game
+    ));
   };
 
   return {
@@ -222,6 +313,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
     searchGames,
     saveGame,
     loadGame,
-    checkOperationStatus
+    loadGameSaveFolder,
+    listSaveFolders,
+    deleteSaveFolder,
+    backupAllSaves,
+    deleteAllSaves,
+    openSaveLocation,
+    checkOperationStatus,
+    touchRecentGame
   };
 });

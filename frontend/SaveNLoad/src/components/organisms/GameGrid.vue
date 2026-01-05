@@ -59,6 +59,8 @@
           footer-size="0.875rem"
           title-tag="h5"
           :show-actions="true"
+          :saving="savingId === game.id"
+          :loading="loadingId === game.id"
           @click="emit('open', game)"
           @save="emit('save', game)"
           @load="emit('load', game)"
@@ -80,7 +82,9 @@ import TextInput from '@/components/atoms/TextInput.vue';
 
 defineProps({
   games: { type: Array, default: () => [] },
-  loading: { type: Boolean, default: false }
+  loading: { type: Boolean, default: false },
+  savingId: { type: Number, default: null },
+  loadingId: { type: Number, default: null }
 });
 
 const emit = defineEmits(['search', 'open', 'save', 'load']);
