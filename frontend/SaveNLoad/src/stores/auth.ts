@@ -9,7 +9,7 @@ type AuthUser = {
 
 type FieldErrors = Record<string, string | string[]>;
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001';
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 const notify = {
   success: (msg: string) => {

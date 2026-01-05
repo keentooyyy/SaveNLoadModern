@@ -26,3 +26,9 @@ defineProps({
   userLabel: { type: String, default: '' }
 });
 </script>
+
+<style scoped>
+.page-header-height {
+  height: 82px;
+}
+</style>

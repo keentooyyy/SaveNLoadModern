@@ -10,11 +10,8 @@ const app = createApp(App);
 
 const initToastr = () => {
   const t = (window as any).toastr;
-  if (!t) {
-    console.error('Toastr not loaded. Check /vendor/toastr/toastr.min.js and index.html order.');
-    return;
-  }
   t.options = {
+    progressBar: true,
     closeButton: true,
     newestOnTop: true,
     positionClass: 'toast-top-right',
