@@ -33,3 +33,43 @@ defineProps({
   items: { type: Array, default: () => [] }
 });
 </script>
+
+<style scoped>
+.recent-game-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.recent-game-card:hover {
+  transform: translateY(-2px);
+}
+
+.recent-game-card:hover :deep(.card) {
+  box-shadow: 0 4px 12px var(--black-opacity-30) !important;
+}
+
+.recent-game-card-width {
+  width: 260px;
+}
+
+.overflow-x-auto::-webkit-scrollbar {
+  height: 8px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: var(--white-opacity-10);
+  border-radius: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: var(--white-opacity-30);
+  border-radius: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: var(--white-opacity-50);
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+</style>

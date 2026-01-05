@@ -2,33 +2,28 @@
   <AppLayout>
     <div class="container-fluid px-0">
       <PageHeader title="Settings" />
-      <div class="px-4 pt-4 pb-5">
-        <SettingsPanel />
-        <div class="mt-4" v-if="isAdmin">
-          <QueuePanel />
-        </div>
-        <div class="mt-4" v-if="isAdmin">
-          <AccountTable :users="users" />
-        </div>
-        <div class="mt-4">
-          <ModalShell title="Manage game" subtitle="Preview of the admin modal">
-            <p class="text-secondary mb-0">Wire this modal to game management endpoints.</p>
-          </ModalShell>
-        </div>
+      <div>
+        <AddGamePanel v-if="isAdmin" />
+        <ManageAccountsPanel v-if="isAdmin" />
+        <OperationQueuePanel v-if="isAdmin" />
+        <AccountSettingsPanel />
       </div>
     </div>
+    <GameSearchModal v-if="isAdmin" />
+    <ManageGameModal v-if="isAdmin" />
   </AppLayout>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
 import PageHeader from '@/components/organisms/PageHeader.vue';
-import SettingsPanel from '@/components/organisms/SettingsPanel.vue';
-import QueuePanel from '@/components/organisms/QueuePanel.vue';
-import AccountTable from '@/components/organisms/AccountTable.vue';
-import ModalShell from '@/components/organisms/ModalShell.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import AddGamePanel from '@/components/organisms/AddGamePanel.vue';
+import ManageAccountsPanel from '@/components/organisms/ManageAccountsPanel.vue';
+import OperationQueuePanel from '@/components/organisms/OperationQueuePanel.vue';
+import AccountSettingsPanel from '@/components/organisms/AccountSettingsPanel.vue';
+import GameSearchModal from '@/components/organisms/GameSearchModal.vue';
+import ManageGameModal from '@/components/organisms/ManageGameModal.vue';
 
 const isAdmin = ref(true);
-const users = [];
 </script>

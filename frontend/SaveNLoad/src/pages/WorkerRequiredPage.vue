@@ -36,3 +36,24 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 </script>
+
+<style scoped>
+.worker-id-hint {
+  background-color: var(--primary-opacity-15);
+  border: 1px solid var(--primary-opacity-30);
+  color: var(--color-primary-bootstrap);
+}
+
+.min-vh-80 {
+  min-height: 80vh;
+}
+
+.max-width-600 {
+  max-width: 600px;
+}
+
+.spinner-lg {
+  width: 3rem;
+  height: 3rem;
+}
+</style>

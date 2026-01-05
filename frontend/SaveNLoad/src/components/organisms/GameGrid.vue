@@ -20,11 +20,7 @@
       >
         <div class="d-flex flex-column flex-md-row gap-2 w-100 w-md-auto">
           <div class="position-relative flex-grow-1 search-input-container">
-            <input
-              type="text"
-              class="form-control bg-primary border-secondary text-white pe-5 w-100"
-              placeholder="Search games..."
-            />
+            <TextInput placeholder="Search games..." input-class="border-secondary pe-5 w-100" />
             <i
               class="fas fa-search position-absolute top-50 end-0 translate-middle-y me-3 text-white-50 pointer-events-none"
             ></i>
@@ -64,8 +60,59 @@
 
 <script setup lang="ts">
 import GameCard from '@/components/molecules/GameCard.vue';
+import TextInput from '@/components/atoms/TextInput.vue';
 
 defineProps({
   games: { type: Array, default: () => [] }
 });
 </script>
+
+<style scoped>
+@media (min-width: 992px) and (max-width: 1199.98px) {
+  #availableGamesSection .col-lg-3 {
+    flex: 0 0 auto;
+    width: 33.33333333% !important;
+  }
+}
+
+@media (min-width: 1200px) {
+  #availableGamesSection .col-lg-3 {
+    max-width: 300px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  #gameSearchSortCollapse {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  #gameSearchInput {
+    width: 100% !important;
+  }
+
+  #gameSortSelect {
+    width: auto !important;
+    min-width: 180px !important;
+    flex-shrink: 0 !important;
+  }
+
+  #availableGamesSection {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}
+
+.search-input-container {
+  min-width: 200px;
+}
+
+.sort-select-width {
+  width: auto;
+  min-width: 180px;
+}
+
+.pointer-events-none {
+  pointer-events: none;
+}
+</style>

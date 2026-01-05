@@ -53,7 +53,7 @@
         <span class="text-white-50 small fw-medium">{{ versionLabel }}</span>
       </div>
       <div class="d-flex align-items-center justify-content-between">
-        <div class="text-white-50 small opacity-75">Ac 2026 SaveNLoadModern</div>
+        <div class="text-white-50 small opacity-75">2026 SaveNLoadModern</div>
         <button class="btn p-0 text-white-50" type="button" title="Logout" aria-label="Logout" @click="onLogout">
           <i class="fas fa-sign-out-alt fs-4"></i>
         </button>

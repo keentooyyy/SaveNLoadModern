@@ -20,3 +20,11 @@ defineProps({
   subtitle: String
 });
 </script>
+
+<style scoped>
+.login-page {
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+</style>

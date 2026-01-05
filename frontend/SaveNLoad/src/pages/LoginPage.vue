@@ -2,19 +2,17 @@
   <AuthLayout title="Save N Load" subtitle="Managing saves has never been easier.">
     <form @submit.prevent="onSubmit">
       <div class="mb-3">
-        <label class="fs-6 opacity-50">USERNAME OR EMAIL</label>
-        <input
-          class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white"
-          :class="{ 'is-invalid': fieldErrors?.username }"
-          type="text"
+        <InputLabel text="USERNAME OR EMAIL" />
+        <TextInput
           v-model="form.username"
           placeholder="Enter your username or email"
+          :invalid="!!fieldErrors?.username"
           required
         />
       </div>
       <div class="mb-2">
         <div class="d-flex justify-content-between align-items-center">
-          <label class="fs-6 mb-0 opacity-50">PASSWORD</label>
+          <InputLabel text="PASSWORD" label-class="mb-0" />
           <RouterLink to="/forgot-password" class="text-secondary text-decoration-none fs-6" tabindex="-1">
             Forgot Password?
           </RouterLink>
@@ -33,9 +31,9 @@
         </div>
       </div>
       <div class="d-grid">
-        <button type="submit" class="btn btn-secondary text-white fw-bold mt-3 py-2" :disabled="loading">
+        <IconButton type="submit" variant="secondary" class="text-white fw-bold mt-3 py-2" :disabled="loading">
           LOGIN
-        </button>
+        </IconButton>
       </div>
       <p class="text-white fs-6 text-center mt-3">
         Don't have an account?
@@ -51,6 +49,9 @@ import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
 import { useAuthStore } from '@/stores/auth';
+import IconButton from '@/components/atoms/IconButton.vue';
+import InputLabel from '@/components/atoms/InputLabel.vue';
+import TextInput from '@/components/atoms/TextInput.vue';
 
 const store = useAuthStore();
 const router = useRouter();

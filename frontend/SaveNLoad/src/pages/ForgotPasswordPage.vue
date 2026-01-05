@@ -2,20 +2,13 @@
   <AuthLayout title="Save N Load" subtitle="Reset your password to regain access.">
     <form @submit.prevent="onSubmit">
       <div class="mb-3">
-        <label class="fs-6 opacity-50">EMAIL</label>
-        <input
-          class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white"
-          :class="{ 'is-invalid': fieldErrors?.email }"
-          type="email"
-          v-model="email"
-          placeholder="Enter your email"
-          required
-        />
+        <InputLabel text="EMAIL" />
+        <TextInput v-model="email" type="email" placeholder="Enter your email" :invalid="!!fieldErrors?.email" required />
       </div>
       <div class="d-grid">
-        <button type="submit" class="btn btn-secondary text-white fw-bold mt-3 py-2" :disabled="loading">
+        <IconButton type="submit" variant="secondary" class="text-white fw-bold mt-3 py-2" :disabled="loading">
           SEND OTP
-        </button>
+        </IconButton>
       </div>
       <p class="text-white fs-6 text-center mt-3">
         Remember your password?
@@ -30,6 +23,9 @@ import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { useAuthStore } from '@/stores/auth';
+import IconButton from '@/components/atoms/IconButton.vue';
+import InputLabel from '@/components/atoms/InputLabel.vue';
+import TextInput from '@/components/atoms/TextInput.vue';
 
 const store = useAuthStore();
 const router = useRouter();

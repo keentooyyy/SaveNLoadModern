@@ -15,3 +15,15 @@
 <script setup lang="ts">
 import SidebarNav from '@/components/organisms/SidebarNav.vue';
 </script>
+
+<style scoped>
+@media (min-width: 992px) {
+  :global(.offcanvas-backdrop) {
+    display: none !important;
+  }
+
+  .main-content {
+    margin-left: var(--sidebar-width);
+  }
+}
+</style>

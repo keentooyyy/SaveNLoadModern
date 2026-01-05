@@ -3,16 +3,13 @@
     <SectionHeader title="Operation queue" subtitle="Admin monitoring" />
     <div class="row text-center mt-3">
       <div class="col-4">
-        <div class="text-secondary small">Pending</div>
-        <div class="h4 mb-0">6</div>
+        <StatBadge label="Pending" :value="6" />
       </div>
       <div class="col-4">
-        <div class="text-secondary small">Active</div>
-        <div class="h4 mb-0">2</div>
+        <StatBadge label="Active" :value="2" />
       </div>
       <div class="col-4">
-        <div class="text-secondary small">Completed</div>
-        <div class="h4 mb-0">18</div>
+        <StatBadge label="Completed" :value="18" />
       </div>
     </div>
     <div class="mt-3">
@@ -25,4 +22,5 @@
 import BaseButton from '@/components/atoms/BaseButton.vue';
 import BaseCard from '@/components/atoms/BaseCard.vue';
 import SectionHeader from '@/components/molecules/SectionHeader.vue';
+import StatBadge from '@/components/molecules/StatBadge.vue';
 </script>

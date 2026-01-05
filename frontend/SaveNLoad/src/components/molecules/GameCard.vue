@@ -55,3 +55,47 @@ defineProps({
   showActions: { type: Boolean, default: false }
 });
 </script>
+
+<style scoped>
+.game-card {
+  cursor: pointer;
+  transition: transform 0.3s ease;
+}
+
+.game-card:hover {
+  transform: translateY(-4px);
+}
+
+.game-card-img {
+  transition: transform 0.5s ease;
+}
+
+.game-card:hover .game-card-img {
+  transform: scale(1.1);
+}
+
+.game-card-overlay {
+  background: linear-gradient(to top, var(--black-opacity-80) 0%, var(--black-opacity-40) 50%, transparent 100%);
+  transition: opacity 0.3s ease;
+}
+
+.game-card:hover .game-card-overlay {
+  background: linear-gradient(to top, var(--black-opacity-90) 0%, var(--black-opacity-50) 50%, transparent 100%);
+}
+
+.game-card-img-wrapper {
+  height: var(--card-height, 180px);
+}
+
+.game-card-body-wrapper {
+  min-height: var(--card-height, 180px);
+}
+
+.game-card-title {
+  font-size: var(--card-title-size, 0.9rem);
+}
+
+.game-card-footer-text {
+  font-size: var(--card-footer-size, 0.75rem);
+}
+</style>

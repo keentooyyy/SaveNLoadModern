@@ -2,32 +2,24 @@
   <AuthLayout title="Save N Load" subtitle="We've sent a verification code to your email.">
     <form @submit.prevent="onSubmit">
       <div class="mb-3">
-        <label class="fs-6 opacity-50">EMAIL</label>
-        <input
-          class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white"
-          :class="{ 'is-invalid': fieldErrors?.email }"
-          type="email"
-          v-model="email"
-          placeholder="Enter your email"
-          required
-        />
+        <InputLabel text="EMAIL" />
+        <TextInput v-model="email" type="email" placeholder="Enter your email" :invalid="!!fieldErrors?.email" required />
       </div>
       <div class="mb-3">
-        <label class="fs-6 opacity-50">6-Digit Verification Code</label>
-        <input
-          class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white text-center otp-input-code"
-          :class="{ 'is-invalid': fieldErrors?.otp_code }"
-          type="text"
+        <InputLabel text="6-Digit Verification Code" />
+        <TextInput
           v-model="otpCode"
+          input-class="text-center otp-input-code"
           placeholder="000000"
           maxlength="6"
+          :invalid="!!fieldErrors?.otp_code"
           required
         />
       </div>
       <div class="d-grid mt-2">
-        <button type="button" class="btn btn-secondary text-white fw-bold py-2" :disabled="loading" @click="onResend">
+        <IconButton type="button" variant="secondary" class="text-white fw-bold py-2" :disabled="loading" @click="onResend">
           RESEND CODE
-        </button>
+        </IconButton>
       </div>
       <p class="text-white fs-6 text-center mt-3">
         Remember your password?
@@ -46,6 +38,9 @@ import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { useAuthStore } from '@/stores/auth';
+import IconButton from '@/components/atoms/IconButton.vue';
+import InputLabel from '@/components/atoms/InputLabel.vue';
+import TextInput from '@/components/atoms/TextInput.vue';
 
 const store = useAuthStore();
 const router = useRouter();
