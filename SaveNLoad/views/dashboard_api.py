@@ -16,7 +16,8 @@ def _user_payload(user):
     return {
         'id': user.id,
         'username': user.username,
-        'role': 'admin' if user.is_admin() else 'user'
+        'role': 'admin' if user.is_admin() else 'user',
+        'email': user.email
     }
 
 

@@ -21,6 +21,7 @@
           :type="inputType"
           :placeholder="placeholder"
           :input-class="inputClass"
+          @keydown.enter.prevent="$emit('action')"
         />
       </slot>
     </template>
@@ -32,6 +33,7 @@
           :type="inputType"
           :placeholder="placeholder"
           :input-class="inputClass"
+          @keydown.enter.prevent="$emit('action')"
         />
       </slot>
       <slot name="button">

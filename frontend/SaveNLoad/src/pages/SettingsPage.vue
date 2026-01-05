@@ -9,7 +9,6 @@
         <AccountSettingsPanel />
       </div>
     </div>
-    <GameSearchModal v-if="isAdmin" />
     <ManageGameModal v-if="isAdmin" />
   </AppLayout>
 </template>
@@ -22,7 +21,6 @@ import AddGamePanel from '@/components/organisms/AddGamePanel.vue';
 import ManageAccountsPanel from '@/components/organisms/ManageAccountsPanel.vue';
 import OperationQueuePanel from '@/components/organisms/OperationQueuePanel.vue';
 import AccountSettingsPanel from '@/components/organisms/AccountSettingsPanel.vue';
-import GameSearchModal from '@/components/organisms/GameSearchModal.vue';
 import ManageGameModal from '@/components/organisms/ManageGameModal.vue';
 import { useRouter } from 'vue-router';
 

@@ -72,7 +72,6 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
 import IconButton from '@/components/atoms/IconButton.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
 import TextInput from '@/components/atoms/TextInput.vue';
@@ -81,9 +80,9 @@ const props = defineProps({
   prefix: { type: String, default: 'game' }
 });
 
-const bannerUrl = ref('');
-const gameName = ref('');
-const saveLocations = ref(['']);
+const bannerUrl = defineModel<string>('bannerUrl', { default: '' });
+const gameName = defineModel<string>('gameName', { default: '' });
+const saveLocations = defineModel<string[]>('saveLocations', { default: () => [''] });
 
 const bannerPreviewId = `${props.prefix}-banner-preview`;
 const bannerInputId = `${props.prefix}-banner`;

@@ -22,7 +22,7 @@
               <span class="text-white fw-medium">{{ statusText }}</span>
               <span class="text-white-50 small">{{ Math.round(progress) }}%</span>
             </div>
-            <p class="text-white-50 small mt-2 mb-0">{{ detail }}</p>
+            <p v-if="detail" class="text-white-50 small mt-2 mb-0">{{ detail }}</p>
           </div>
         </div>
         

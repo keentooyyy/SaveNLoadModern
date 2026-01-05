@@ -221,3 +221,7 @@ def unclaim_worker(request):
     except Exception as e:
         print(f"ERROR: Failed to unclaim worker: {e}")
         return json_response_error(str(e), status=500)
+"""
+DEPRECATED: Legacy Django function views retained for reference only.
+Do not use in production; replaced by DRF API views.
+"""

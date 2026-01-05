@@ -1185,3 +1185,7 @@ def reset_user_password(request, user_id):
     except Exception as e:
         print(f"ERROR: Error resetting user password: {str(e)}")
         return json_response_error(f'Failed to reset password: {str(e)}', status=500)
+"""
+DEPRECATED: Legacy Django function views retained for reference only.
+Do not use in production; replaced by DRF API views.
+"""

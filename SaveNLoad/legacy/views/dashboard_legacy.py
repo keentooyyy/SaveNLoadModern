@@ -273,3 +273,7 @@ def search_available_games(request):
         'games': games_list,
         'count': len(games_list)
     })
+"""
+DEPRECATED: Legacy Django template views retained for reference only.
+Do not use in production; replaced by Vue frontend and DRF APIs.
+"""

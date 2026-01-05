@@ -824,3 +824,7 @@ def open_save_location(request, game_id):
         client_worker,
         message=message
     )
+"""
+DEPRECATED: Legacy Django function views retained for reference only.
+Do not use in production; replaced by DRF API views.
+"""

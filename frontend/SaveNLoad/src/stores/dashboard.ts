@@ -195,7 +195,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     try {
       const data = await apiPost(`/games/${gameId}/save/`, {});
       const message = data?.message || 'Save queued.';
-      if (!message.toLowerCase().includes('operations queued')) {
+      const normalizedMessage = message.toLowerCase();
+      if (!normalizedMessage.includes('operations queued') && !normalizedMessage.includes('save operation queued')) {
         notify.success(message);
       }
       return data;

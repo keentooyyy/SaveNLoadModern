@@ -105,6 +105,17 @@ const notify = {
   }
 };
 
+const HIDE_IN_OPERATION_MODAL_MESSAGES = [
+  "Oops! You don't have any save files to save. Maybe you haven't played the game yet, or the save location is incorrect.",
+  'The save directory is empty. There are no files to save. Make sure you have played the game and saved your progress.'
+];
+
+const shouldHideOperationDetail = (message: string) =>
+  HIDE_IN_OPERATION_MODAL_MESSAGES.some((hiddenMessage) => message.includes(hiddenMessage));
+
+const isOperationBlockedMessage = (message: string) =>
+  HIDE_IN_OPERATION_MODAL_MESSAGES.some((hiddenMessage) => message.includes(hiddenMessage));
+
 const handleAuthError = async (err: any) => {
   const status = err?.status;
   if (status === 401) {
@@ -172,6 +183,7 @@ const pollOperations = async (
   const maxAttempts = 300;
   let attempts = 0;
   let completed = false;
+  let errorToastShown = false;
 
   while (!completed && attempts < maxAttempts) {
     attempts += 1;
@@ -204,6 +216,20 @@ const pollOperations = async (
       const latestMessage = results
         .map((item) => item?.progress?.message || item?.message)
         .find((msg) => msg);
+
+      if (latestMessage && isOperationBlockedMessage(latestMessage)) {
+        operationModal.variant = 'danger';
+        operationModal.statusText = 'Operation failed';
+        operationModal.detail = '';
+        operationModal.progress = 100;
+        operationModal.closable = true;
+        if (!errorToastShown) {
+          notify.error(latestMessage);
+          errorToastShown = true;
+        }
+        completed = true;
+        continue;
+      }
 
       operationModal.statusText = latestMessage || 'Processing...';
       operationModal.detail = `${completedCount}/${totalCount} completed`;
@@ -243,8 +269,9 @@ const pollOperations = async (
           const errorMessage = results.find((item) => item?.message)?.message || 'Operation failed.';
           operationModal.variant = 'danger';
           operationModal.statusText = 'Operation failed';
-          operationModal.detail = errorMessage;
+          operationModal.detail = shouldHideOperationDetail(errorMessage) ? '' : errorMessage;
           notify.error(errorMessage);
+          errorToastShown = true;
         }
         operationModal.progress = 100;
         operationModal.closable = true;
