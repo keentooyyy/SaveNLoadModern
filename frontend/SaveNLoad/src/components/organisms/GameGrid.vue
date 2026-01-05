@@ -60,6 +60,8 @@
           title-tag="h5"
           :show-actions="true"
           @click="emit('open', game)"
+          @save="emit('save', game)"
+          @load="emit('load', game)"
         />
       </div>
       <div v-if="!loading && !games.length" class="col-12">
@@ -81,7 +83,7 @@ defineProps({
   loading: { type: Boolean, default: false }
 });
 
-const emit = defineEmits(['search', 'open']);
+const emit = defineEmits(['search', 'open', 'save', 'load']);
 const searchQuery = defineModel<string>('search', { default: '' });
 const sortBy = defineModel<string>('sort', { default: 'name_asc' });
 

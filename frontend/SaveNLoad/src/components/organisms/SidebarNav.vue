@@ -10,7 +10,7 @@
     >
       <div class="d-flex align-items-center flex-grow-1 min-w-0 gap-2 gap-md-3 sidebar-header-content">
         <div class="d-flex align-items-center justify-content-center flex-shrink-0 logo-icon">
-          <img src="/images/icon.png" alt="Save N Load" class="img-fluid" />
+          <img src="/images/icon.png" alt="Save N Load" class="img-fluid" width="50" height="50" />
         </div>
         <span class="text-white fw-bold text-truncate fs-5 sidebar-header-text">Save N Load</span>
       </div>

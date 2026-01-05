@@ -47,7 +47,9 @@ services:
         condition: service_healthy
 
   web:
-    image: node:20-alpine
+    build:
+      context: .
+      dockerfile: frontend/SaveNLoad/Dockerfile.web
     container_name: web
     working_dir: /app/frontend/SaveNLoad
     ports:
@@ -55,6 +57,10 @@ services:
     environment:
       - CHOKIDAR_USEPOLLING=true
       - CHOKIDAR_INTERVAL=300
-    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 8000"
+    command: sh -c "npm run dev -- --host 0.0.0.0 --port 8000"
     volumes:
       - .:/app
+      - web_node_modules:/app/frontend/SaveNLoad/node_modules
+
+volumes:
+  web_node_modules:

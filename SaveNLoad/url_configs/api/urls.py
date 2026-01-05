@@ -4,4 +4,5 @@ urlpatterns = [
     path('', include('SaveNLoad.url_configs.api.dashboard')),
     path('', include('SaveNLoad.url_configs.api.meta')),
     path('', include('SaveNLoad.url_configs.api.auth')),
+    path('', include('SaveNLoad.url_configs.api.save_load')),
 ]

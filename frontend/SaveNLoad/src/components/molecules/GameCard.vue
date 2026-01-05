@@ -21,10 +21,10 @@
           {{ footer }}
         </small>
         <div v-if="showActions" class="d-flex gap-2 mt-2">
-          <button class="btn btn-sm btn-success flex-fill" @click.stop>
+          <button class="btn btn-sm btn-success flex-fill" @click.stop="emit('save')">
             <i class="fas fa-upload me-1"></i> Save
           </button>
-          <button class="btn btn-sm btn-primary flex-fill" @click.stop>
+          <button class="btn btn-sm btn-primary flex-fill" @click.stop="emit('load')">
             <i class="fas fa-download me-1"></i> Quick Load
           </button>
         </div>
@@ -39,10 +39,10 @@
         <component :is="titleTag" class="card-title text-white mb-2">{{ title }}</component>
         <p v-if="footer" class="text-white-50 mb-3 small">{{ footer }}</p>
         <div v-if="showActions" class="d-flex gap-2 justify-content-center">
-          <button class="btn btn-sm btn-success" @click.stop>
+          <button class="btn btn-sm btn-success" @click.stop="emit('save')">
             <i class="fas fa-upload me-1"></i> Save
           </button>
-          <button class="btn btn-sm btn-primary" @click.stop>
+          <button class="btn btn-sm btn-primary" @click.stop="emit('load')">
             <i class="fas fa-download me-1"></i> Quick Load
           </button>
         </div>
@@ -52,7 +52,7 @@
 </template>
 
 <script setup lang="ts">
-const emit = defineEmits(['click']);
+const emit = defineEmits(['click', 'save', 'load']);
 
 defineProps({
   title: { type: String, default: '' },

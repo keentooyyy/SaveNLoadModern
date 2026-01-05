@@ -18,6 +18,21 @@ type GameSummary = {
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
+const notify = {
+  success: (msg: string) => {
+    const t = (window as any).toastr;
+    if (t?.success) {
+      t.success(msg);
+    }
+  },
+  error: (msg: string) => {
+    const t = (window as any).toastr;
+    if (t?.error) {
+      t.error(msg);
+    }
+  }
+};
+
 const resolveMediaUrl = (url: string) => {
   if (!url) {
     return url;
@@ -32,6 +47,20 @@ const normalizeGameImage = (game: GameSummary) => ({
   ...game,
   image: resolveMediaUrl(game.image || '')
 });
+
+const getCookie = (name: string) => {
+  const match = document.cookie.match(new RegExp(`(^|;\\s*)${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[2]) : '';
+};
+
+const ensureCsrf = async () => {
+  const token = getCookie('csrftoken');
+  if (token) {
+    return token;
+  }
+  await fetch(`${API_BASE}/auth/csrf`, { credentials: 'include' });
+  return getCookie('csrftoken');
+};
 
 async function apiGet(path: string, params?: Record<string, string>) {
   const url = new URL(`${API_BASE}${path}`, window.location.origin);
@@ -62,12 +91,42 @@ async function apiGet(path: string, params?: Record<string, string>) {
   return data;
 }
 
+async function apiPost(path: string, body: Record<string, unknown>) {
+  const csrfToken = await ensureCsrf();
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrfToken
+    },
+    credentials: 'include',
+    body: JSON.stringify(body)
+  });
+
+  let data: any = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    const error = new Error(data?.error || data?.message || 'Request failed');
+    (error as any).status = response.status;
+    (error as any).data = data;
+    throw error;
+  }
+
+  return data;
+}
+
 export const useDashboardStore = defineStore('dashboard', () => {
   const user = ref<DashboardUser | null>(null);
   const isAdmin = ref(false);
   const recentGames = ref<GameSummary[]>([]);
   const games = ref<GameSummary[]>([]);
   const loading = ref(false);
+  const operationLoading = ref(false);
   const error = ref('');
 
   const loadDashboard = async () => {
@@ -103,14 +162,60 @@ export const useDashboardStore = defineStore('dashboard', () => {
     }
   };
 
+  const saveGame = async (gameId: number) => {
+    operationLoading.value = true;
+    error.value = '';
+    try {
+      const data = await apiPost(`/games/${gameId}/save/`, {});
+      notify.success(data?.message || 'Save queued.');
+      return data;
+    } catch (err: any) {
+      error.value = err?.message || 'Failed to save game.';
+      notify.error(error.value);
+      throw err;
+    } finally {
+      operationLoading.value = false;
+    }
+  };
+
+  const loadGame = async (gameId: number) => {
+    operationLoading.value = true;
+    error.value = '';
+    try {
+      const data = await apiPost(`/games/${gameId}/load/`, {});
+      notify.success(data?.message || 'Load queued.');
+      return data;
+    } catch (err: any) {
+      error.value = err?.message || 'Failed to load game.';
+      notify.error(error.value);
+      throw err;
+    } finally {
+      operationLoading.value = false;
+    }
+  };
+
+  const checkOperationStatus = async (operationId: string) => {
+    const data = await apiGet(`/operations/${operationId}/status/`);
+    if (!data?.success && data?.error) {
+      const error = new Error(data.error);
+      (error as any).status = 400;
+      throw error;
+    }
+    return data;
+  };
+
   return {
     user,
     isAdmin,
     recentGames,
     games,
     loading,
+    operationLoading,
     error,
     loadDashboard,
-    searchGames
+    searchGames,
+    saveGame,
+    loadGame,
+    checkOperationStatus
   };
 });
