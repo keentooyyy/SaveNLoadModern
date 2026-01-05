@@ -14,18 +14,13 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.urls import path, include, re_path
-from SaveNLoad.views import dashboard
+from django.urls import include, path, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve
 
 urlpatterns = [
     path('', include('SaveNLoad.urls')),
-    path('worker-required/', dashboard.worker_required, name='worker_required'),
-    path('admin/', include('SaveNLoad.url_configs.admin.urls')),
-    path('user/', include('SaveNLoad.url_configs.user.urls')),
-    path('api/client/', include('SaveNLoad.url_configs.client_worker.urls')),
     # Serve media files in both debug and production (LAN) modes
     re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
 ]

@@ -1,7 +1,7 @@
 from functools import wraps
 
 from django.conf import settings
-from django.http import JsonResponse
+from rest_framework.response import Response
 
 import jwt
 
@@ -46,7 +46,7 @@ def login_required(view_func):
         user = get_current_user(request)
 
         if not user:
-            return JsonResponse({'error': 'Not authenticated. Please log in.', 'requires_login': True}, status=401)
+            return Response({'error': 'Not authenticated. Please log in.', 'requires_login': True}, status=401)
 
         # User is authenticated - attach to request and proceed
         request.user = user
@@ -83,7 +83,7 @@ def client_worker_required(view_func):
         # Check authentication first
         user = get_current_user(request)
         if not user:
-            return JsonResponse({
+            return Response({
                 'error': 'Not authenticated. Please log in.',
                 'requires_login': True
             }, status=401)
@@ -95,13 +95,7 @@ def client_worker_required(view_func):
         has_worker = len(worker_ids) > 0
 
         if not has_worker:
-            if is_ajax:
-                return JsonResponse({
-                    'error': 'Client worker not connected. Please ensure the client worker is running and claimed.',
-                    'requires_worker': True
-                }, status=503)
-
-            return JsonResponse({
+            return Response({
                 'error': 'Client worker not connected. Please ensure the client worker is running and claimed.',
                 'requires_worker': True
             }, status=503)

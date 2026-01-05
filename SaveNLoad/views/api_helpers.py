@@ -3,8 +3,6 @@ Common helper functions for API endpoints
 """
 import json
 import os
-
-from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -15,6 +13,8 @@ from SaveNLoad.services.redis_worker_service import (
     is_worker_online
 )
 from SaveNLoad.utils.image_utils import get_image_url_or_fallback
+from rest_framework.response import Response
+
 from SaveNLoad.views.custom_decorators import get_current_user
 
 
@@ -46,7 +46,7 @@ def delete_game_banner_file(game):
     return True
 
 
-def json_response_error(message: str, status: int = 400) -> JsonResponse:
+def json_response_error(message: str, status: int = 400) -> Response:
     """
     Helper to create error JSON responses.
 
@@ -57,10 +57,10 @@ def json_response_error(message: str, status: int = 400) -> JsonResponse:
     Returns:
         JsonResponse with error payload.
     """
-    return JsonResponse({'error': message}, status=status)
+    return Response({'error': message}, status=status)
 
 
-def json_response_success(message: str = None, data: dict = None) -> JsonResponse:
+def json_response_success(message: str = None, data: dict = None) -> Response:
     """
     Helper to create success JSON responses.
 
@@ -76,7 +76,7 @@ def json_response_success(message: str = None, data: dict = None) -> JsonRespons
         response['message'] = message
     if data:
         response.update(data)
-    return JsonResponse(response)
+    return Response(response)
 
 
 def parse_json_body(request):
@@ -90,6 +90,9 @@ def parse_json_body(request):
     Returns:
         Tuple of (data_dict, error_response_or_none).
     """
+    if hasattr(request, 'data'):
+        return request.data or {}, None
+
     try:
         data = json.loads(request.body or "{}")
         return data, None
@@ -198,7 +201,7 @@ def get_client_worker_or_error(user, request=None):
     worker_ids = get_user_workers(user.id)
 
     if not worker_ids:
-        return None, JsonResponse({
+        return None, Response({
             'error': 'No client worker paired. Please claim a worker in settings.',
             'requires_worker': True
         }, status=503)
@@ -207,7 +210,7 @@ def get_client_worker_or_error(user, request=None):
     client_id = worker_ids[0]
 
     if not is_worker_online(client_id):
-        return None, JsonResponse({
+        return None, Response({
             'error': f'Client worker ({client_id}) is offline. Please ensure it is running.',
             'requires_worker': True
         }, status=503)
@@ -287,7 +290,7 @@ def json_response_field_errors(field_errors, general_errors=None, message=None):
         response['errors'] = general_errors
     if message:
         response['message'] = message
-    return JsonResponse(response, status=400)
+    return Response(response, status=400)
 
 
 def get_client_worker_by_id_or_error(client_id):
