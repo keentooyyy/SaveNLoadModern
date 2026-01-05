@@ -61,6 +61,10 @@ else:
 
 INSTALLED_APPS = [
     'channels',
+    'rest_framework',
+    'corsheaders',
+    'django_ratelimit',
+    'csp',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -90,6 +94,8 @@ TEMPLATES = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',  # WhiteNoise for static files
+    'corsheaders.middleware.CorsMiddleware',
+    'csp.middleware.CSPMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -214,6 +220,11 @@ CSRF_COOKIE_HTTPONLY = False  # Must be False for AJAX to work
 CSRF_COOKIE_SAMESITE = 'Lax'  # Prevents CSRF attacks while allowing AJAX
 CSRF_USE_SESSIONS = False  # Use cookie-based CSRF tokens
 CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'  # Default CSRF failure view
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:8000').split(',')
+    if origin.strip()
+]
 
 # Security Settings for Production
 if not DEBUG:
@@ -223,6 +234,17 @@ if not DEBUG:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SECURE = False  # Set to True only with HTTPS
     SESSION_COOKIE_SAMESITE = 'Lax'
+
+# JWT Auth (Cookie-based)
+AUTH_ACCESS_COOKIE_NAME = os.getenv('AUTH_ACCESS_COOKIE_NAME', 'snl_access')
+AUTH_REFRESH_COOKIE_NAME = os.getenv('AUTH_REFRESH_COOKIE_NAME', 'snl_refresh')
+AUTH_RESET_COOKIE_NAME = os.getenv('AUTH_RESET_COOKIE_NAME', 'snl_reset')
+AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', 'False') == 'True'
+AUTH_COOKIE_SAMESITE = os.getenv('AUTH_COOKIE_SAMESITE', 'Lax')
+AUTH_ACCESS_TOKEN_MINUTES = int(os.getenv('AUTH_ACCESS_TOKEN_MINUTES', '15'))
+AUTH_REFRESH_TOKEN_DAYS = int(os.getenv('AUTH_REFRESH_TOKEN_DAYS', '14'))
+AUTH_REFRESH_TOKEN_SHORT_DAYS = int(os.getenv('AUTH_REFRESH_TOKEN_SHORT_DAYS', '1'))
+AUTH_RESET_TOKEN_MINUTES = int(os.getenv('AUTH_RESET_TOKEN_MINUTES', '15'))
 
 # Permissions-Policy header configuration
 # Disable experimental/unsupported features to avoid browser warnings
@@ -242,6 +264,45 @@ PERMISSIONS_POLICY = {
 # Disable for LAN deployment (HTTP) to avoid browser warnings
 # Only needed for HTTPS deployments with cross-origin requirements
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
+
+# Content Security Policy (CSP)
+CONTENT_SECURITY_POLICY = {
+    'DIRECTIVES': {
+        'default-src': ("'self'",),
+        'img-src': ("'self'", 'data:'),
+        'font-src': ("'self'", 'data:'),
+        'style-src': ("'self'",),
+        'script-src': ("'self'",),
+        'connect-src': ("'self'",)
+    }
+}
+
+if DEBUG:
+    CONTENT_SECURITY_POLICY['DIRECTIVES'].update({
+        'script-src': ("'self'", "'unsafe-eval'", 'http://localhost:8000'),
+        'style-src': ("'self'", "'unsafe-inline'", 'http://localhost:8000'),
+        'connect-src': ("'self'", 'http://localhost:8000', 'ws://localhost:8000'),
+        'img-src': ("'self'", 'data:', 'http://localhost:8000')
+    })
+
+# Cache (required for django-ratelimit)
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': _redis_channel_url,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient'
+        }
+    }
+}
+
+# CORS (Vue dev server)
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:8000').split(',')
+    if origin.strip()
+]
 
 
 

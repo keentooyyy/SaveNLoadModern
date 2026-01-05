@@ -48,9 +48,6 @@ services:
     image: node:20-alpine
     container_name: web
     working_dir: /app/frontend/SaveNLoad
-    volumes:
-      - ./frontend/SaveNLoad:/app/frontend/SaveNLoad
-      - /app/frontend/SaveNLoad/node_modules
     ports:
       - "8000:8000"
     environment:

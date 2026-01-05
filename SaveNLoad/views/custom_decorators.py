@@ -1,20 +1,22 @@
 from functools import wraps
 
+from django.conf import settings
 from django.http import JsonResponse
-from django.shortcuts import redirect
-from django.urls import reverse
+
+import jwt
 
 from SaveNLoad.models import SimpleUsers
+from SaveNLoad.utils.jwt_utils import decode_token
 from SaveNLoad.services.redis_worker_service import get_user_workers
 
 
 def login_required(view_func):
     """
-    Custom login required decorator using sessions - IDOR-proof
+    Custom login required decorator using JWT cookies - IDOR-proof
     
     Security features:
     - Uses get_current_user() for all validation logic (DRY principle)
-    - Returns JSON error for AJAX requests instead of redirecting
+    - Returns JSON error for unauthenticated requests
     - Attaches user to request.user for view access
     
     Note: All session validation, user_id validation, and database checks
@@ -40,23 +42,11 @@ def login_required(view_func):
         Returns:
             HttpResponse from the wrapped view or redirect/JsonResponse on failure.
         """
-        # Check if this is an AJAX request
-        # Check multiple indicators to reliably detect AJAX requests
-        is_ajax = (
-                request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
-                request.META.get('HTTP_CONTENT_TYPE', '').startswith('application/json') or
-                request.META.get('HTTP_ACCEPT', '').startswith('application/json') or
-                request.path.startswith('/api/')
-        )
-
         # Use get_current_user() to handle all validation logic
         user = get_current_user(request)
 
         if not user:
-            # User not authenticated - return appropriate response
-            if is_ajax:
-                return JsonResponse({'error': 'Not authenticated. Please log in.', 'requires_login': True}, status=401)
-            return redirect(reverse('SaveNLoad:login'))
+            return JsonResponse({'error': 'Not authenticated. Please log in.', 'requires_login': True}, status=401)
 
         # User is authenticated - attach to request and proceed
         request.user = user
@@ -90,18 +80,13 @@ def client_worker_required(view_func):
         Returns:
             HttpResponse from the wrapped view or redirect/JsonResponse on failure.
         """
-        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or \
-                  request.META.get('HTTP_CONTENT_TYPE', '').startswith('application/json')
-
         # Check authentication first
         user = get_current_user(request)
         if not user:
-            if is_ajax:
-                return JsonResponse({
-                    'error': 'Not authenticated. Please log in.',
-                    'requires_login': True
-                }, status=401)
-            return redirect(reverse('SaveNLoad:login'))
+            return JsonResponse({
+                'error': 'Not authenticated. Please log in.',
+                'requires_login': True
+            }, status=401)
 
         # Check for active worker owned by this user
         # 6-second timeout matches is_online default
@@ -116,7 +101,10 @@ def client_worker_required(view_func):
                     'requires_worker': True
                 }, status=503)
 
-            return redirect(reverse('worker_required'))
+            return JsonResponse({
+                'error': 'Client worker not connected. Please ensure the client worker is running and claimed.',
+                'requires_worker': True
+            }, status=503)
 
         return view_func(request, *args, **kwargs)
 
@@ -125,13 +113,13 @@ def client_worker_required(view_func):
 
 def get_current_user(request):
     """
-    Get current user from session - IDOR-proof implementation
+    Get current user from JWT - IDOR-proof implementation
     
     Security features:
-    - Validates session exists and is not expired
+    - Validates access token exists and is not expired
     - Validates user_id is a valid integer (prevents type confusion attacks)
     - Verifies user still exists in database (prevents deleted user access)
-    - Clears invalid sessions automatically
+    - Fails closed for invalid tokens
     - Returns None if any validation fails (fail-secure)
     - Implements request-level caching to prevent multiple DB queries
     
@@ -145,27 +133,32 @@ def get_current_user(request):
     if hasattr(request, '_cached_user'):
         return request._cached_user
 
-    # Check if session exists
-    if not hasattr(request, 'session'):
+    token = None
+
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header.split(' ', 1)[1].strip()
+
+    if not token:
+        token = request.COOKIES.get(settings.AUTH_ACCESS_COOKIE_NAME)
+
+    if not token:
         return None
 
-    # Get user_id from session
-    user_id = request.session.get('user_id')
-
-    if not user_id:
+    try:
+        payload = decode_token(token, 'access')
+        user_id = int(payload.get('sub', 0))
+    except (jwt.InvalidTokenError, ValueError):
         return None
 
     # Validate user_id is a valid integer (prevent type confusion attacks)
     try:
         user_id = int(user_id)
     except (ValueError, TypeError):
-        # Invalid user_id type - clear session and return None
-        request.session.flush()
         return None
 
     # Validate user_id is positive (prevent negative IDs or zero)
     if user_id <= 0:
-        request.session.flush()
         return None
 
     # Get user from database - verify it still exists
@@ -181,8 +174,6 @@ def get_current_user(request):
         request._cached_user = user
         return user
     except SimpleUsers.DoesNotExist:
-        # User was deleted - clear session to prevent orphaned sessions
-        request.session.flush()
         return None
     except Exception:
         # Unexpected error - fail securely

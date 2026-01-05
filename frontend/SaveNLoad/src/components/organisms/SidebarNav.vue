@@ -54,7 +54,7 @@
       </div>
       <div class="d-flex align-items-center justify-content-between">
         <div class="text-white-50 small opacity-75">Ac 2026 SaveNLoadModern</div>
-        <button class="btn p-0 text-white-50" type="button" title="Logout" aria-label="Logout">
+        <button class="btn p-0 text-white-50" type="button" title="Logout" aria-label="Logout" @click="onLogout">
           <i class="fas fa-sign-out-alt fs-4"></i>
         </button>
       </div>
@@ -63,6 +63,8 @@
 </template>
 
 <script setup lang="ts">
+import { useRouter } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
 import { useRoute } from 'vue-router';
 
 defineProps({
@@ -71,6 +73,16 @@ defineProps({
 });
 
 const route = useRoute();
+const router = useRouter();
+const store = useAuthStore();
 
 const isActive = (path: string) => route.path === path;
+
+const onLogout = async () => {
+  try {
+    await store.logout();
+  } finally {
+    await router.push('/login');
+  }
+};
 </script>

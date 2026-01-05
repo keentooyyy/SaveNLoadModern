@@ -1,18 +1,27 @@
-from django.shortcuts import render, redirect
-from django.urls import reverse
-from django.utils.html import escape
-from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
+from datetime import timedelta
+
+import jwt
+from django.conf import settings
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django_ratelimit.decorators import ratelimit
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import status
 
 from SaveNLoad.models import SimpleUsers, UserRole
-from SaveNLoad.views.api_helpers import (
-    redirect_if_logged_in,
-    json_response_with_redirect,
-    json_response_field_errors,
-    json_response_error,
-    json_response_success,
-    parse_json_body
+from SaveNLoad.models.password_reset_otp import PasswordResetOTP
+from SaveNLoad.utils.email_service import send_otp_email
+from SaveNLoad.utils.jwt_utils import (
+    issue_access_token,
+    issue_refresh_token,
+    issue_reset_token,
+    decode_token,
+    find_active_refresh_token,
+    revoke_refresh_token,
+    revoke_all_refresh_tokens
 )
-from SaveNLoad.views.custom_decorators import login_required, get_current_user
 from SaveNLoad.views.input_sanitizer import (
     sanitize_username,
     sanitize_email,
@@ -21,145 +30,142 @@ from SaveNLoad.views.input_sanitizer import (
 )
 
 
-@ensure_csrf_cookie
-@csrf_protect
-def login(request):
-    """
-    Login page and authentication - CSRF protected.
+def _json_error(message, errors=None, http_status=status.HTTP_400_BAD_REQUEST):
+    payload = {'message': message}
+    if errors:
+        payload['errors'] = errors
+    return Response(payload, status=http_status)
 
-    Args:
-        request: Django request object.
 
-    Returns:
-        HttpResponse or JsonResponse.
-    """
-    # Check if already logged in
-    redirect_response = redirect_if_logged_in(request)
-    if redirect_response:
-        return redirect_response
+def _set_cookie(response, name, value, max_age, path='/'):
+    response.set_cookie(
+        name,
+        value,
+        max_age=max_age,
+        httponly=True,
+        secure=settings.AUTH_COOKIE_SECURE,
+        samesite=settings.AUTH_COOKIE_SAMESITE,
+        path=path
+    )
 
-    if request.method == 'POST':
-        # Sanitize and validate inputs
-        # Accept either username or email
-        username_or_email = request.POST.get('username', '').strip()
-        password = request.POST.get('password')
-        remember_me = request.POST.get('rememberMe') == 'on'
 
-        # Validation with field-specific errors
+def _clear_cookie(response, name, path='/'):
+    response.delete_cookie(name, path=path)
+
+
+def _get_client_ip(request):
+    forwarded = request.headers.get('X-Forwarded-For', '')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
+
+
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class CsrfView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({'message': 'CSRF cookie set.'}, status=status.HTTP_200_OK)
+
+
+@method_decorator(ratelimit(key='ip', rate='5/m', block=True), name='post')
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        username_or_email = request.data.get('username', '').strip()
+        password = request.data.get('password') or ''
+        remember_me = bool(request.data.get('rememberMe'))
+
         field_errors = {}
 
         if not username_or_email:
             field_errors['username'] = 'Username or email is required.'
-
         if not password:
             field_errors['password'] = 'Password is required.'
+        if field_errors:
+            return _json_error('Please fill in all required fields.', field_errors)
 
-        # Only handle AJAX requests
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            if field_errors:
-                return json_response_field_errors(
-                    field_errors,
-                    message='Please fill in all required fields.'
-                )
+        user = None
+        try:
+            sanitized_username = sanitize_username(username_or_email)
+            if sanitized_username:
+                user = SimpleUsers.objects.get(username=sanitized_username)
+        except SimpleUsers.DoesNotExist:
+            pass
 
-            # Custom authentication - check user exists by username or email and password matches
-            # Using Django ORM .filter() prevents SQL injection
-            user = None
-
-            # Try to find user by username first
+        if not user:
             try:
-                sanitized_username = sanitize_username(username_or_email)
-                if sanitized_username:
-                    user = SimpleUsers.objects.get(username=sanitized_username)
+                sanitized_email = sanitize_email(username_or_email)
+                if sanitized_email:
+                    user = SimpleUsers.objects.get(email__iexact=sanitized_email)
             except SimpleUsers.DoesNotExist:
                 pass
 
-            # If not found by username, try email
-            if not user:
-                try:
-                    sanitized_email = sanitize_email(username_or_email)
-                    if sanitized_email:
-                        user = SimpleUsers.objects.get(email__iexact=sanitized_email)
-                except SimpleUsers.DoesNotExist:
-                    pass
+        if not user or not user.check_password(password):
+            field_errors['username'] = 'Invalid username/email or password.'
+            field_errors['password'] = 'Invalid username/email or password.'
+            return _json_error('Invalid username/email or password.', field_errors, status.HTTP_401_UNAUTHORIZED)
 
-            # Check password if user was found
-            if user and user.check_password(password):
-                # Store user ID in session
-                request.session['user_id'] = user.id
+        access_token = issue_access_token(user)
+        refresh_days = settings.AUTH_REFRESH_TOKEN_DAYS if remember_me else settings.AUTH_REFRESH_TOKEN_SHORT_DAYS
+        refresh_token = issue_refresh_token(
+            user,
+            refresh_days,
+            user_agent=request.headers.get('User-Agent'),
+            ip_address=_get_client_ip(request)
+        )
 
-                # Handle "Remember Me" functionality
-                if not remember_me:
-                    # Session expires in 1 day (86400 seconds) - standard practice
-                    request.session.set_expiry(86400)
-                else:
-                    # Session expires in 2 weeks (1209600 seconds) when "Remember Me" is checked
-                    request.session.set_expiry(1209600)
+        response = Response(
+            {
+                'message': 'Login successful.',
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'role': user.role
+                }
+            },
+            status=status.HTTP_200_OK
+        )
 
-                # Server-side redirect for AJAX (via custom header)
-                if user.is_admin():
-                    redirect_url = reverse('admin:dashboard')
-                else:
-                    redirect_url = reverse('user:dashboard')
-
-                # Escape username to prevent XSS in response
-                safe_username = escape(user.username)
-                return json_response_with_redirect(
-                    message=f'Welcome back, {safe_username}!',
-                    redirect_url=redirect_url
-                )
-            else:
-                # User not found or password incorrect
-                field_errors['username'] = 'Invalid username/email or password.'
-                field_errors['password'] = 'Invalid username/email or password.'
-                return json_response_field_errors(
-                    field_errors,
-                    message='Invalid username/email or password.'
-                )
-
-    return render(request, 'SaveNLoad/login.html')
+        _set_cookie(
+            response,
+            settings.AUTH_ACCESS_COOKIE_NAME,
+            access_token,
+            max_age=int(timedelta(minutes=settings.AUTH_ACCESS_TOKEN_MINUTES).total_seconds())
+        )
+        _set_cookie(
+            response,
+            settings.AUTH_REFRESH_COOKIE_NAME,
+            refresh_token,
+            max_age=int(timedelta(days=refresh_days).total_seconds())
+        )
+        return response
 
 
-@ensure_csrf_cookie
-@csrf_protect
-def register(request):
-    """
-    Registration page and user creation - CSRF protected.
+@method_decorator(ratelimit(key='ip', rate='3/m', block=True), name='post')
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
 
-    Args:
-        request: Django request object.
+    def post(self, request):
+        username = sanitize_username(request.data.get('username'))
+        email = sanitize_email(request.data.get('email'))
+        password = request.data.get('password') or ''
+        repeat_password = request.data.get('repeatPassword') or ''
 
-    Returns:
-        HttpResponse or JsonResponse.
-    """
-    # Check if already logged in
-    redirect_response = redirect_if_logged_in(request)
-    if redirect_response:
-        return redirect_response
-
-    if request.method == 'POST':
-        # Sanitize and validate inputs
-        username = sanitize_username(request.POST.get('username'))
-        email = sanitize_email(request.POST.get('email'))
-        password = request.POST.get('password')  # Password is hashed, no sanitization needed
-        repeat_password = request.POST.get('repeatPassword')
-
-        # Validation with field-specific errors
         field_errors = {}
-        general_errors = []
 
         if not username:
             field_errors['username'] = 'Username is required.'
         elif not validate_username_format(username):
-            field_errors[
-                'username'] = 'Username must be 3-150 characters and contain only letters, numbers, underscores, and hyphens.'
-        # Using Django ORM .filter() prevents SQL injection
+            field_errors['username'] = (
+                'Username must be 3-150 characters and contain only letters, numbers, underscores, and hyphens.'
+            )
         elif SimpleUsers.objects.filter(username=username).exists():
             field_errors['username'] = 'Username already exists.'
 
         if not email:
             field_errors['email'] = 'Email is required.'
-        # Using Django ORM .filter() prevents SQL injection
         elif SimpleUsers.objects.filter(email=email).exists():
             field_errors['email'] = 'Email already exists.'
 
@@ -173,341 +179,213 @@ def register(request):
         if password != repeat_password:
             field_errors['repeatPassword'] = 'Passwords do not match.'
 
-        # Only handle AJAX requests
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            if field_errors or general_errors:
-                return json_response_field_errors(field_errors, general_errors)
-            else:
-                # Create user
-                try:
-                    user = SimpleUsers(
-                        username=username,
-                        email=email,
-                        role=UserRole.USER
-                    )
-                    user.set_password(password)
-                    user.save()
+        if field_errors:
+            return _json_error('Please fix the errors below.', field_errors)
 
-                    # Server-side redirect for AJAX (via custom header)
-                    redirect_url = reverse('SaveNLoad:login')
-                    return json_response_with_redirect(
-                        message='Account created successfully! Please login.',
-                        redirect_url=redirect_url
-                    )
-                except Exception as e:
-                    # Don't expose internal error details to prevent information leakage
-                    return json_response_error(
-                        'An error occurred while creating your account. Please try again.',
-                        status=400
-                    )
+        user = SimpleUsers(
+            username=username,
+            email=email,
+            role=UserRole.USER
+        )
+        user.set_password(password)
+        user.save()
 
-    return render(request, 'SaveNLoad/register.html')
+        return Response({'message': 'Account created successfully. Please login.'}, status=status.HTTP_201_CREATED)
 
 
-@ensure_csrf_cookie
-@csrf_protect
-def forgot_password(request):
-    """
-    Forgot password page - sends OTP via email.
+@method_decorator(ratelimit(key='ip', rate='5/m', block=True), name='post')
+class ForgotPasswordView(APIView):
+    permission_classes = [AllowAny]
 
-    Args:
-        request: Django request object.
+    def post(self, request):
+        raw_email = request.data.get('email', '').strip()
+        email = sanitize_email(raw_email)
 
-    Returns:
-        HttpResponse or JsonResponse.
-    """
-    # Check if already logged in
-    redirect_response = redirect_if_logged_in(request)
-    if redirect_response:
-        return redirect_response
+        if not email:
+            return _json_error('Please enter a valid email address.')
 
-    if request.method == 'POST':
-        # Handle AJAX requests
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            from SaveNLoad.models.password_reset_otp import PasswordResetOTP
-            from SaveNLoad.utils.email_service import send_otp_email
+        try:
+            user = SimpleUsers.objects.get(email__iexact=email)
+        except SimpleUsers.DoesNotExist:
+            # Avoid account enumeration.
+            return Response({'message': 'If the email exists, an OTP was sent.'}, status=status.HTTP_200_OK)
 
-            data, error_response = parse_json_body(request)
-            if error_response:
-                return error_response
+        try:
+            otp = PasswordResetOTP.generate_otp(user, user.email, expiry_minutes=10)
+            email_sent = send_otp_email(user.email, otp.otp_code, user.username)
+            if not email_sent:
+                return _json_error('Failed to send email. Please try again later.', http_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            return _json_error('An error occurred. Please try again later.', http_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # Sanitize email
-            raw_email = data.get('email', '').strip()
-            email = sanitize_email(raw_email)
+        return Response({'message': 'If the email exists, an OTP was sent.'}, status=status.HTTP_200_OK)
 
-            if not email:
-                return json_response_error('Please enter a valid email address.', status=400)
 
-            # Check if user exists with this email - ONLY send OTP to registered emails
+@method_decorator(ratelimit(key='ip', rate='5/m', block=True), name='post')
+class VerifyOtpView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = sanitize_email(request.data.get('email', '').strip())
+        otp_code = (request.data.get('otp_code') or '').strip()
+        action = request.data.get('action', 'verify')
+
+        if not email:
+            return _json_error('Email is required.')
+
+        if action == 'resend':
             try:
                 user = SimpleUsers.objects.get(email__iexact=email)
+                otp = PasswordResetOTP.generate_otp(user, user.email, expiry_minutes=10)
+                email_sent = send_otp_email(user.email, otp.otp_code, user.username)
+                if not email_sent:
+                    return _json_error('Failed to send email. Please try again later.', http_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             except SimpleUsers.DoesNotExist:
-                # User doesn't exist - return error message
-                return json_response_error(
-                    'Email not found. This email address is not registered. Please check your email or create an account.',
-                    status=404
-                )
+                return Response({'message': 'If the email exists, an OTP was sent.'}, status=status.HTTP_200_OK)
+            except Exception:
+                return _json_error('An error occurred. Please try again later.', http_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # User exists - verify we're using the registered email (not the input)
-            # This ensures we only send to the exact email stored in the database
-            registered_email = user.email
+            return Response({'message': 'If the email exists, an OTP was sent.'}, status=status.HTTP_200_OK)
 
-            # Generate OTP using the registered email
+        if not otp_code:
+            return _json_error('OTP code is required.')
+
+        otp = PasswordResetOTP.validate_otp(email, otp_code)
+        if not otp:
+            return _json_error('Invalid or expired OTP code.', http_status=status.HTTP_400_BAD_REQUEST)
+
+        reset_token = issue_reset_token(otp.user, otp.id)
+        response = Response({'message': 'OTP verified successfully.'}, status=status.HTTP_200_OK)
+        _set_cookie(
+            response,
+            settings.AUTH_RESET_COOKIE_NAME,
+            reset_token,
+            max_age=int(timedelta(minutes=settings.AUTH_RESET_TOKEN_MINUTES).total_seconds())
+        )
+        return response
+
+
+@method_decorator(ratelimit(key='ip', rate='5/m', block=True), name='post')
+class ResetPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        reset_token = request.COOKIES.get(settings.AUTH_RESET_COOKIE_NAME)
+        if not reset_token:
+            return _json_error('Reset token missing or expired.', http_status=status.HTTP_401_UNAUTHORIZED)
+
+        new_password = (request.data.get('new_password') or '').strip()
+        confirm_password = (request.data.get('confirm_password') or '').strip()
+
+        if not new_password:
+            return _json_error('New password is required.')
+        if not confirm_password:
+            return _json_error('Please confirm your new password.')
+        if new_password != confirm_password:
+            return _json_error('Passwords do not match.')
+
+        is_valid, error_msg = validate_password_strength(new_password)
+        if not is_valid:
+            return _json_error(error_msg)
+
+        try:
+            payload = decode_token(reset_token, 'reset')
+            user_id = int(payload.get('sub', 0))
+            otp_id = payload.get('otp_id')
+        except (jwt.InvalidTokenError, ValueError):
+            return _json_error('Invalid or expired reset token.', http_status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            otp = PasswordResetOTP.objects.get(id=otp_id, user_id=user_id, is_used=False)
+            if not otp.is_valid():
+                return _json_error('OTP has expired. Please request a new one.')
+        except PasswordResetOTP.DoesNotExist:
+            return _json_error('Invalid reset token.')
+
+        user = otp.user
+        user.set_password(new_password)
+        user.save()
+        otp.mark_as_used()
+
+        response = Response({'message': 'Password reset successfully.'}, status=status.HTTP_200_OK)
+        _clear_cookie(response, settings.AUTH_RESET_COOKIE_NAME)
+        return response
+
+
+@method_decorator(ratelimit(key='ip', rate='30/m', block=True), name='post')
+class RefreshTokenView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        refresh_token = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME)
+        if not refresh_token:
+            return _json_error('Refresh token missing.', http_status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            payload = decode_token(refresh_token, 'refresh')
+            user_id = int(payload.get('sub', 0))
+            jti = payload.get('jti')
+        except (jwt.InvalidTokenError, ValueError):
+            return _json_error('Invalid refresh token.', http_status=status.HTTP_401_UNAUTHORIZED)
+
+        token_record = find_active_refresh_token(jti)
+        if not token_record:
+            revoke_all_refresh_tokens(user_id)
+            return _json_error('Refresh token revoked.', http_status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            user = SimpleUsers.objects.get(id=user_id)
+        except SimpleUsers.DoesNotExist:
+            return _json_error('User not found.', http_status=status.HTTP_401_UNAUTHORIZED)
+
+        if not token_record.matches_context(
+            request.headers.get('User-Agent'),
+            _get_client_ip(request)
+        ):
+            revoke_all_refresh_tokens(user_id)
+            return _json_error('Refresh token context mismatch.', http_status=status.HTTP_401_UNAUTHORIZED)
+
+        access_token = issue_access_token(user)
+        new_refresh_token = issue_refresh_token(
+            user,
+            settings.AUTH_REFRESH_TOKEN_DAYS,
+            user_agent=request.headers.get('User-Agent'),
+            ip_address=_get_client_ip(request)
+        )
+        new_payload = decode_token(new_refresh_token, 'refresh')
+        revoke_refresh_token(jti, replaced_by=new_payload.get('jti'))
+
+        response = Response({'message': 'Token refreshed.'}, status=status.HTTP_200_OK)
+        _set_cookie(
+            response,
+            settings.AUTH_ACCESS_COOKIE_NAME,
+            access_token,
+            max_age=int(timedelta(minutes=settings.AUTH_ACCESS_TOKEN_MINUTES).total_seconds())
+        )
+        _set_cookie(
+            response,
+            settings.AUTH_REFRESH_COOKIE_NAME,
+            new_refresh_token,
+            max_age=int(timedelta(days=settings.AUTH_REFRESH_TOKEN_DAYS).total_seconds())
+        )
+        return response
+
+
+@method_decorator(ratelimit(key='ip', rate='30/m', block=True), name='post')
+class LogoutView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        refresh_token = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME)
+        if refresh_token:
             try:
-                otp = PasswordResetOTP.generate_otp(user, registered_email, expiry_minutes=10)
+                payload = decode_token(refresh_token, 'refresh')
+                revoke_refresh_token(payload.get('jti'))
+            except jwt.InvalidTokenError:
+                pass
 
-                # Send OTP via email - ONLY to the registered email address
-                email_sent = send_otp_email(registered_email, otp.otp_code, user.username)
-
-                if email_sent:
-                    # Store registered email in session for OTP verification step
-                    request.session['password_reset_email'] = registered_email
-                    request.session['password_reset_user_id'] = user.id
-                    # Clear any previous OTP verification
-                    request.session.pop('password_reset_otp_verified', None)
-
-                    return json_response_success(
-                        message='OTP code has been sent to your email address. Please check your inbox.'
-                    )
-                else:
-                    print(f"ERROR: Failed to send OTP email to registered email: {registered_email}")
-                    return json_response_error(
-                        'Failed to send email. Please try again later.',
-                        status=500
-                    )
-            except Exception as e:
-                print(f"ERROR: Error generating/sending OTP: {str(e)}")
-                return json_response_error(
-                    'An error occurred. Please try again later.',
-                    status=500
-                )
-
-    return render(request, 'SaveNLoad/forgot_password.html')
-
-
-@ensure_csrf_cookie
-@csrf_protect
-def verify_otp(request):
-    """
-    Verify OTP page - validates OTP code.
-
-    Args:
-        request: Django request object.
-
-    Returns:
-        HttpResponse or JsonResponse.
-    """
-    # Check if already logged in
-    redirect_response = redirect_if_logged_in(request)
-    if redirect_response:
-        return redirect_response
-
-    # Check if email is in session (from forgot_password step)
-    email = request.session.get('password_reset_email')
-    if not email:
-        # No email in session, redirect to forgot password
-        return redirect(reverse('SaveNLoad:forgot_password'))
-
-    if request.method == 'POST':
-        # Handle AJAX requests
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            from SaveNLoad.models.password_reset_otp import PasswordResetOTP
-            from SaveNLoad.utils.email_service import send_otp_email
-
-            data, error_response = parse_json_body(request)
-            if error_response:
-                return error_response
-
-            action = data.get('action', 'verify')
-
-            if action == 'resend':
-                # Resend OTP - only to registered email
-                try:
-                    user = SimpleUsers.objects.get(email__iexact=email)
-                    # Use the registered email from database, not the session email
-                    registered_email = user.email
-                    otp = PasswordResetOTP.generate_otp(user, registered_email, expiry_minutes=10)
-                    email_sent = send_otp_email(registered_email, otp.otp_code, user.username)
-
-                    if email_sent:
-                        return json_response_success(
-                            message='A new code has been sent to your email address.'
-                        )
-                    else:
-                        print(f"ERROR: Failed to resend OTP email to {email}")
-                        return json_response_error(
-                            'Failed to send email. Please try again later.',
-                            status=500
-                        )
-                except SimpleUsers.DoesNotExist:
-                    return json_response_error('User not found.', status=404)
-                except Exception as e:
-                    print(f"ERROR: Error resending OTP: {str(e)}")
-                    return json_response_error(
-                        'An error occurred. Please try again later.',
-                        status=500
-                    )
-
-            # Verify OTP
-            otp_code = data.get('otp_code', '').strip()
-
-            if not otp_code:
-                return json_response_error('OTP code is required.', status=400)
-
-            # Validate OTP - must match the email in session
-            otp = PasswordResetOTP.validate_otp(email, otp_code)
-            if not otp:
-                return json_response_error('Invalid or expired OTP code.', status=400)
-
-            # Verify OTP belongs to the correct user (prevent IDOR)
-            user_id = request.session.get('password_reset_user_id')
-            if otp.user.id != user_id:
-                return json_response_error('Invalid OTP code.', status=400)
-
-            # Mark OTP as verified in session
-            request.session['password_reset_otp_verified'] = True
-            request.session['password_reset_otp_id'] = otp.id
-
-            # Redirect to reset password page
-            redirect_url = reverse('SaveNLoad:reset_password')
-            return json_response_with_redirect(
-                message='OTP verified successfully!',
-                redirect_url=redirect_url
-            )
-
-    # GET request - show verify OTP form
-    return render(request, 'SaveNLoad/verify_otp.html', {
-        'email': email
-    })
-
-
-@ensure_csrf_cookie
-@csrf_protect
-def reset_password(request):
-    """
-    Reset password page - sets new password after OTP verification.
-
-    Args:
-        request: Django request object.
-
-    Returns:
-        HttpResponse or JsonResponse.
-    """
-    # Check if already logged in
-    redirect_response = redirect_if_logged_in(request)
-    if redirect_response:
-        return redirect_response
-
-    # Check if email and OTP verification are in session
-    email = request.session.get('password_reset_email')
-    otp_verified = request.session.get('password_reset_otp_verified')
-    otp_id = request.session.get('password_reset_otp_id')
-
-    if not email or not otp_verified or not otp_id:
-        # Missing required session data, redirect to forgot password
-        return redirect(reverse('SaveNLoad:forgot_password'))
-
-    if request.method == 'POST':
-        # Handle AJAX requests
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            from SaveNLoad.models.password_reset_otp import PasswordResetOTP
-
-            data, error_response = parse_json_body(request)
-            if error_response:
-                return error_response
-
-            new_password = data.get('new_password', '').strip()
-            confirm_password = data.get('confirm_password', '').strip()
-
-            # Validate inputs
-            if not new_password:
-                return json_response_error('New password is required.', status=400)
-
-            if not confirm_password:
-                return json_response_error('Please confirm your new password.', status=400)
-
-            if new_password != confirm_password:
-                return json_response_error('Passwords do not match.', status=400)
-
-            # Validate password strength
-            is_valid, error_msg = validate_password_strength(new_password)
-            if not is_valid:
-                return json_response_error(error_msg, status=400)
-
-            # Verify OTP is still valid and matches session
-            try:
-                otp = PasswordResetOTP.objects.get(id=otp_id, email__iexact=email, is_used=False)
-
-                if not otp.is_valid():
-                    return json_response_error('OTP has expired. Please request a new one.', status=400)
-
-                # Verify OTP belongs to the correct user (prevent IDOR)
-                user_id = request.session.get('password_reset_user_id')
-                if otp.user.id != user_id:
-                    return json_response_error('Invalid session. Please start over.', status=400)
-
-                # Reset password
-                user = otp.user
-                user.set_password(new_password)
-                user.save()
-
-                # Mark OTP as used
-                otp.mark_as_used()
-
-                # Clear session data
-                request.session.pop('password_reset_email', None)
-                request.session.pop('password_reset_user_id', None)
-                request.session.pop('password_reset_otp_verified', None)
-                request.session.pop('password_reset_otp_id', None)
-
-                # Redirect to login
-                redirect_url = reverse('SaveNLoad:login')
-                return json_response_with_redirect(
-                    message='Password reset successfully! Please login with your new password.',
-                    redirect_url=redirect_url
-                )
-            except PasswordResetOTP.DoesNotExist:
-                return json_response_error('Invalid session. Please start over.', status=400)
-            except Exception as e:
-                print(f"ERROR: Error resetting password: {str(e)}")
-                return json_response_error(
-                    'An error occurred. Please try again.',
-                    status=500
-                )
-
-    # GET request - show reset password form
-    return render(request, 'SaveNLoad/reset_password.html', {
-        'email': email
-    })
-
-
-@login_required
-def logout(request):
-    """
-    Logout and clear session.
-
-    Args:
-        request: Django request object.
-
-    Returns:
-        HttpResponseRedirect to login.
-    """
-    # Unclaim all client workers associated with this user before logging out
-    try:
-        user = get_current_user(request)
-        if user:
-            from SaveNLoad.services.redis_worker_service import unclaim_worker, get_user_workers
-            # Get all workers owned by this user
-            worker_ids = get_user_workers(user.id)
-            # Unclaim all of them
-            for client_id in worker_ids:
-                try:
-                    unclaim_worker(client_id)
-                    print(f"Unclaimed worker {client_id} for user {user.username} on logout")
-                except Exception as e:
-                    print(f"Error unclaiming worker {client_id}: {e}")
-    except Exception as e:
-        print(f"Error unclaiming workers on logout: {e}")
-
-    request.session.flush()
-    return redirect(reverse('SaveNLoad:login'))
+        response = Response({'message': 'Logged out.'}, status=status.HTTP_200_OK)
+        _clear_cookie(response, settings.AUTH_ACCESS_COOKIE_NAME)
+        _clear_cookie(response, settings.AUTH_REFRESH_COOKIE_NAME)
+        _clear_cookie(response, settings.AUTH_RESET_COOKIE_NAME)
+        return response
