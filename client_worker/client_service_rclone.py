@@ -593,16 +593,37 @@ class ClientWorkerServiceRclone:
                 )
                 
                 if success:
-                    # Check if anything was actually transferred
-                    if bytes_transferred == 0:
-                        return self._create_error_response(
-                            'No files were transferred. The save directory appears to be empty or contains no valid files to upload.'
+                    # If rclone reports no transfers, force a resync by purging remote and re-uploading.
+                    if bytes_transferred == 0 and files_transferred == 0:
+                        self._safe_console_print("No changes detected. Forcing resync...")
+                        purge_success, purge_message = self.rclone_client.delete_directory(remote_ftp_path)
+                        if not purge_success:
+                            return self._create_error_response(
+                                f'Failed to clear remote save folder before resync: {purge_message}'
+                            )
+
+                        success, message, uploaded_files, failed_files, bytes_transferred, files_transferred = self.rclone_client.upload_directory(
+                            local_dir=local_save_path,
+                            remote_ftp_path=remote_ftp_path,
+                            transfers=RCLONE_TRANSFERS,
+                            progress_callback=progress_callback
                         )
-                    
-                    self._safe_console_print("Upload complete")
+
+                        if not success:
+                            self._safe_console_print(f"Upload failed after resync: {message}")
+                            return self._create_error_response(
+                                message,
+                                uploaded_files=uploaded_files,
+                                failed_files=failed_files
+                            )
+
+                    message = message or 'Upload complete'
+                    self._safe_console_print(message)
                     return self._create_success_response(
                         message,
-                        uploaded_files=uploaded_files
+                        uploaded_files=uploaded_files,
+                        bytes_transferred=bytes_transferred,
+                        files_transferred=files_transferred
                     )
                 else:
                     self._safe_console_print(f"Upload failed: {message}")

@@ -1,15 +1,9 @@
 <template>
   <Teleport to="body">
     <div v-if="open" class="operation-modal-backdrop" role="presentation" @click.self="onClose">
-      <div class="operation-modal-card" role="dialog" aria-modal="true" :aria-labelledby="titleId">
-        <header class="operation-modal-header" :class="variantClass">
-          <div class="operation-modal-icon">
-            <i :class="iconClass"></i>
-          </div>
-          <div class="operation-modal-heading">
-            <h5 :id="titleId" class="mb-1">{{ title }}</h5>
-            <p class="mb-0 text-white-50 small">{{ subtitle }}</p>
-          </div>
+      <div class="operation-modal-card bg-primary text-white border-0" role="dialog" aria-modal="true" :aria-labelledby="titleId">
+        <header class="operation-modal-header bg-primary border-secondary">
+          <h5 :id="titleId" class="mb-0">{{ title }}</h5>
           <button
             v-if="closable"
             class="btn-close btn-close-white ms-auto"
@@ -19,7 +13,7 @@
           ></button>
         </header>
 
-        <div class="operation-modal-body">
+        <div class="operation-modal-body bg-primary">
           <div class="operation-progress">
             <div class="operation-progress-track">
               <div class="operation-progress-bar" :class="variantClass" :style="{ width: `${progress}%` }"></div>
@@ -31,10 +25,7 @@
             <p class="text-white-50 small mt-2 mb-0">{{ detail }}</p>
           </div>
         </div>
-
-        <div v-if="closable" class="operation-modal-footer">
-          <button class="btn btn-outline-light btn-sm" type="button" @click="onClose">Close</button>
-        </div>
+        
       </div>
     </div>
   </Teleport>
@@ -96,7 +87,7 @@ const onClose = () => {
 .operation-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(6, 9, 16, 0.72);
+  background: var(--overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -106,9 +97,7 @@ const onClose = () => {
 
 .operation-modal-card {
   width: min(520px, 100%);
-  background: var(--color-primary);
   border-radius: 12px;
-  border: 1px solid var(--white-opacity-10);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
   overflow: hidden;
 }
@@ -119,33 +108,6 @@ const onClose = () => {
   gap: 1rem;
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--white-opacity-10);
-}
-
-.operation-modal-header.is-info {
-  background: var(--primary-opacity-30);
-}
-
-.operation-modal-header.is-success {
-  background: rgba(32, 107, 74, 0.5);
-}
-
-.operation-modal-header.is-warning {
-  background: rgba(152, 104, 32, 0.5);
-}
-
-.operation-modal-header.is-danger {
-  background: rgba(129, 44, 44, 0.5);
-}
-
-.operation-modal-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: var(--white-opacity-10);
-  display: grid;
-  place-items: center;
-  font-size: 1rem;
-  color: var(--color-white);
 }
 
 .operation-modal-body {
@@ -166,19 +128,19 @@ const onClose = () => {
 }
 
 .operation-progress-bar.is-info {
-  background: var(--color-primary);
+  background: #2f96b4;
 }
 
 .operation-progress-bar.is-success {
-  background: var(--color-success);
+  background: #51a351;
 }
 
 .operation-progress-bar.is-warning {
-  background: var(--color-warning);
+  background: #f89406;
 }
 
 .operation-progress-bar.is-danger {
-  background: var(--color-danger);
+  background: #bd362f;
 }
 
 .operation-modal-footer {

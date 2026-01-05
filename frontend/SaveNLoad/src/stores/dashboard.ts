@@ -167,7 +167,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
     error.value = '';
     try {
       const data = await apiPost(`/games/${gameId}/save/`, {});
-      notify.success(data?.message || 'Save queued.');
+      const message = data?.message || 'Save queued.';
+      if (!message.toLowerCase().includes('operations queued')) {
+        notify.success(message);
+      }
       return data;
     } catch (err: any) {
       error.value = err?.message || 'Failed to save game.';
@@ -183,7 +186,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
     error.value = '';
     try {
       const data = await apiPost(`/games/${gameId}/load/`, {});
-      notify.success(data?.message || 'Load queued.');
+      const message = data?.message || 'Load queued.';
+      if (!message.toLowerCase().includes('operations queued')) {
+        notify.success(message);
+      }
       return data;
     } catch (err: any) {
       error.value = err?.message || 'Failed to load game.';

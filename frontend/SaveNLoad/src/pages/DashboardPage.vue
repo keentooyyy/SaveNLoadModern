@@ -64,6 +64,15 @@ const operationModal = reactive({
   closable: false
 });
 
+let successCloseTimer: number | null = null;
+
+const clearSuccessCloseTimer = () => {
+  if (successCloseTimer !== null) {
+    window.clearTimeout(successCloseTimer);
+    successCloseTimer = null;
+  }
+};
+
 const notify = {
   success: (msg: string) => {
     const t = (window as any).toastr;
@@ -89,6 +98,7 @@ const handleAuthError = async (err: any) => {
 };
 
 const openOperationModal = (title: string, subtitle: string, detail: string) => {
+  clearSuccessCloseTimer();
   operationModal.open = true;
   operationModal.title = title;
   operationModal.subtitle = subtitle;
@@ -100,6 +110,7 @@ const openOperationModal = (title: string, subtitle: string, detail: string) => 
 };
 
 const closeOperationModal = () => {
+  clearSuccessCloseTimer();
   operationModal.open = false;
 };
 
@@ -175,13 +186,25 @@ const pollOperations = async (operationIds: string[], label: string, detail: str
       operationModal.statusText = latestMessage || 'Processing...';
       operationModal.detail = `${completedCount}/${totalCount} completed`;
 
-      if (completedCount === totalCount) {
-        completed = true;
+        if (completedCount === totalCount) {
+          completed = true;
         if (failedCount === 0) {
           operationModal.variant = 'success';
           operationModal.statusText = 'All operations complete';
           operationModal.detail = label.includes('Load') ? 'Game loaded successfully.' : 'Game saved successfully.';
           notify.success(operationModal.detail);
+          if (label.toLowerCase().includes('save')) {
+            try {
+              await store.loadDashboard();
+            } catch {
+              // Ignore refresh errors to avoid blocking success flow.
+            }
+          }
+          successCloseTimer = window.setTimeout(() => {
+            if (operationModal.open && operationModal.variant === 'success') {
+              closeOperationModal();
+            }
+          }, 1500);
         } else if (failedCount < totalCount) {
           operationModal.variant = 'warning';
           operationModal.statusText = 'Partially complete';
