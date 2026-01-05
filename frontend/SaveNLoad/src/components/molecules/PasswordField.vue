@@ -7,6 +7,7 @@
       :type="visible ? 'text' : 'password'"
       :placeholder="placeholder"
       class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white pe-5"
+      :class="{ 'is-invalid': invalid }"
     />
     <i
       :id="toggleId"
@@ -28,7 +29,8 @@ const props = defineProps({
   id: String,
   name: String,
   placeholder: String,
-  toggleId: String
+  toggleId: String,
+  invalid: { type: Boolean, default: false }
 });
 
 const model = defineModel<string>({ default: '' });

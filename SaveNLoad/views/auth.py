@@ -105,7 +105,7 @@ class LoginView(APIView):
         if not user or not user.check_password(password):
             field_errors['username'] = 'Invalid username/email or password.'
             field_errors['password'] = 'Invalid username/email or password.'
-            return _json_error('Invalid username/email or password.', field_errors, status.HTTP_401_UNAUTHORIZED)
+            return _json_error('Invalid username/email or password.', field_errors, status.HTTP_404_NOT_FOUND)
 
         access_token = issue_access_token(user)
         refresh_days = settings.AUTH_REFRESH_TOKEN_DAYS if remember_me else settings.AUTH_REFRESH_TOKEN_SHORT_DAYS

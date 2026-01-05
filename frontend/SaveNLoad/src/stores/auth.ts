@@ -11,6 +11,27 @@ type FieldErrors = Record<string, string | string[]>;
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001';
 
+const notify = {
+  success: (msg: string) => {
+    const t = (window as any).toastr;
+    if (t?.success) {
+      t.success(msg);
+    }
+  },
+  error: (msg: string) => {
+    const t = (window as any).toastr;
+    if (t?.error) {
+      t.error(msg);
+    }
+  },
+  info: (msg: string) => {
+    const t = (window as any).toastr;
+    if (t?.info) {
+      t.info(msg);
+    }
+  }
+};
+
 const getCookie = (name: string) => {
   const match = document.cookie.match(new RegExp(`(^|;\\s*)${name}=([^;]*)`));
   return match ? decodeURIComponent(match[2]) : '';
@@ -79,9 +100,11 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await apiPost('/auth/login', payload);
       user.value = data?.user || null;
       message.value = data?.message || 'Login successful.';
+      notify.success(message.value);
       return data;
     } catch (err: any) {
       error.value = err.message || 'Login failed.';
+      notify.error(error.value);
       fieldErrors.value = err.errors || null;
       throw err;
     } finally {
@@ -100,9 +123,11 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const data = await apiPost('/auth/register', payload);
       message.value = data?.message || 'Account created.';
+      notify.success(message.value);
       return data;
     } catch (err: any) {
       error.value = err.message || 'Registration failed.';
+      notify.error(error.value);
       fieldErrors.value = err.errors || null;
       throw err;
     } finally {
@@ -117,9 +142,11 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await apiPost('/auth/forgot-password', payload);
       otpEmail.value = payload.email;
       message.value = data?.message || 'If the email exists, an OTP was sent.';
+      notify.success(message.value);
       return data;
     } catch (err: any) {
       error.value = err.message || 'Request failed.';
+      notify.error(error.value);
       fieldErrors.value = err.errors || null;
       throw err;
     } finally {
@@ -133,9 +160,11 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const data = await apiPost('/auth/verify-otp', payload);
       message.value = data?.message || 'OTP verified.';
+      notify.success(message.value);
       return data;
     } catch (err: any) {
       error.value = err.message || 'Verification failed.';
+      notify.error(error.value);
       fieldErrors.value = err.errors || null;
       throw err;
     } finally {
@@ -149,9 +178,11 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const data = await apiPost('/auth/verify-otp', { ...payload, action: 'resend' });
       message.value = data?.message || 'If the email exists, an OTP was sent.';
+      notify.success(message.value);
       return data;
     } catch (err: any) {
       error.value = err.message || 'Request failed.';
+      notify.error(error.value);
       fieldErrors.value = err.errors || null;
       throw err;
     } finally {
@@ -165,9 +196,11 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const data = await apiPost('/auth/reset-password', payload);
       message.value = data?.message || 'Password reset.';
+      notify.success(message.value);
       return data;
     } catch (err: any) {
       error.value = err.message || 'Reset failed.';
+      notify.error(error.value);
       fieldErrors.value = err.errors || null;
       throw err;
     } finally {
@@ -182,9 +215,11 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await apiPost('/auth/logout', {});
       user.value = null;
       message.value = data?.message || 'Logged out.';
+      notify.success(message.value);
       return data;
     } catch (err: any) {
       error.value = err.message || 'Logout failed.';
+      notify.error(error.value);
       throw err;
     } finally {
       loading.value = false;

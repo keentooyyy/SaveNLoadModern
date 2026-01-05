@@ -1,11 +1,11 @@
 <template>
   <AuthLayout title="Save N Load" subtitle="We've sent a verification code to your email.">
     <form @submit.prevent="onSubmit">
-      <div v-if="error" class="alert alert-warning mb-3">{{ error }}</div>
       <div class="mb-3">
         <label class="fs-6 opacity-50">EMAIL</label>
         <input
           class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white"
+          :class="{ 'is-invalid': fieldErrors?.email }"
           type="email"
           v-model="email"
           placeholder="Enter your email"
@@ -16,6 +16,7 @@
         <label class="fs-6 opacity-50">6-Digit Verification Code</label>
         <input
           class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white text-center otp-input-code"
+          :class="{ 'is-invalid': fieldErrors?.otp_code }"
           type="text"
           v-model="otpCode"
           placeholder="000000"
@@ -62,7 +63,7 @@ watch(
 );
 
 const loading = computed(() => store.loading);
-const error = computed(() => store.error);
+const fieldErrors = computed(() => store.fieldErrors);
 
 const onSubmit = async () => {
   try {

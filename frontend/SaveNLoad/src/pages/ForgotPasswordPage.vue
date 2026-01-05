@@ -1,11 +1,11 @@
 <template>
   <AuthLayout title="Save N Load" subtitle="Reset your password to regain access.">
     <form @submit.prevent="onSubmit">
-      <div v-if="error" class="alert alert-warning mb-3">{{ error }}</div>
       <div class="mb-3">
         <label class="fs-6 opacity-50">EMAIL</label>
         <input
           class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white"
+          :class="{ 'is-invalid': fieldErrors?.email }"
           type="email"
           v-model="email"
           placeholder="Enter your email"
@@ -36,7 +36,7 @@ const router = useRouter();
 const email = ref('');
 
 const loading = computed(() => store.loading);
-const error = computed(() => store.error);
+const fieldErrors = computed(() => store.fieldErrors);
 
 const onSubmit = async () => {
   try {

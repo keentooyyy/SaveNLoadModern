@@ -1,11 +1,11 @@
 <template>
   <AuthLayout title="Save N Load" subtitle="Managing saves has never been easier.">
     <form @submit.prevent="onSubmit">
-      <div v-if="error" class="alert alert-warning mb-3">{{ error }}</div>
       <div class="mb-3">
         <label class="fs-6 opacity-50">USERNAME OR EMAIL</label>
         <input
           class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white"
+          :class="{ 'is-invalid': fieldErrors?.username }"
           type="text"
           v-model="form.username"
           placeholder="Enter your username or email"
@@ -19,7 +19,7 @@
             Forgot Password?
           </RouterLink>
         </div>
-        <PasswordField v-model="form.password" placeholder="Enter your password" />
+        <PasswordField v-model="form.password" placeholder="Enter your password" :invalid="!!fieldErrors?.password" />
       </div>
       <div class="mb-3">
         <div class="form-check">
@@ -62,7 +62,7 @@ const form = reactive({
 });
 
 const loading = computed(() => store.loading);
-const error = computed(() => store.error);
+const fieldErrors = computed(() => store.fieldErrors);
 
 const onSubmit = async () => {
   try {
