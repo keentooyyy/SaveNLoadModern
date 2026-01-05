@@ -143,7 +143,7 @@ class ClientWorkerServiceRclone:
             if ':' not in rest.split('/')[0]:
                 host = rest.split('/')[0]
                 path = rest[len(host):] if len(rest) > len(host) else ''
-                server_url = f'{scheme}://{host}:8000{path}'
+                server_url = f'{scheme}://{host}:8001{path}'
         self.server_url = server_url.rstrip('/')
         self.session = requests.Session()
         self.running = False
@@ -167,7 +167,7 @@ class ClientWorkerServiceRclone:
         self.rclone_client = RcloneClient(remote_name=remote_name)
         
         # WebSocket connection is established after registration.
-    
+
     def _update_progress(self, operation_id: int, current: int, total: int, message: str = ''):
         """
         Send progress update to server.
@@ -284,7 +284,8 @@ class ClientWorkerServiceRclone:
         """
         parsed = urlparse(self.server_url)
         scheme = 'wss' if parsed.scheme == 'https' else 'ws'
-        return f"{scheme}://{parsed.netloc}/ws/worker/{client_id}/?token={self._ws_token}"
+        path_prefix = parsed.path.rstrip('/')
+        return f"{scheme}://{parsed.netloc}{path_prefix}/ws/worker/{client_id}/?token={self._ws_token}"
 
     def _send_ws_message(self, message_type: str, payload: Dict[str, Any], correlation_id: Optional[str] = None):
         """
@@ -496,11 +497,13 @@ class ClientWorkerServiceRclone:
         if not self._ws_connected and self._ws_last_error:
             ws_line = f"{ws_line} ({self._ws_last_error})"
 
+        heartbeat_line = f"[green][OK][/green] Heartbeat active (WebSocket, every {HEARTBEAT_INTERVAL}s)"
+
         status_content = f"""[green][OK][/green] Connected to server
 [green][OK][/green] Client ID: {self._current_client_id}
 {self._rclone_status_line}
 {ws_line}
-[green][OK][/green] Heartbeat active (WebSocket, every {HEARTBEAT_INTERVAL}s)"""
+{heartbeat_line}"""
 
         owner_status = f"[green][OK][/green] Owned by: {self.linked_user}" if self.linked_user else "[yellow][!][/yellow] Waiting for Claim"
         status_content += f"\n{owner_status}"
@@ -1302,6 +1305,7 @@ def main():
         print("Error: Server URL is required. Set SAVENLOAD_SERVER_URL environment variable or use --server argument.")
         parser.print_help()
         sys.exit(1)
+
     
     try:
         service = ClientWorkerServiceRclone(args.server, args.remote)

@@ -281,7 +281,13 @@ if DEBUG:
     CONTENT_SECURITY_POLICY['DIRECTIVES'].update({
         'script-src': ("'self'", "'unsafe-eval'", 'http://localhost:8000'),
         'style-src': ("'self'", "'unsafe-inline'", 'http://localhost:8000'),
-        'connect-src': ("'self'", 'http://localhost:8000', 'ws://localhost:8000'),
+        'connect-src': (
+            "'self'",
+            'http://localhost:8000',
+            'http://localhost:8001',
+            'ws://localhost:8000',
+            'ws://localhost:8001'
+        ),
         'img-src': ("'self'", 'data:', 'http://localhost:8000')
     })
 

@@ -1,6 +1,7 @@
 from channels.generic.websocket import JsonWebsocketConsumer
 from asgiref.sync import async_to_sync
 from SaveNLoad.services.ws_worker_service import ui_user_group_name
+from SaveNLoad.ws_consumers.ws_auth import get_ws_user
 
 
 class UserWorkerStatusConsumer(JsonWebsocketConsumer):
@@ -87,20 +88,4 @@ class UserWorkerStatusConsumer(JsonWebsocketConsumer):
         Returns:
             SimpleUsers or None
         """
-        session = self.scope.get('session')
-        if not session:
-            return None
-        user_id = session.get('user_id')
-        if not user_id:
-            return None
-        try:
-            user_id = int(user_id)
-        except (TypeError, ValueError):
-            return None
-        if user_id <= 0:
-            return None
-        from SaveNLoad.models import SimpleUsers
-        try:
-            return SimpleUsers.objects.get(id=user_id)
-        except SimpleUsers.DoesNotExist:
-            return None
+        return get_ws_user(self.scope)

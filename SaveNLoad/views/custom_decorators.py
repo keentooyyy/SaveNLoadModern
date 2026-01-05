@@ -134,6 +134,7 @@ def get_current_user(request):
         return request._cached_user
 
     token = None
+    token_kind = 'access'
 
     auth_header = request.headers.get('Authorization', '')
     if auth_header.startswith('Bearer '):
@@ -143,10 +144,14 @@ def get_current_user(request):
         token = request.COOKIES.get(settings.AUTH_ACCESS_COOKIE_NAME)
 
     if not token:
+        token = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME)
+        token_kind = 'refresh'
+
+    if not token:
         return None
 
     try:
-        payload = decode_token(token, 'access')
+        payload = decode_token(token, token_kind)
         user_id = int(payload.get('sub', 0))
     except (jwt.InvalidTokenError, ValueError):
         return None

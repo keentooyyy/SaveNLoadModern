@@ -20,12 +20,12 @@
       >
         <div class="d-flex flex-column flex-md-row gap-2 w-100 w-md-auto">
           <div class="position-relative flex-grow-1 search-input-container">
-            <TextInput placeholder="Search games..." input-class="border-secondary pe-5 w-100" />
+            <TextInput v-model="searchQuery" placeholder="Search games..." input-class="border-secondary pe-5 w-100" />
             <i
               class="fas fa-search position-absolute top-50 end-0 translate-middle-y me-3 text-white-50 pointer-events-none"
             ></i>
           </div>
-          <select class="form-select bg-primary border-secondary text-white flex-shrink-0 sort-select-width">
+          <select v-model="sortBy" class="form-select bg-primary border-secondary text-white flex-shrink-0 sort-select-width">
             <option value="name_asc">Sort: Name (A-Z)</option>
             <option value="name_desc">Sort: Name (Z-A)</option>
             <option value="last_saved_desc">Sort: Last Saved (Recent)</option>
@@ -59,11 +59,33 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeUnmount, watch } from 'vue';
 import GameCard from '@/components/molecules/GameCard.vue';
 import TextInput from '@/components/atoms/TextInput.vue';
 
 defineProps({
   games: { type: Array, default: () => [] }
+});
+
+const emit = defineEmits(['search']);
+const searchQuery = defineModel<string>('search', { default: '' });
+const sortBy = defineModel<string>('sort', { default: 'name_asc' });
+
+let searchTimer: number | null = null;
+
+watch([searchQuery, sortBy], () => {
+  if (searchTimer) {
+    window.clearTimeout(searchTimer);
+  }
+  searchTimer = window.setTimeout(() => {
+    emit('search', { query: searchQuery.value, sort: sortBy.value });
+  }, 250);
+});
+
+onBeforeUnmount(() => {
+  if (searchTimer) {
+    window.clearTimeout(searchTimer);
+  }
 });
 </script>
 

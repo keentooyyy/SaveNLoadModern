@@ -2,10 +2,13 @@ from django.urls import path
 
 from SaveNLoad.views import auth
 from SaveNLoad.views import meta
+from SaveNLoad.views import dashboard_api
 
 app_name = 'SaveNLoad'
 
 urlpatterns = [
+    path('dashboard', dashboard_api.DashboardView.as_view(), name='dashboard'),
+    path('games/search', dashboard_api.GameSearchView.as_view(), name='game_search'),
     path('meta/version', meta.VersionView.as_view(), name='version'),
     path('auth/csrf', auth.CsrfView.as_view(), name='csrf'),
     path('auth/login', auth.LoginView.as_view(), name='login'),
