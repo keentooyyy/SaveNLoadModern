@@ -32,4 +32,4 @@ COPY . /app/
 RUN mkdir -p /app/logs
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8001

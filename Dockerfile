@@ -5,20 +5,13 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install system dependencies and Node.js
+# Install system dependencies (backend only)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         postgresql-client \
         build-essential \
         libpq-dev \
-        curl \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
-
-# Install Node.js dependencies
-COPY package.json package-lock.json* /app/
-RUN npm install
 
 # Install Python dependencies
 COPY requirements.txt /app/
@@ -27,6 +20,3 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 # Copy project
 COPY . /app/
-
-# Build frontend assets
-RUN npm run build

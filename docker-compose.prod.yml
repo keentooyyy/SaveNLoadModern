@@ -45,7 +45,7 @@ services:
         reservations:
           memory: 32M
 
-  web:
+  backend:
     # CONFIGURATION NOTE:
     # 1. PRE-BUILT IMAGE: The 'image' property points to a private package on GitHub Container Registry (GHCR).
     #    To use it, you must authenticate Docker with a Personal Access Token (PAT).
@@ -57,10 +57,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
-    container_name: savenload_web_prod
-    command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && daphne -b 0.0.0.0 -p 8000 config.asgi:application"
+    container_name: savenload_backend_prod
+    command: sh -c "python manage.py migrate --noinput && daphne -b 0.0.0.0 -p 8001 config.asgi:application"
     ports:
-      - "8000:8000"
+      - "8001:8001"
     env_file:
       - .env
     environment:
@@ -84,6 +84,28 @@ services:
           memory: 200M
         reservations:
           memory: 100M
+
+  web:
+    image: node:20-alpine
+    container_name: savenload_frontend_prod
+    working_dir: /app/frontend/SaveNLoad
+    volumes:
+      - ./frontend/SaveNLoad:/app/frontend/SaveNLoad
+    ports:
+      - "8000:8000"
+    command: sh -c "npm ci && npm run build-only && npm run preview -- --host 0.0.0.0 --port 8000"
+    profiles:
+      - frontend
+    restart: unless-stopped
+    networks:
+      - savenload_network
+    # Memory limit for Vue preview server (80MB)
+    deploy:
+      resources:
+        limits:
+          memory: 80M
+        reservations:
+          memory: 48M
 
 # Removed postgres_data_prod volume - using bind mount instead
 

@@ -25,17 +25,15 @@ services:
       timeout: 5s
       retries: 5
 
-  web:
+  backend:
     # Build locally for development (files are localized to the dev machine)
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: web
-    command: sh -c "python manage.py makemigrations && python manage.py migrate && daphne -b 0.0.0.0 -p 8000 config.asgi:application"
-    volumes:
-      - .:/app
+    container_name: backend
+    command: sh -c "python manage.py migrate && daphne -b 0.0.0.0 -p 8001 config.asgi:application"
     ports:
-      - "8000:8000"
+      - "8001:8001"
     env_file:
       - .env
     environment:
@@ -45,3 +43,19 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  web:
+    image: node:20-alpine
+    container_name: web
+    working_dir: /app/frontend/SaveNLoad
+    volumes:
+      - ./frontend/SaveNLoad:/app/frontend/SaveNLoad
+      - /app/frontend/SaveNLoad/node_modules
+    ports:
+      - "8000:8000"
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=300
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 8000"
+    volumes:
+      - .:/app

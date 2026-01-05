@@ -22,8 +22,9 @@ build/
 .coverage
 htmlcov/
 .pytest_cache/
-# package-lock.json is optional - npm will generate it during build if missing
-package-lock.json
+# Frontend build artifacts (not needed in backend image)
+frontend/SaveNLoad/node_modules/
+frontend/SaveNLoad/dist/
 # Rclone executable and config (not needed in Docker)
 client_worker/rclone/
 

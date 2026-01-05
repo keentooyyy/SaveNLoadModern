@@ -1,0 +1,639 @@
+/* Custom styles for SaveNLoad Modern - Minimal CSS using Bootstrap where possible */
+
+:root {
+    /* Layout */
+    --sidebar-width: 300px;
+    --sidebar-bg: #283046;
+    --body-bg: #1c222f;
+
+    /* Primary Colors */
+    --color-primary: #5a8dee;
+    --color-primary-bootstrap: #0d6efd;
+
+    /* Status Colors */
+    --color-success: #198754;
+    --color-danger: #dc3545;
+    --color-warning: #ffc107;
+
+    /* Neutral Colors */
+    --color-white: #ffffff;
+    --color-black: #000000;
+
+    /* Opacity Variants - White */
+    --white-opacity-08: rgba(255, 255, 255, 0.08);
+    --white-opacity-10: rgba(255, 255, 255, 0.1);
+    --white-opacity-15: rgba(255, 255, 255, 0.15);
+    --white-opacity-30: rgba(255, 255, 255, 0.3);
+    --white-opacity-50: rgba(255, 255, 255, 0.5);
+    --white-opacity-60: rgba(255, 255, 255, 0.6);
+
+    /* Opacity Variants - Primary Blue */
+    --primary-opacity-15: rgba(90, 141, 238, 0.15);
+    --primary-opacity-20: rgba(90, 141, 238, 0.2);
+    --primary-opacity-30: rgba(90, 141, 238, 0.3);
+
+    /* Opacity Variants - Black */
+    --black-opacity-30: rgba(0, 0, 0, 0.3);
+    --black-opacity-40: rgba(0, 0, 0, 0.4);
+    --black-opacity-50: rgba(0, 0, 0, 0.5);
+    --black-opacity-80: rgba(0, 0, 0, 0.8);
+    --black-opacity-90: rgba(0, 0, 0, 0.9);
+
+    /* Overlay */
+    --overlay-bg: rgba(28, 34, 47, 0.85);
+}
+
+body {
+    background-color: var(--body-bg);
+    min-height: 100vh;
+}
+
+/* Login page overflow handling */
+.login-page {
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Placeholder text for primary background inputs */
+.bg-primary::placeholder {
+    color: var(--white-opacity-60) !important;
+}
+
+/* Custom checkbox for dark theme */
+.form-check-input.bg-primary:checked {
+    background-color: var(--color-primary) !important;
+    border-color: var(--color-primary) !important;
+}
+
+/* Remove Bootstrap validation icons */
+.form-control.is-invalid {
+    background-image: none !important;
+    padding-right: calc(1.5em + 0.75rem) !important;
+}
+
+/* Sidebar - Only essential overrides Bootstrap can't handle */
+.sidebar {
+    width: var(--sidebar-width) !important;
+    background-color: var(--sidebar-bg) !important;
+}
+
+.sidebar.offcanvas {
+    --bs-offcanvas-width: var(--sidebar-width) !important;
+    width: var(--sidebar-width) !important;
+    background-color: var(--sidebar-bg) !important;
+}
+
+.sidebar.offcanvas.offcanvas-start {
+    width: var(--sidebar-width) !important;
+}
+
+/* Mobile sidebar width */
+@media (max-width: 767.98px) {
+    .sidebar.offcanvas {
+        --bs-offcanvas-width: 80% !important;
+        width: 80% !important;
+    }
+
+    .sidebar.offcanvas.offcanvas-start {
+        width: 80% !important;
+    }
+}
+
+/* Tablet sidebar width */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .sidebar.offcanvas {
+        --bs-offcanvas-width: 320px !important;
+        width: 320px !important;
+        max-width: 320px !important;
+    }
+
+    .sidebar.offcanvas.offcanvas-start {
+        width: 320px !important;
+        max-width: 320px !important;
+    }
+}
+
+/* Desktop sidebar - fixed positioning */
+@media (min-width: 992px) {
+    .sidebar.offcanvas {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        height: 100vh !important;
+        visibility: visible !important;
+        transform: none !important;
+        z-index: 1000 !important;
+        border: none !important;
+        max-width: var(--sidebar-width) !important;
+    }
+
+    .sidebar.offcanvas.show {
+        transform: none !important;
+    }
+
+    .offcanvas-backdrop {
+        display: none !important;
+    }
+
+    .main-content {
+        margin-left: var(--sidebar-width);
+    }
+}
+
+/* Sidebar header container */
+.sidebar-header-container {
+    min-height: 70px;
+    overflow: hidden;
+}
+
+.sidebar-header-content {
+    overflow: hidden;
+}
+
+.sidebar-header-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Sidebar header mobile adjustments */
+@media (max-width: 575.98px) {
+    .sidebar-header-container {
+        min-height: 60px;
+        padding: 0.75rem 1rem !important;
+    }
+}
+
+/* Very small screens - prevent overflow */
+@media (max-width: 335px) {
+    .sidebar-header-container {
+        min-height: 50px !important;
+        padding: 0.5rem 0.75rem !important;
+        gap: 0.5rem !important;
+    }
+
+    .sidebar-header-content {
+        gap: 0.5rem !important;
+    }
+
+    .sidebar .logo-icon img,
+    .sidebar .logo-icon svg {
+        max-width: 32px !important;
+        min-width: 28px !important;
+    }
+
+    .sidebar-header-text {
+        font-size: 1rem !important;
+    }
+
+    .sidebar-header-container .btn-close {
+        margin-left: 0.25rem !important;
+        padding: 0.25rem !important;
+    }
+}
+
+/* Sidebar nav link styles - minimal custom for hover/active states */
+.sidebar-nav-link {
+    transition: background-color 0.2s;
+    margin: 2px 8px;
+}
+
+.sidebar-nav-link:hover:not(.active) {
+    background-color: var(--white-opacity-08) !important;
+}
+
+.sidebar-nav-link.active {
+    background-color: var(--primary-opacity-15) !important;
+    color: var(--color-primary) !important;
+}
+
+.sidebar-nav-link.active i {
+    color: var(--color-primary) !important;
+}
+
+.sidebar-nav-link i {
+    width: 20px;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+/* Mobile text sizes */
+@media (max-width: 767.98px) {
+    .sidebar .border-bottom span {
+        font-size: 1.4rem !important;
+    }
+
+    .sidebar-nav-link {
+        font-size: 1.1rem !important;
+        padding: 0.875rem 1rem !important;
+    }
+
+    .sidebar-nav-link i {
+        font-size: 1.1rem !important;
+        width: 24px !important;
+    }
+
+    .sidebar-footer {
+        font-size: 1rem !important;
+    }
+
+    .sidebar-footer .small {
+        font-size: 0.95rem !important;
+    }
+}
+
+/* Logo icon sizing */
+.sidebar .logo-icon img,
+.sidebar .logo-icon svg {
+    max-width: 50px;
+    min-width: 40px;
+    object-fit: contain;
+}
+
+/* Custom scrollbar styling */
+.overflow-x-auto::-webkit-scrollbar {
+    height: 8px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+    background: var(--white-opacity-10);
+    border-radius: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+    background: var(--white-opacity-30);
+    border-radius: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+    background: var(--white-opacity-50);
+}
+
+/* Game card hover effects */
+.game-card {
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+.game-card:hover {
+    transform: translateY(-4px);
+}
+
+.game-card-img {
+    transition: transform 0.5s ease;
+}
+
+.game-card:hover .game-card-img {
+    transform: scale(1.1);
+}
+
+.game-card-overlay {
+    background: linear-gradient(to top, var(--black-opacity-80) 0%, var(--black-opacity-40) 50%, transparent 100%);
+    transition: opacity 0.3s ease;
+}
+
+.game-card:hover .game-card-overlay {
+    background: linear-gradient(to top, var(--black-opacity-90) 0%, var(--black-opacity-50) 50%, transparent 100%);
+}
+
+/* Game Manage Modal Tabs */
+#gameManageModal .nav-tabs {
+    border-bottom: 1px solid var(--white-opacity-10);
+}
+
+#gameManageModal .nav-tabs .nav-link {
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--white-opacity-50) !important;
+    transition: all 0.2s ease;
+    background-color: transparent;
+}
+
+#gameManageModal .nav-tabs .nav-link.active {
+    color: var(--color-white) !important;
+    background-color: var(--primary-opacity-30) !important;
+    border-color: var(--color-primary) var(--color-primary) transparent !important;
+    border-bottom-width: 3px !important;
+    font-weight: 600;
+}
+
+#gameManageModal .nav-tabs .nav-link.active i {
+    color: var(--color-primary) !important;
+}
+
+#gameManageModal .nav-tabs .nav-link:not(.active):hover {
+    color: var(--color-white) !important;
+    background-color: var(--white-opacity-08);
+}
+
+/* Grid fixes for available games */
+@media (min-width: 992px) and (max-width: 1199.98px) {
+    #availableGamesSection .col-lg-3 {
+        flex: 0 0 auto;
+        width: 33.33333333% !important;
+    }
+}
+
+@media (min-width: 1200px) {
+    #availableGamesSection .col-lg-3 {
+        max-width: 300px;
+    }
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 767.98px) {
+    #gameSearchSortCollapse {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    #gameSearchInput {
+        width: 100% !important;
+    }
+
+    #gameSortSelect {
+        width: auto !important;
+        min-width: 180px !important;
+        flex-shrink: 0 !important;
+    }
+
+    #availableGamesSection {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+}
+
+/* Accordion header transitions */
+.add-game-header,
+.account-settings-header,
+.operation-queue-header,
+.manage-accounts-header {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+/* Add transition for chevron rotation */
+.add-game-header i[class*="chevron"],
+.account-settings-header i[class*="chevron"],
+.operation-queue-header i[class*="chevron"],
+.manage-accounts-header i[class*="chevron"],
+#addGameChevron,
+#accountSettingsChevron,
+#operationQueueChevron,
+#manageAccountsChevron {
+    transition: transform 0.3s ease;
+}
+
+.add-game-header.active .add-game-icon,
+.add-game-header.active .add-game-title,
+.add-game-header.active .add-game-chevron,
+.account-settings-header.active .account-settings-icon,
+.account-settings-header.active .account-settings-title,
+.operation-queue-header.active .operation-queue-icon,
+.operation-queue-header.active .operation-queue-title,
+.operation-queue-header.active .operation-queue-chevron,
+.manage-accounts-header.active .manage-accounts-icon,
+.manage-accounts-header.active .manage-accounts-title,
+.manage-accounts-header.active .manage-accounts-chevron {
+    color: var(--color-primary) !important;
+}
+
+/* Recent game card hover */
+.recent-game-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.recent-game-card:hover {
+    transform: translateY(-2px);
+}
+
+.recent-game-card:hover .card {
+    box-shadow: 0 4px 12px var(--black-opacity-30) !important;
+}
+
+/* Utility classes for common patterns */
+.page-header-height {
+    height: 80px;
+}
+
+.modal-search-dialog {
+    max-width: 900px;
+}
+
+.modal-search-body {
+    max-height: 500px;
+}
+
+.search-list-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-bottom: 1px solid var(--white-opacity-08);
+}
+
+.search-list-item:hover {
+    background-color: var(--primary-opacity-15);
+}
+
+.search-img-container {
+    flex-shrink: 0;
+    width: 60px;
+    height: 60px;
+    margin-right: 1rem;
+    border-radius: 4px;
+    overflow: hidden;
+    background-color: var(--white-opacity-10);
+}
+
+.search-text-container {
+    flex: 1;
+    min-width: 0;
+}
+
+.search-title {
+    color: var(--color-white);
+    font-size: 1rem;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.search-subtitle {
+    color: var(--white-opacity-50);
+    font-size: 0.875rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+/* Utility class for min-height 80vh */
+.min-vh-80 {
+    min-height: 80vh;
+}
+
+/* Transition utility for background color */
+.transition-bg {
+    transition: background-color 0.2s ease;
+}
+
+/* Hover effect for list items */
+.list-group-item-hover:hover {
+    background-color: var(--primary-opacity-20) !important;
+}
+
+/* User management table - override Bootstrap defaults */
+#usersList .table,
+#usersList .table thead,
+#usersList .table tbody,
+#usersList .table tr,
+#usersList .table th,
+#usersList .table td {
+    background-color: transparent !important;
+    border-color: var(--white-opacity-10) !important;
+    color: var(--color-white) !important;
+}
+
+#usersList .table thead {
+    background-color: var(--sidebar-bg) !important;
+}
+
+#usersList .table thead th {
+    background-color: var(--sidebar-bg) !important;
+    color: var(--white-opacity-50) !important;
+}
+
+
+
+#usersList .table tbody tr {
+    background-color: transparent !important;
+}
+
+#usersList .table tbody tr:nth-child(even) {
+    background-color: var(--white-opacity-05) !important;
+}
+
+#usersList .table tbody tr:hover {
+    background-color: var(--primary-opacity-15) !important;
+}
+
+#usersList .table tbody td {
+    background-color: transparent !important;
+}
+
+#usersList .table tbody tr:nth-child(even) td {
+    background-color: var(--white-opacity-05) !important;
+}
+
+#usersList .table tbody tr:hover td {
+    background-color: var(--primary-opacity-15) !important;
+}
+
+/* Container and Layout */
+.max-width-600 {
+    max-width: 600px;
+}
+
+.spinner-lg {
+    width: 3rem;
+    height: 3rem;
+}
+
+.recent-game-card-width {
+    width: 260px;
+}
+
+.search-input-container {
+    min-width: 200px;
+}
+
+/* Toastr overrides */
+#toast-container > div {
+    box-shadow: none;
+    -webkit-box-shadow: none;
+    -moz-box-shadow: none;
+    opacity: 1;
+    filter: none;
+}
+
+.toast-close-button {
+    text-shadow: none;
+    -webkit-text-shadow: none;
+}
+
+.sort-select-width {
+    width: auto;
+    min-width: 180px;
+}
+
+/* Special Inputs */
+.otp-input-code {
+    font-size: 24px;
+    letter-spacing: 8px;
+    font-family: 'Courier New', monospace;
+}
+
+/* Utilities */
+.pointer-events-none {
+    pointer-events: none;
+}
+
+.scrollbar-thin {
+    scrollbar-width: thin;
+}
+
+/* Components */
+.game-banner-preview {
+    min-height: 200px;
+    max-width: 100%;
+    border: 1px solid var(--bs-secondary);
+    border-radius: 0.375rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bs-primary);
+}
+
+.game-banner-preview img {
+    max-width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+    border-radius: 0.375rem;
+}
+
+/* Worker ID hint box */
+.worker-id-hint {
+    background-color: var(--primary-opacity-15);
+    border: 1px solid var(--primary-opacity-30);
+    color: var(--color-primary-bootstrap);
+}
+
+/* Dynamic Component Styles */
+.game-card-img-wrapper {
+    height: var(--card-height, 180px);
+}
+
+.game-card-title {
+    font-size: var(--card-title-size, 0.9rem);
+}
+
+.game-card-footer-text {
+    font-size: var(--card-footer-size, 0.75rem);
+}
+
+.game-card-body-wrapper {
+    min-height: var(--card-height, 180px);
+}
+
+.game-banner-preview-img {
+    width: 100%;
+    max-width: 100%;
+    height: 200px;
+    object-fit: contain;
+    background-color: var(--white-opacity-10);
+}
