@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import { useSettingsStore } from '@/stores/settings';
 
 type AuthUser = {
   id: number;
@@ -122,12 +123,10 @@ export const useAuthStore = defineStore('auth', () => {
   };
 
   const fetchCurrentUser = async () => {
-    const response = await requestWithRetry(() => (
-      fetch(`${API_BASE}/auth/me`, {
-        method: 'GET',
-        credentials: 'include'
-      })
-    ));
+    const response = await fetch(`${API_BASE}/auth/me`, {
+      method: 'GET',
+      credentials: 'include'
+    });
 
     if (response.ok) {
       const data = await response.json();
@@ -143,6 +142,18 @@ export const useAuthStore = defineStore('auth', () => {
     throw new Error('Failed to load current user.');
   };
 
+  const isAuthPath = () => {
+    const path = window.location.pathname;
+    return [
+      '/',
+      '/login',
+      '/register',
+      '/forgot-password',
+      '/reset-password',
+      '/verify-otp'
+    ].includes(path);
+  };
+
   const bootstrap = async () => {
     if (isBootstrapped.value) {
       return;
@@ -151,7 +162,9 @@ export const useAuthStore = defineStore('auth', () => {
     if (!bootstrapPromise) {
       bootstrapPromise = (async () => {
         try {
-          await fetchCurrentUser();
+          if (!isAuthPath()) {
+            await fetchCurrentUser();
+          }
         } catch {
           user.value = null;
         } finally {
@@ -322,6 +335,8 @@ export const useAuthStore = defineStore('auth', () => {
       }
       const data = await apiPost('/auth/logout', {});
       user.value = null;
+      const settingsStore = useSettingsStore();
+      settingsStore.resetState();
       message.value = data?.message || '';
       if (message.value) {
         notify.success(message.value);

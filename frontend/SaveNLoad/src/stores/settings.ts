@@ -175,12 +175,62 @@ export const useSettingsStore = defineStore('settings', () => {
   const wsToken = ref('');
   const bootstrapData = ref<any | null>(null);
   let bootstrapPromise: Promise<any> | null = null;
+  const resetState = () => {
+    loading.value = false;
+    error.value = '';
+    currentUser.value = null;
+    isAdmin.value = false;
+    users.value = [];
+    usersPagination.value = {
+      page: 1,
+      page_size: 25,
+      total_count: 0,
+      total_pages: 1,
+      has_next: false,
+      has_previous: false
+    };
+    queueStatsData.value = {
+      total: 0,
+      by_status: {
+        pending: 0,
+        in_progress: 0,
+        completed: 0,
+        failed: 0
+      }
+    };
+    bootstrapLoaded.value = false;
+    bootstrapUsersLoaded.value = false;
+    bootstrapStatsLoaded.value = false;
+    wsToken.value = '';
+    bootstrapData.value = null;
+    bootstrapPromise = null;
+  };
 
   const createGame = async (payload: { name: string; save_file_locations: string[]; banner?: string }) => {
     loading.value = true;
     error.value = '';
     try {
       const data = await apiPost('/games/create/', payload);
+      if (data?.message) {
+        notify.success(data.message);
+      }
+      return data;
+    } catch (err: any) {
+      error.value = err?.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  const updateGame = async (gameId: number, payload: { name: string; save_file_locations: string[]; banner?: string }) => {
+    loading.value = true;
+    error.value = '';
+    try {
+      const data = await apiPost(`/games/${gameId}/update/`, payload);
       if (data?.message) {
         notify.success(data.message);
       }
@@ -312,10 +362,12 @@ export const useSettingsStore = defineStore('settings', () => {
     usersPagination,
     queueStatsData,
     wsToken,
+    resetState,
     bootstrapLoaded,
     bootstrapUsersLoaded,
     bootstrapStatsLoaded,
     createGame,
+    updateGame,
     listUsers,
     resetUserPassword,
     deleteUser,

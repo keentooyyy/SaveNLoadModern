@@ -1,7 +1,14 @@
 <template>
   <AppLayout>
     <div class="container-fluid px-0">
-      <PageHeader title="Home" />
+      <PageHeader
+        title="Home"
+        :user-label="headerName"
+        :user-role="headerRole"
+        @profile="goToProfile"
+        @settings="goToSettings"
+        @logout="onLogout"
+      />
       <RecentList :items="recentGames" :loading="recentLoading" :searching="searching" @select="onRecentSelect" />
       <GameGrid
         v-model:search="searchQuery"
@@ -29,6 +36,8 @@
     @backup-all="onBackupAllSaves"
     @delete-all="onDeleteAllSaves"
     @open-location="onOpenSaveLocation"
+    @edit-game="onEditGame"
+    @delete-game="onDeleteGame"
   />
   <OperationProgressModal
     :open="operationModal.open"
@@ -60,10 +69,12 @@ import OperationProgressModal from '@/components/organisms/OperationProgressModa
 import BackupCompleteModal from '@/components/organisms/BackupCompleteModal.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useDashboardStore } from '@/stores/dashboard';
+import { useAuthStore } from '@/stores/auth';
 import { useConfirm } from '@/composables/useConfirm';
 
 const router = useRouter();
 const store = useDashboardStore();
+const authStore = useAuthStore();
 const { requestConfirm } = useConfirm();
 
 const searchQuery = ref('');
@@ -74,6 +85,8 @@ const recentGames = computed(() => store.recentGames);
 const recentLoading = computed(() => store.loading && recentGames.value.length === 0);
 const gamesLoading = computed(() => store.loading && games.value.length === 0);
 const isAdmin = computed(() => store.isAdmin);
+const headerName = computed(() => store.user?.username || authStore.user?.username || '');
+const headerRole = computed(() => (store.user?.role || authStore.user?.role || '').toUpperCase());
 const selectedGameTitle = ref('');
 const selectedGameId = ref<number | null>(null);
 const saveFolders = ref<any[]>([]);
@@ -521,6 +534,18 @@ const onQuickLoadGame = async (game: { id: number; title?: string }) => {
   }
 };
 
+const goToSettings = () => router.push('/settings');
+const goToProfile = () => router.push('/settings');
+const onLogout = async () => {
+  try {
+    await authStore.logout();
+  } catch {
+    // ignore
+  } finally {
+    window.location.reload();
+  }
+};
+
 const loadSaveFolders = async () => {
   if (!selectedGameId.value) {
     saveFolders.value = [];
@@ -637,6 +662,49 @@ const onOpenSaveLocation = async () => {
   }
 };
 
+const onDeleteGame = async () => {
+  if (!selectedGameId.value) {
+    return;
+  }
+  const confirmed = await requestConfirm({
+    title: 'Delete Game',
+    message: 'Delete this game and all its saves? This cannot be undone.',
+    confirmText: 'Delete',
+    variant: 'danger'
+  });
+  if (!confirmed) {
+    return;
+  }
+  try {
+    const data = await store.deleteGame(selectedGameId.value);
+    const operationIds = normalizeOperationIds(data);
+    const modalEl = document.getElementById('gameSavesModal');
+    const bootstrapModal = (window as any)?.bootstrap?.Modal?.getOrCreateInstance(modalEl);
+    bootstrapModal?.hide();
+    const resetSelection = () => {
+      selectedGameId.value = null;
+      selectedGameTitle.value = '';
+      saveFolders.value = [];
+    };
+    if (operationIds.length) {
+      await pollOperations(
+        operationIds,
+        'Deleting game',
+        `Deleting ${selectedGameTitle.value || 'game'}...`,
+        async () => {
+          resetSelection();
+          await store.loadDashboard();
+        }
+      );
+    } else {
+      resetSelection();
+      await store.loadDashboard();
+    }
+  } catch (err: any) {
+    await handleAuthError(err);
+  }
+};
+
 const onOpenBackupLocation = async () => {
   const zipPath = sanitizeZipPath(backupModal.zipPath);
   if (!zipPath || !backupModal.gameId) {
@@ -651,6 +719,24 @@ const onOpenBackupLocation = async () => {
   } catch (err: any) {
     await handleAuthError(err);
   }
+};
+
+const onEditGame = () => {
+  if (!selectedGameId.value) {
+    return;
+  }
+  if (!router.hasRoute('game-detail')) {
+    router.addRoute({
+      name: 'game-detail',
+      path: '/games/:id',
+      component: () => import('@/pages/GameDetailPage.vue'),
+      meta: { title: 'Game Details', requiresAuth: true }
+    });
+  }
+  const modalEl = document.getElementById('gameSavesModal');
+  const bootstrapModal = (window as any)?.bootstrap?.Modal?.getOrCreateInstance(modalEl);
+  bootstrapModal?.hide();
+  void router.push({ path: `/games/${selectedGameId.value}` });
 };
 
 onMounted(async () => {

@@ -1,7 +1,14 @@
 <template>
   <AppLayout>
     <div class="container-fluid px-0">
-      <PageHeader title="Settings" />
+      <PageHeader
+        title="Settings"
+        :user-label="headerName"
+        :user-role="headerRole"
+        @profile="goToProfile"
+        @settings="goToSettings"
+        @logout="onLogout"
+      />
       <div>
         <AddGamePanel v-if="isAdmin" />
         <ManageAccountsPanel v-if="isAdmin" />
@@ -24,10 +31,16 @@ import AccountSettingsPanel from '@/components/organisms/AccountSettingsPanel.vu
 import ManageGameModal from '@/components/organisms/ManageGameModal.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useSettingsStore } from '@/stores/settings';
+import { computed } from 'vue';
+import { useRouter } from 'vue-router';
 
 const isAdmin = ref(false);
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
+const router = useRouter();
+
+const headerName = computed(() => settingsStore.currentUser?.username || authStore.user?.username || '');
+const headerRole = computed(() => (settingsStore.currentUser?.role || authStore.user?.role || '').toUpperCase());
 
 const resolveAdmin = (user: { role?: string } | null) => {
   return user?.role === 'admin';
@@ -49,5 +62,17 @@ onMounted(async () => {
     isAdmin.value = false;
   }
 });
+
+const goToSettings = () => router.push('/settings');
+const goToProfile = () => router.push('/settings');
+const onLogout = async () => {
+  try {
+    await authStore.logout();
+  } catch {
+    // ignore
+  } finally {
+    window.location.reload();
+  }
+};
 
 </script>

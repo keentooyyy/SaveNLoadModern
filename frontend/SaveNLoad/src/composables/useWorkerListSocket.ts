@@ -4,6 +4,7 @@ import { buildWsUrl } from '@/utils/ws';
 import { useDashboardStore } from '@/stores/dashboard';
 import { useSettingsStore } from '@/stores/settings';
 import { useAuthStore } from '@/stores/auth';
+import { getSharedWsToken } from '@/utils/wsToken';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -77,34 +78,7 @@ export const useWorkerListSocket = (options: WorkerListOptions = {}) => {
     return response;
   };
 
-  const fetchWsToken = async () => {
-    if (dashboardStore.wsToken) {
-      return dashboardStore.wsToken;
-    }
-    if (settingsStore.wsToken) {
-      dashboardStore.wsToken = settingsStore.wsToken;
-      return settingsStore.wsToken;
-    }
-    try {
-      const csrfToken = await ensureCsrf();
-      const response = await requestWithRetry(() => (
-        fetch(`${API_BASE}/auth/ws-token/`, {
-          method: 'POST',
-          headers: {
-            'X-CSRFToken': csrfToken
-          },
-          credentials: 'include'
-        })
-      ));
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        return null;
-      }
-      return data?.token || null;
-    } catch {
-      return null;
-    }
-  };
+  const fetchWsToken = async () => getSharedWsToken(dashboardStore, settingsStore);
 
   const closeSocket = () => {
     shouldReconnect = false;

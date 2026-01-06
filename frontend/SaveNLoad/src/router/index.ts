@@ -28,9 +28,15 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
-  if (to.path === '/dashboard') {
+    if (to.path === '/dashboard') {
     const dashboard = useDashboardStore();
     const meta = useMetaStore();
+
+    const clientId = window.localStorage.getItem('savenload_client_id');
+    if (!clientId) {
+      return true; // skip bootstrap when no worker is linked
+    }
+
     try {
       const data = await dashboard.bootstrapDashboard();
       if (data?.user) {
@@ -48,7 +54,8 @@ router.beforeEach(async (to) => {
         return { path: '/worker-required' };
       }
     }
-  } else if (to.path === '/settings') {
+  }
+  else if (to.path === '/settings') {
     const settingsStore = useSettingsStore();
     const meta = useMetaStore();
     try {

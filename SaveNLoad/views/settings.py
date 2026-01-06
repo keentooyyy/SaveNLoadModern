@@ -609,20 +609,16 @@ def _queue_user_deletion_operations(user, admin_user, request=None):
     try:
         save_folders = SaveFolder.objects.filter(user=user)
 
-        if not save_folders.exists():
-            print(f"No save folders found for user {user.id} ({user.username}), no FTP cleanup needed")
-            return (True, "no_saves", None)
-
         from SaveNLoad.views.api_helpers import get_client_worker_or_error
         client_worker, error_response = get_client_worker_or_error(admin_user, request)
         if error_response:
             error_msg = (
-                f"No active client worker available. Cannot delete FTP saves for user '{user.username}'. "
+                f"No active client worker available. Cannot delete FTP data for user '{user.username}'. "
                 "Please ensure a client worker is running and try again."
             )
             print(
                 f"WARNING: No active client worker available for admin {admin_user.username}, "
-                f"cannot delete FTP saves for user {user.id}"
+                f"cannot delete FTP data for user {user.id}"
             )
             return (False, error_msg, None)
 
@@ -663,11 +659,6 @@ def _handle_user_deletion(request, user, admin_user):
     )
     if not success:
         return json_response_error(error_message or "Failed to queue FTP cleanup operations", status=503)
-
-    if error_message == "no_saves":
-        user.delete()
-        print(f"User {user.id} ({user.username}) deleted immediately - no FTP saves to clean up")
-        return json_response_success(message=f'User "{user.username}" deleted successfully')
 
     user.pending_deletion = True
     user.save()

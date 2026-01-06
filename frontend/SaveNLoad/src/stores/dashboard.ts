@@ -323,6 +323,26 @@ export const useDashboardStore = defineStore('dashboard', () => {
     return apiPost(`/games/${gameId}/open-backup-location/`, { zip_path: zipPath });
   };
 
+  const deleteGame = async (gameId: number) => {
+    operationLoading.value = true;
+    error.value = '';
+    try {
+      const data = await apiDelete(`/games/${gameId}/delete/`);
+      if (data?.message) {
+        notify.success(data.message);
+      }
+      return data;
+    } catch (err: any) {
+      error.value = err?.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
+      throw err;
+    } finally {
+      operationLoading.value = false;
+    }
+  };
+
   const checkOperationStatus = async (operationId: string) => {
     const data = await apiGet(`/operations/${operationId}/status/`);
     if (!data?.success && data?.error) {
@@ -382,6 +402,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     openSaveLocation,
     openBackupLocation,
     checkOperationStatus,
-    touchRecentGame
+    touchRecentGame,
+    deleteGame
   };
 });

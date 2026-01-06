@@ -23,7 +23,9 @@ from SaveNLoad.views.api_helpers import (
     get_game_save_locations,
     create_operation_response,
     json_response_error,
-    json_response_success
+    json_response_success,
+    check_admin_or_error,
+    delete_game_banner_file
 )
 from SaveNLoad.views.custom_decorators import get_current_user
 
@@ -678,6 +680,81 @@ def get_game_save_location(request, game_id):
             'save_file_locations': save_paths,
             'game_name': game.name
         }
+    )
+
+
+@api_view(["DELETE"])
+@authentication_classes([])
+@csrf_protect
+def delete_game(request, game_id):
+    """
+    Delete a game and queue remote cleanup of all associated saves across users (admin only).
+    """
+    from SaveNLoad.models.operation_constants import OperationType
+    from SaveNLoad.models.save_folder import SaveFolder
+    from SaveNLoad.models.user import SimpleUsers
+
+    user = get_current_user(request)
+    if not user:
+        return Response(
+            {'error': 'Not authenticated. Please log in.', 'requires_login': True},
+            status=401
+        )
+
+    admin_error = check_admin_or_error(user)
+    if admin_error:
+        return admin_error
+
+    game, error_response = get_game_or_error(game_id)
+    if error_response:
+        return error_response
+
+    save_folders = SaveFolder.objects.filter(game=game)
+    if not save_folders.exists():
+        delete_game_banner_file(game)
+        game.delete()
+        return json_response_success(message='Game deleted.')
+
+    client_worker, error_response = get_client_worker_or_error(user, request)
+    if error_response:
+        return error_response
+
+    operation_ids = []
+    users_with_saves = save_folders.values_list('user', flat=True).distinct()
+
+    for user_id in users_with_saves:
+        try:
+            save_owner = SimpleUsers.objects.get(id=user_id)
+        except SimpleUsers.DoesNotExist:
+            continue
+
+        remote_path = generate_game_directory_path(save_owner.username, game.name)
+        operation_id = create_operation(
+            {
+                'operation_type': OperationType.DELETE,
+                'operation_group': 'game_delete',
+                'user_id': save_owner.id,
+                'game_id': game.id,
+                'local_save_path': '',
+                'save_folder_number': None,
+                'remote_ftp_path': remote_path,
+                'path_index': None
+            },
+            client_worker
+        )
+        operation_ids.append(operation_id)
+
+    if not operation_ids:
+        delete_game_banner_file(game)
+        game.delete()
+        return json_response_success(message='Game deleted.')
+
+    game.pending_deletion = True
+    game.save(update_fields=['pending_deletion', 'updated_at'])
+
+    return json_response_success(
+        message='Delete queued.',
+        data={'operation_ids': operation_ids, 'client_id': client_worker}
     )
 
 

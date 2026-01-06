@@ -17,7 +17,7 @@
     </div>
 
     <div class="mb-3">
-      <InputLabel :for-id="bannerInputId" text="BANNER/IMAGE URL" />
+      <InputLabel :for-id="bannerInputId" text="BANNER/IMAGE URL" label-class="text-white" />
       <TextInput
         :id="bannerInputId"
         v-model="bannerUrl"
@@ -30,12 +30,12 @@
     </div>
 
     <div class="mb-3">
-      <InputLabel :for-id="nameInputId" text="GAME NAME" />
+      <InputLabel :for-id="nameInputId" text="GAME NAME" label-class="text-white" />
       <TextInput :id="nameInputId" v-model="gameName" placeholder="Enter game name" required />
     </div>
 
     <div class="mb-3">
-      <InputLabel text="SAVE FILE LOCATIONS" />
+      <InputLabel text="SAVE FILE LOCATIONS" label-class="text-white" />
       <div :id="containerId">
         <div
           v-for="(location, index) in saveLocations"
