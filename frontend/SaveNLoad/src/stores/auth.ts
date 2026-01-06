@@ -70,6 +70,39 @@ const requestWithRetry = async (makeRequest: () => Promise<Response>) => {
   return response;
 };
 
+const buildErrorMessage = (data: any) => {
+  const fallback = (data?.message || data?.error || '').toString().trim();
+  const isGenericFallback = fallback === 'Please fix the errors below.';
+  const errorMessages: string[] = [];
+
+  const errors = data?.errors;
+  if (errors && typeof errors === 'object') {
+    Object.values(errors).forEach((value) => {
+      if (Array.isArray(value)) {
+        value.forEach((item) => {
+          if (item) {
+            errorMessages.push(String(item));
+          }
+        });
+      } else if (value) {
+        errorMessages.push(String(value));
+      }
+    });
+  }
+
+  if (errorMessages.length) {
+    if (isGenericFallback) {
+      return errorMessages.join(' ');
+    }
+    if (fallback && !errorMessages.includes(fallback)) {
+      return `${fallback} ${errorMessages.join(' ')}`.trim();
+    }
+    return errorMessages.join(' ');
+  }
+
+  return fallback || 'Request failed.';
+};
+
 async function apiPost(path: string, body: Record<string, unknown>) {
   const csrfToken = await ensureCsrf();
   const response = await requestWithRetry(() => (
@@ -92,7 +125,7 @@ async function apiPost(path: string, body: Record<string, unknown>) {
   }
 
   if (!response.ok) {
-    const error = new Error(data?.message || data?.error || '');
+    const error = new Error(buildErrorMessage(data));
     (error as any).status = response.status;
     (error as any).errors = data?.errors || null;
     throw error;

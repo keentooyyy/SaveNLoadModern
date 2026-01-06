@@ -14,10 +14,9 @@
       class="position-absolute top-50 end-0 translate-middle-y me-3 text-white-50 fw-light"
       :class="visible ? 'fas fa-eye' : 'fas fa-eye-slash'"
       role="button"
-      tabindex="0"
+      tabindex="-1"
+      aria-hidden="true"
       @click="toggle"
-      @keydown.enter.prevent="toggle"
-      @keydown.space.prevent="toggle"
     ></i>
   </div>
 </template>

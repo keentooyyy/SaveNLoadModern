@@ -31,7 +31,7 @@
               <img :src="avatarUrl" :alt="avatarAlt" class="avatar" />
             </div> 
           </button>
-          <ul class="dropdown-menu dropdown-menu-end user-menu shadow-lg mt-2">
+          <ul class="dropdown-menu dropdown-menu-end user-menu shadow-lg">
             <li>
               <button class="dropdown-item text-white d-flex align-items-center gap-2" type="button" @click="emit('settings')">
                 <i class="fas fa-cog"></i>
@@ -151,6 +151,7 @@ const displayName = computed(() => props.userLabel || 'User');
   border-radius: 12px;
   padding: 0.35rem 0;
   box-shadow: 0 10px 24px var(--black-opacity-50);
+  margin-top: 6px;
 }
 
 .dropdown-item {

@@ -542,7 +542,7 @@ const onLogout = async () => {
   } catch {
     // ignore
   } finally {
-    window.location.reload();
+    await router.push('/login');
   }
 };
 
