@@ -149,6 +149,32 @@ async function apiDelete(path: string) {
 export const useSettingsStore = defineStore('settings', () => {
   const loading = ref(false);
   const error = ref('');
+  const currentUser = ref<any | null>(null);
+  const isAdmin = ref(false);
+  const users = ref<any[]>([]);
+  const usersPagination = ref({
+    page: 1,
+    page_size: 25,
+    total_count: 0,
+    total_pages: 1,
+    has_next: false,
+    has_previous: false
+  });
+  const queueStatsData = ref({
+    total: 0,
+    by_status: {
+      pending: 0,
+      in_progress: 0,
+      completed: 0,
+      failed: 0
+    }
+  });
+  const bootstrapLoaded = ref(false);
+  const bootstrapUsersLoaded = ref(false);
+  const bootstrapStatsLoaded = ref(false);
+  const wsToken = ref('');
+  const bootstrapData = ref<any | null>(null);
+  let bootstrapPromise: Promise<any> | null = null;
 
   const createGame = async (payload: { name: string; save_file_locations: string[]; banner?: string }) => {
     loading.value = true;
@@ -171,7 +197,11 @@ export const useSettingsStore = defineStore('settings', () => {
   };
 
   const listUsers = async (query = '', page = 1) => {
-    return apiGet('/users/', { q: query, page: String(page) });
+    const data = await apiGet('/users/', { q: query, page: String(page) });
+    users.value = data?.users || [];
+    usersPagination.value = data?.pagination || usersPagination.value;
+    bootstrapUsersLoaded.value = true;
+    return data;
   };
 
   const resetUserPassword = async (userId: number) => {
@@ -198,7 +228,10 @@ export const useSettingsStore = defineStore('settings', () => {
   };
 
   const queueStats = async () => {
-    return apiGet('/operations/queue/stats/');
+    const data = await apiGet('/operations/queue/stats/');
+    queueStatsData.value = data?.data || data || queueStatsData.value;
+    bootstrapStatsLoaded.value = true;
+    return data;
   };
 
   const cleanupQueue = async (type: string) => {
@@ -222,14 +255,66 @@ export const useSettingsStore = defineStore('settings', () => {
     return data;
   };
 
+  const bootstrapSettings = async () => {
+    if (bootstrapPromise) {
+      return bootstrapPromise;
+    }
+    if (bootstrapLoaded.value && bootstrapData.value) {
+      return Promise.resolve(bootstrapData.value);
+    }
+    loading.value = true;
+    error.value = '';
+    bootstrapPromise = (async () => {
+      try {
+        const data = await apiGet('/settings/bootstrap');
+        bootstrapData.value = data;
+        currentUser.value = data?.user || null;
+        isAdmin.value = !!data?.is_admin;
+        if (Array.isArray(data?.users)) {
+          users.value = data.users;
+          usersPagination.value = data?.pagination || usersPagination.value;
+          bootstrapUsersLoaded.value = true;
+        }
+        if (data?.queue_stats) {
+          queueStatsData.value = data.queue_stats;
+          bootstrapStatsLoaded.value = true;
+        }
+        if (data?.ws_token) {
+          wsToken.value = data.ws_token;
+        }
+        bootstrapLoaded.value = true;
+        return data;
+      } catch (err: any) {
+        error.value = err?.message || '';
+        bootstrapPromise = null;
+        throw err;
+      } finally {
+        loading.value = false;
+      }
+    })();
+    return bootstrapPromise;
+  };
+
   const loadCurrentUser = async () => {
-    const data = await apiGet('/dashboard');
+    if (currentUser.value) {
+      return currentUser.value;
+    }
+    const data = await bootstrapSettings();
     return data?.user || null;
   };
 
   return {
     loading,
     error,
+    currentUser,
+    isAdmin,
+    users,
+    usersPagination,
+    queueStatsData,
+    wsToken,
+    bootstrapLoaded,
+    bootstrapUsersLoaded,
+    bootstrapStatsLoaded,
     createGame,
     listUsers,
     resetUserPassword,
@@ -238,6 +323,7 @@ export const useSettingsStore = defineStore('settings', () => {
     queueStats,
     cleanupQueue,
     updateAccount,
+    bootstrapSettings,
     loadCurrentUser
   };
 });

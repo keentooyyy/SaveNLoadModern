@@ -18,6 +18,9 @@ export const useMetaStore = defineStore('meta', () => {
     if (versionPromise) {
       return versionPromise;
     }
+    if (versionLabel.value !== 'v--') {
+      return Promise.resolve();
+    }
     versionPromise = (async () => {
       try {
         const response = await fetch(`${API_BASE}/meta/version`, { credentials: 'include' });
@@ -33,8 +36,13 @@ export const useMetaStore = defineStore('meta', () => {
     return versionPromise;
   };
 
+  const setVersion = (raw: string) => {
+    versionLabel.value = normalizeVersion(raw);
+  };
+
   return {
     versionLabel,
-    loadVersion
+    loadVersion,
+    setVersion
   };
 });

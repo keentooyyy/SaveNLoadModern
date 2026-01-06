@@ -111,6 +111,10 @@ const clearAll = async () => {
 };
 
 onMounted(() => {
+  if (store.bootstrapStatsLoaded) {
+    stats.value = store.queueStatsData;
+    return;
+  }
   loadStats();
 });
 </script>

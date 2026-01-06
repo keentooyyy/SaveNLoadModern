@@ -34,13 +34,15 @@ const resolveAdmin = (user: { role?: string } | null) => {
 };
 
 onMounted(async () => {
-  if (authStore.user) {
-    isAdmin.value = resolveAdmin(authStore.user);
+  if (settingsStore.bootstrapLoaded) {
+    const user = settingsStore.currentUser || authStore.user;
+    isAdmin.value = resolveAdmin(user);
     return;
   }
 
   try {
-    const user = await settingsStore.loadCurrentUser();
+    const data = await settingsStore.bootstrapSettings();
+    const user = data?.user || settingsStore.currentUser;
     authStore.user = user as any;
     isAdmin.value = resolveAdmin(user);
   } catch {

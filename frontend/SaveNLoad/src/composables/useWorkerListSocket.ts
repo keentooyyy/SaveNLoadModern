@@ -1,6 +1,9 @@
 // WS mirror from SaveNLoad/templates/workerClaim.js.
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { buildWsUrl } from '@/utils/ws';
+import { useDashboardStore } from '@/stores/dashboard';
+import { useSettingsStore } from '@/stores/settings';
+import { useAuthStore } from '@/stores/auth';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -28,6 +31,9 @@ export const useWorkerListSocket = (options: WorkerListOptions = {}) => {
   const socketOpen = ref(false);
   const lastError = ref('');
   const supportsWebSocket = ref(true);
+  const dashboardStore = useDashboardStore();
+  const settingsStore = useSettingsStore();
+  const authStore = useAuthStore();
 
   let socket: WebSocket | null = null;
   let reconnectTimer: number | null = null;
@@ -72,6 +78,13 @@ export const useWorkerListSocket = (options: WorkerListOptions = {}) => {
   };
 
   const fetchWsToken = async () => {
+    if (dashboardStore.wsToken) {
+      return dashboardStore.wsToken;
+    }
+    if (settingsStore.wsToken) {
+      dashboardStore.wsToken = settingsStore.wsToken;
+      return settingsStore.wsToken;
+    }
     try {
       const csrfToken = await ensureCsrf();
       const response = await requestWithRetry(() => (
@@ -121,6 +134,9 @@ export const useWorkerListSocket = (options: WorkerListOptions = {}) => {
       supportsWebSocket.value = false;
       return;
     }
+    if (!authStore.user) {
+      return;
+    }
 
     const token = await fetchWsToken();
     if (!token) {
@@ -161,6 +177,14 @@ export const useWorkerListSocket = (options: WorkerListOptions = {}) => {
   };
 
   onMounted(connect);
+  watch(
+    () => authStore.user,
+    () => {
+      if (!socket && authStore.user) {
+        connect();
+      }
+    }
+  );
   onBeforeUnmount(closeSocket);
 
   return {

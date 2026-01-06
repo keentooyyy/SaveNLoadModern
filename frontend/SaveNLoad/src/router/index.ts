@@ -8,6 +8,9 @@ import DashboardPage from '@/pages/DashboardPage.vue';
 import SettingsPage from '@/pages/SettingsPage.vue';
 import WorkerRequiredPage from '@/pages/WorkerRequiredPage.vue';
 import { useAuthStore } from '@/stores/auth';
+import { useDashboardStore } from '@/stores/dashboard';
+import { useMetaStore } from '@/stores/meta';
+import { useSettingsStore } from '@/stores/settings';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -25,7 +28,46 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
-  await auth.bootstrap();
+  if (to.path === '/dashboard') {
+    const dashboard = useDashboardStore();
+    const meta = useMetaStore();
+    try {
+      const data = await dashboard.bootstrapDashboard();
+      if (data?.user) {
+        auth.user = data.user as any;
+      }
+      if (data?.version) {
+        meta.setVersion(data.version);
+      }
+    } catch (err: any) {
+      const status = err?.status;
+      if (status === 401) {
+        return { path: '/' };
+      }
+      if (status === 503) {
+        return { path: '/worker-required' };
+      }
+    }
+  } else if (to.path === '/settings') {
+    const settingsStore = useSettingsStore();
+    const meta = useMetaStore();
+    try {
+      const data = await settingsStore.bootstrapSettings();
+      if (data?.user) {
+        auth.user = data.user as any;
+      }
+      if (data?.version) {
+        meta.setVersion(data.version);
+      }
+    } catch (err: any) {
+      const status = err?.status;
+      if (status === 401) {
+        return { path: '/' };
+      }
+    }
+  } else {
+    await auth.bootstrap();
+  }
   const isAuthed = !!auth.user;
 
   if (to.meta?.requiresAuth && !isAuthed) {

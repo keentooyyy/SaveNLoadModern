@@ -5,6 +5,7 @@ type DashboardUser = {
   id: number;
   username: string;
   role: string;
+  email?: string;
 };
 
 type GameSummary = {
@@ -184,16 +185,45 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const loading = ref(false);
   const operationLoading = ref(false);
   const error = ref('');
+  const appVersion = ref('');
+  const wsToken = ref('');
+  const bootstrapLoaded = ref(false);
+
+  const applyDashboardPayload = (data: any) => {
+    user.value = data?.user || null;
+    isAdmin.value = !!data?.is_admin;
+    recentGames.value = (data?.recent_games || []).map(normalizeGameImage);
+    games.value = (data?.available_games || []).map(normalizeGameImage);
+    if (data?.version) {
+      appVersion.value = data.version;
+    }
+    if (data?.ws_token) {
+      wsToken.value = data.ws_token;
+    }
+  };
+
+  const bootstrapDashboard = async () => {
+    loading.value = true;
+    error.value = '';
+    try {
+      const data = await apiGet('/dashboard/bootstrap');
+      applyDashboardPayload(data);
+      bootstrapLoaded.value = true;
+      return data;
+    } catch (err: any) {
+      error.value = err?.message || '';
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  };
 
   const loadDashboard = async () => {
     loading.value = true;
     error.value = '';
     try {
       const data = await apiGet('/dashboard');
-      user.value = data?.user || null;
-      isAdmin.value = !!data?.is_admin;
-      recentGames.value = (data?.recent_games || []).map(normalizeGameImage);
-      games.value = (data?.available_games || []).map(normalizeGameImage);
+      applyDashboardPayload(data);
       return data;
     } catch (err: any) {
       error.value = err?.message || '';
@@ -336,6 +366,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
     loading,
     operationLoading,
     error,
+    appVersion,
+    wsToken,
+    bootstrapLoaded,
+    bootstrapDashboard,
     loadDashboard,
     searchGames,
     saveGame,

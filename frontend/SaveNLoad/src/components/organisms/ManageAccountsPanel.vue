@@ -246,6 +246,11 @@ const onDelete = async (user: UserItem) => {
 };
 
 onMounted(() => {
+  if (store.bootstrapUsersLoaded) {
+    users.value = store.users;
+    pagination.value = store.usersPagination;
+    return;
+  }
   loadUsers(1);
 });
 </script>

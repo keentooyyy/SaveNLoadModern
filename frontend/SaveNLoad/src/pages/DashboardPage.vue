@@ -631,7 +631,9 @@ const onOpenBackupLocation = async () => {
 onMounted(async () => {
   window.addEventListener('dashboard:reset', resetDashboardFilters);
   try {
-    await store.loadDashboard();
+    if (!store.bootstrapLoaded) {
+      await store.bootstrapDashboard();
+    }
   } catch (err: any) {
     await handleAuthError(err);
   }

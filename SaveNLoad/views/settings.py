@@ -4,6 +4,7 @@ DRF API endpoints for settings and admin operations.
 import os
 from urllib.parse import urlparse
 
+from django.conf import settings
 from django.core.files import File
 from django.db import models
 from rest_framework.decorators import api_view, authentication_classes
@@ -22,6 +23,7 @@ from SaveNLoad.views.api_helpers import (
     cleanup_operations_by_status,
     cleanup_operations_by_age
 )
+from SaveNLoad.services.ws_ui_token_service import issue_ui_ws_token
 from SaveNLoad.views.custom_decorators import get_current_user
 from SaveNLoad.views.rawg_api import search_games as rawg_search_games
 
@@ -34,6 +36,196 @@ def _require_user(request):
             status=401
         )
     return user, None
+
+
+def _user_payload(user):
+    return {
+        'id': user.id,
+        'username': user.username,
+        'role': 'admin' if user.is_admin() else 'user',
+        'email': user.email
+    }
+
+
+def _list_users_payload(request, user):
+    try:
+        from SaveNLoad.models import SimpleUsers
+
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 25))
+
+        if page < 1:
+            page = 1
+        if page_size < 1:
+            page_size = 25
+        if page_size > 100:
+            page_size = 100
+
+        search_query = request.GET.get('q', '').strip()
+
+        users_query = SimpleUsers.objects.all().exclude(id=user.id).order_by('username')
+
+        if search_query:
+            users_query = users_query.filter(
+                models.Q(username__icontains=search_query) |
+                models.Q(email__icontains=search_query)
+            )
+
+        total_count = users_query.count()
+        total_pages = (total_count + page_size - 1) // page_size
+
+        if page > total_pages and total_pages > 0:
+            page = total_pages
+
+        offset = (page - 1) * page_size
+        users = users_query[offset:offset + page_size]
+
+        users_list = []
+        for u in users:
+            users_list.append({
+                'id': u.id,
+                'username': u.username,
+                'email': u.email,
+                'role': u.role,
+            })
+
+        return {
+            'users': users_list,
+            'pagination': {
+                'page': page,
+                'page_size': page_size,
+                'total_count': total_count,
+                'total_pages': total_pages,
+                'has_next': page < total_pages,
+                'has_previous': page > 1,
+            }
+        }, None
+    except Exception as e:
+        print(f"ERROR: Error listing users: {str(e)}")
+        return None, json_response_error('Failed to list users', status=500)
+
+
+def _queue_stats_payload():
+    from SaveNLoad.utils.redis_client import get_redis_client
+    from SaveNLoad.services.redis_operation_service import OperationStatus
+    from SaveNLoad.models.operation_constants import OperationType
+    from django.utils import timezone
+    from datetime import timedelta
+
+    redis_client = get_redis_client()
+
+    operation_keys = redis_client.keys('operation:*')
+
+    all_operations = []
+    for key in operation_keys:
+        operation_hash = redis_client.hgetall(key)
+        if operation_hash:
+            all_operations.append({
+                'status': operation_hash.get('status', ''),
+                'type': operation_hash.get('type', ''),
+                'created_at': operation_hash.get('created_at', ''),
+                'started_at': operation_hash.get('started_at', '')
+            })
+
+    total_count = len(all_operations)
+
+    status_counts = {
+        OperationStatus.PENDING: 0,
+        OperationStatus.IN_PROGRESS: 0,
+        OperationStatus.COMPLETED: 0,
+        OperationStatus.FAILED: 0,
+    }
+    for op in all_operations:
+        status_value = op.get('status', '')
+        if status_value in status_counts:
+            status_counts[status_value] += 1
+
+    type_counts = {
+        OperationType.SAVE: 0,
+        OperationType.LOAD: 0,
+        OperationType.LIST: 0,
+        OperationType.DELETE: 0,
+        OperationType.BACKUP: 0,
+        OperationType.OPEN_FOLDER: 0,
+    }
+    for op in all_operations:
+        op_type = op.get('type', '')
+        if op_type in type_counts:
+            type_counts[op_type] += 1
+
+    oldest = None
+    newest = None
+    if all_operations:
+        sorted_ops = sorted(all_operations, key=lambda x: x.get('created_at', ''))
+        oldest = sorted_ops[0] if sorted_ops else None
+        newest = sorted_ops[-1] if sorted_ops else None
+
+    thirty_days_ago = timezone.now() - timedelta(days=30)
+    old_count = 0
+    for op in all_operations:
+        created_at_str = op.get('created_at')
+        if created_at_str:
+            try:
+                from datetime import datetime
+                created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                if timezone.is_aware(created_at):
+                    created_at = timezone.make_naive(created_at)
+                if created_at < timezone.make_naive(thirty_days_ago):
+                    old_count += 1
+            except Exception:
+                pass
+
+    seven_days_ago = timezone.now() - timedelta(days=7)
+    week_old_count = 0
+    for op in all_operations:
+        created_at_str = op.get('created_at')
+        if created_at_str:
+            try:
+                from datetime import datetime
+                created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                if timezone.is_aware(created_at):
+                    created_at = timezone.make_naive(created_at)
+                if created_at < timezone.make_naive(seven_days_ago):
+                    week_old_count += 1
+            except Exception:
+                pass
+
+    one_hour_ago = timezone.now() - timedelta(hours=1)
+    stuck_count = 0
+    for op in all_operations:
+        if op.get('status') == OperationStatus.IN_PROGRESS:
+            started_at_str = op.get('started_at')
+            if started_at_str:
+                try:
+                    from datetime import datetime
+                    started_at = datetime.fromisoformat(started_at_str.replace('Z', '+00:00'))
+                    if timezone.is_aware(started_at):
+                        started_at = timezone.make_naive(started_at)
+                    if started_at < timezone.make_naive(one_hour_ago):
+                        stuck_count += 1
+                except Exception:
+                    pass
+
+    return {
+        'total': total_count,
+        'by_status': {
+            'pending': status_counts.get(OperationStatus.PENDING, 0),
+            'in_progress': status_counts.get(OperationStatus.IN_PROGRESS, 0),
+            'completed': status_counts.get(OperationStatus.COMPLETED, 0),
+            'failed': status_counts.get(OperationStatus.FAILED, 0),
+        },
+        'by_type': {
+            'save': type_counts.get(OperationType.SAVE, 0),
+            'load': type_counts.get(OperationType.LOAD, 0),
+            'list': type_counts.get(OperationType.LIST, 0),
+            'delete': type_counts.get(OperationType.DELETE, 0),
+        },
+        'oldest_operation': oldest.get('created_at') if oldest else None,
+        'newest_operation': newest.get('created_at') if newest else None,
+        'old_count_30_days': old_count,
+        'old_count_7_days': week_old_count,
+        'stuck_count': stuck_count,
+    }
 
 
 @api_view(["GET"])
@@ -266,6 +458,42 @@ def update_account_settings(request):
 
 @api_view(["GET"])
 @authentication_classes([])
+def settings_bootstrap_view(request):
+    """
+    Get settings page data in a single request.
+    """
+    user, error_response = _require_user(request)
+    if error_response:
+        return error_response
+
+    payload = {
+        'user': _user_payload(user),
+        'is_admin': user.is_admin(),
+        'version': settings.APP_VERSION,
+        'ws_token': issue_ui_ws_token(user.id)
+    }
+
+    if user.is_admin():
+        users_payload, error_response = _list_users_payload(request, user)
+        if error_response:
+            return error_response
+        payload['users'] = users_payload.get('users', [])
+        payload['pagination'] = users_payload.get('pagination', {
+            'page': 1,
+            'page_size': 25,
+            'total_count': 0,
+            'total_pages': 1,
+            'has_next': False,
+            'has_previous': False
+        })
+
+        payload['queue_stats'] = _queue_stats_payload()
+
+    return json_response_success(data=payload)
+
+
+@api_view(["GET"])
+@authentication_classes([])
 def operation_queue_stats(request):
     """
     Get statistics about the operation queue (Admin only).
@@ -278,127 +506,7 @@ def operation_queue_stats(request):
     if error_response:
         return error_response
 
-    from SaveNLoad.utils.redis_client import get_redis_client
-    from SaveNLoad.services.redis_operation_service import OperationStatus
-    from SaveNLoad.models.operation_constants import OperationType
-    from django.utils import timezone
-    from datetime import timedelta
-
-    redis_client = get_redis_client()
-
-    operation_keys = redis_client.keys('operation:*')
-
-    all_operations = []
-    for key in operation_keys:
-        operation_hash = redis_client.hgetall(key)
-        if operation_hash:
-            all_operations.append({
-                'status': operation_hash.get('status', ''),
-                'type': operation_hash.get('type', ''),
-                'created_at': operation_hash.get('created_at', ''),
-                'started_at': operation_hash.get('started_at', '')
-            })
-
-    total_count = len(all_operations)
-
-    status_counts = {
-        OperationStatus.PENDING: 0,
-        OperationStatus.IN_PROGRESS: 0,
-        OperationStatus.COMPLETED: 0,
-        OperationStatus.FAILED: 0,
-    }
-    for op in all_operations:
-        status_value = op.get('status', '')
-        if status_value in status_counts:
-            status_counts[status_value] += 1
-
-    type_counts = {
-        OperationType.SAVE: 0,
-        OperationType.LOAD: 0,
-        OperationType.LIST: 0,
-        OperationType.DELETE: 0,
-        OperationType.BACKUP: 0,
-        OperationType.OPEN_FOLDER: 0,
-    }
-    for op in all_operations:
-        op_type = op.get('type', '')
-        if op_type in type_counts:
-            type_counts[op_type] += 1
-
-    oldest = None
-    newest = None
-    if all_operations:
-        sorted_ops = sorted(all_operations, key=lambda x: x.get('created_at', ''))
-        oldest = sorted_ops[0] if sorted_ops else None
-        newest = sorted_ops[-1] if sorted_ops else None
-
-    thirty_days_ago = timezone.now() - timedelta(days=30)
-    old_count = 0
-    for op in all_operations:
-        created_at_str = op.get('created_at')
-        if created_at_str:
-            try:
-                from datetime import datetime
-                created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
-                if timezone.is_aware(created_at):
-                    created_at = timezone.make_naive(created_at)
-                if created_at < timezone.make_naive(thirty_days_ago):
-                    old_count += 1
-            except Exception:
-                pass
-
-    seven_days_ago = timezone.now() - timedelta(days=7)
-    week_old_count = 0
-    for op in all_operations:
-        created_at_str = op.get('created_at')
-        if created_at_str:
-            try:
-                from datetime import datetime
-                created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
-                if timezone.is_aware(created_at):
-                    created_at = timezone.make_naive(created_at)
-                if created_at < timezone.make_naive(seven_days_ago):
-                    week_old_count += 1
-            except Exception:
-                pass
-
-    one_hour_ago = timezone.now() - timedelta(hours=1)
-    stuck_count = 0
-    for op in all_operations:
-        if op.get('status') == OperationStatus.IN_PROGRESS:
-            started_at_str = op.get('started_at')
-            if started_at_str:
-                try:
-                    from datetime import datetime
-                    started_at = datetime.fromisoformat(started_at_str.replace('Z', '+00:00'))
-                    if timezone.is_aware(started_at):
-                        started_at = timezone.make_naive(started_at)
-                    if started_at < timezone.make_naive(one_hour_ago):
-                        stuck_count += 1
-                except Exception:
-                    pass
-
-    stats = {
-        'total': total_count,
-        'by_status': {
-            'pending': status_counts.get(OperationStatus.PENDING, 0),
-            'in_progress': status_counts.get(OperationStatus.IN_PROGRESS, 0),
-            'completed': status_counts.get(OperationStatus.COMPLETED, 0),
-            'failed': status_counts.get(OperationStatus.FAILED, 0),
-        },
-        'by_type': {
-            'save': type_counts.get(OperationType.SAVE, 0),
-            'load': type_counts.get(OperationType.LOAD, 0),
-            'list': type_counts.get(OperationType.LIST, 0),
-            'delete': type_counts.get(OperationType.DELETE, 0),
-        },
-        'oldest_operation': oldest.get('created_at') if oldest else None,
-        'newest_operation': newest.get('created_at') if newest else None,
-        'old_count_30_days': old_count,
-        'old_count_7_days': week_old_count,
-        'stuck_count': stuck_count,
-    }
-
+    stats = _queue_stats_payload()
     return json_response_success(data=stats)
 
 
@@ -483,63 +591,11 @@ def list_users(request):
     if error_response:
         return error_response
 
-    try:
-        from SaveNLoad.models import SimpleUsers
+    users_payload, error_response = _list_users_payload(request, user)
+    if error_response:
+        return error_response
 
-        page = int(request.GET.get('page', 1))
-        page_size = int(request.GET.get('page_size', 25))
-
-        if page < 1:
-            page = 1
-        if page_size < 1:
-            page_size = 25
-        if page_size > 100:
-            page_size = 100
-
-        search_query = request.GET.get('q', '').strip()
-
-        users_query = SimpleUsers.objects.all().exclude(id=user.id).order_by('username')
-
-        if search_query:
-            users_query = users_query.filter(
-                models.Q(username__icontains=search_query) |
-                models.Q(email__icontains=search_query)
-            )
-
-        total_count = users_query.count()
-        total_pages = (total_count + page_size - 1) // page_size
-
-        if page > total_pages and total_pages > 0:
-            page = total_pages
-
-        offset = (page - 1) * page_size
-        users = users_query[offset:offset + page_size]
-
-        users_list = []
-        for u in users:
-            users_list.append({
-                'id': u.id,
-                'username': u.username,
-                'email': u.email,
-                'role': u.role,
-            })
-
-        return json_response_success(
-            data={
-                'users': users_list,
-                'pagination': {
-                    'page': page,
-                    'page_size': page_size,
-                    'total_count': total_count,
-                    'total_pages': total_pages,
-                    'has_next': page < total_pages,
-                    'has_previous': page > 1,
-                }
-            }
-        )
-    except Exception as e:
-        print(f"ERROR: Error listing users: {str(e)}")
-        return json_response_error('Failed to list users', status=500)
+    return json_response_success(data=users_payload)
 
 
 def _queue_user_deletion_operations(user, admin_user, request=None):
