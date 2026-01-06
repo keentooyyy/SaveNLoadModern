@@ -9,7 +9,7 @@
         @settings="goToSettings"
         @logout="onLogout"
       />
-      <RecentList :items="recentGames" :loading="recentLoading" :searching="searching" @select="onRecentSelect" />
+      <RecentList :items="recentGames" :loading="recentLoading" @select="onRecentSelect" />
       <GameGrid
         v-model:search="searchQuery"
         v-model:sort="sortBy"
