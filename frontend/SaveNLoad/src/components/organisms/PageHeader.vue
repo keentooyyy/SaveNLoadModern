@@ -24,11 +24,11 @@
             data-bs-toggle="dropdown"
             aria-expanded="false"
           >
-          <div class="d-none d-sm-flex flex-column align-items-start lh-1 text-start">
+            <div class="d-none d-sm-flex flex-column align-items-start lh-1 text-start">
               <span class="text-white fw-semibold">Hello, {{ displayName }}</span>
             </div>
             <div class="avatar-wrap">
-              <img :src="avatarUrl" :alt="userLabel || 'User avatar'" class="avatar" />
+              <img :src="avatarUrl" :alt="avatarAlt" class="avatar" />
             </div> 
           </button>
           <ul class="dropdown-menu dropdown-menu-end user-menu shadow-lg mt-2">
@@ -52,7 +52,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const emit = defineEmits(['profile', 'settings', 'logout']);
 
@@ -62,12 +62,50 @@ const props = defineProps({
   userRole: { type: String, default: '' }
 });
 
+const AVATAR_SEED_KEY = 'savenload_avatar_seed';
+const AVATAR_SEED_LABEL_KEY = 'savenload_avatar_seed_label';
+const avatarSeed = ref('');
+const lastLabel = ref('');
+
+const randomId = () => {
+  const uuid = (crypto as any)?.randomUUID?.() || Math.random().toString(16).slice(2, 10);
+  const noise = Math.floor(Math.random() * 1_000_000);
+  return `${uuid}-${noise}`;
+};
+
+const resolveSeed = (label: string) => {
+  if (typeof window === 'undefined') {
+    return randomId();
+  }
+  const storedSeed = sessionStorage.getItem(AVATAR_SEED_KEY);
+  const storedLabel = sessionStorage.getItem(AVATAR_SEED_LABEL_KEY);
+  if (storedSeed && storedLabel === label && storedSeed !== 'undefined') {
+    return storedSeed;
+  }
+  const newSeed = randomId();
+  sessionStorage.setItem(AVATAR_SEED_KEY, newSeed);
+  sessionStorage.setItem(AVATAR_SEED_LABEL_KEY, label);
+  return newSeed;
+};
+
+watch(
+  () => props.userLabel,
+  (label) => {
+    if (label === lastLabel.value && avatarSeed.value) {
+      return;
+    }
+    lastLabel.value = label;
+    avatarSeed.value = resolveSeed(label || 'user');
+  },
+  { immediate: true }
+);
+
 const avatarUrl = computed(() => {
-  const seed = props.userLabel || 'user';
-  const encoded = encodeURIComponent(seed);
+  const encoded = encodeURIComponent(avatarSeed.value || 'user');
   return `https://api.dicebear.com/7.x/pixel-art/svg?seed=${encoded}`;
 });
 
+const avatarAlt = computed(() => 'User avatar');
 const displayName = computed(() => props.userLabel || 'User');
 </script>
 

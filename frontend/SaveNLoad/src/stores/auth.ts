@@ -337,6 +337,10 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = null;
       const settingsStore = useSettingsStore();
       settingsStore.resetState();
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem('savenload_avatar_seed');
+        window.sessionStorage.removeItem('savenload_avatar_seed_label');
+      }
       message.value = data?.message || '';
       if (message.value) {
         notify.success(message.value);
