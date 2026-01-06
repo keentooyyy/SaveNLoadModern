@@ -66,7 +66,7 @@ async function apiPost(path: string, body: Record<string, unknown>) {
   }
 
   if (!response.ok) {
-    const error = new Error(data?.message || 'Request failed');
+    const error = new Error(data?.message || data?.error || '');
     (error as any).status = response.status;
     (error as any).errors = data?.errors || null;
     throw error;
@@ -83,6 +83,8 @@ export const useAuthStore = defineStore('auth', () => {
   const fieldErrors = ref<FieldErrors | null>(null);
   const otpEmail = ref('');
   const isLoggingOut = ref(false);
+  const isBootstrapped = ref(false);
+  let bootstrapPromise: Promise<void> | null = null;
 
   const resetStatus = () => {
     message.value = '';
@@ -94,18 +96,62 @@ export const useAuthStore = defineStore('auth', () => {
     await ensureCsrf();
   };
 
+  const fetchCurrentUser = async () => {
+    const response = await fetch(`${API_BASE}/auth/me`, {
+      method: 'GET',
+      credentials: 'include'
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      user.value = data?.user || null;
+      return;
+    }
+
+    if (response.status === 401) {
+      user.value = null;
+      return;
+    }
+
+    throw new Error('Failed to load current user.');
+  };
+
+  const bootstrap = async () => {
+    if (isBootstrapped.value) {
+      return;
+    }
+
+    if (!bootstrapPromise) {
+      bootstrapPromise = (async () => {
+        try {
+          await fetchCurrentUser();
+        } catch {
+          user.value = null;
+        } finally {
+          isBootstrapped.value = true;
+        }
+      })();
+    }
+
+    await bootstrapPromise;
+  };
+
   const login = async (payload: { username: string; password: string; rememberMe: boolean }) => {
     loading.value = true;
     resetStatus();
     try {
       const data = await apiPost('/auth/login', payload);
       user.value = data?.user || null;
-      message.value = data?.message || 'Login successful.';
-      notify.success(message.value);
+      message.value = data?.message || '';
+      if (message.value) {
+        notify.success(message.value);
+      }
       return data;
     } catch (err: any) {
-      error.value = err.message || 'Login failed.';
-      notify.error(error.value);
+      error.value = err.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
       fieldErrors.value = err.errors || null;
       throw err;
     } finally {
@@ -123,12 +169,16 @@ export const useAuthStore = defineStore('auth', () => {
     resetStatus();
     try {
       const data = await apiPost('/auth/register', payload);
-      message.value = data?.message || 'Account created.';
-      notify.success(message.value);
+      message.value = data?.message || '';
+      if (message.value) {
+        notify.success(message.value);
+      }
       return data;
     } catch (err: any) {
-      error.value = err.message || 'Registration failed.';
-      notify.error(error.value);
+      error.value = err.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
       fieldErrors.value = err.errors || null;
       throw err;
     } finally {
@@ -142,12 +192,16 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const data = await apiPost('/auth/forgot-password', payload);
       otpEmail.value = payload.email;
-      message.value = data?.message || 'If the email exists, an OTP was sent.';
-      notify.success(message.value);
+      message.value = data?.message || '';
+      if (message.value) {
+        notify.success(message.value);
+      }
       return data;
     } catch (err: any) {
-      error.value = err.message || 'Request failed.';
-      notify.error(error.value);
+      error.value = err.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
       fieldErrors.value = err.errors || null;
       throw err;
     } finally {
@@ -160,13 +214,17 @@ export const useAuthStore = defineStore('auth', () => {
     resetStatus();
     try {
       const data = await apiPost('/auth/verify-otp', payload);
-      message.value = data?.message || 'OTP verified.';
-      notify.success(message.value);
+      message.value = data?.message || '';
+      if (message.value) {
+        notify.success(message.value);
+      }
       return data;
     } catch (err: any) {
-      error.value = err.message || 'Verification failed.';
-      notify.error(error.value);
-      fieldErrors.value = err.errors || null;
+      error.value = err.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
+      fieldErrors.value = err.errors || (error.value ? { otp_code: error.value } : null);
       throw err;
     } finally {
       loading.value = false;
@@ -178,12 +236,16 @@ export const useAuthStore = defineStore('auth', () => {
     resetStatus();
     try {
       const data = await apiPost('/auth/verify-otp', { ...payload, action: 'resend' });
-      message.value = data?.message || 'If the email exists, an OTP was sent.';
-      notify.success(message.value);
+      message.value = data?.message || '';
+      if (message.value) {
+        notify.success(message.value);
+      }
       return data;
     } catch (err: any) {
-      error.value = err.message || 'Request failed.';
-      notify.error(error.value);
+      error.value = err.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
       fieldErrors.value = err.errors || null;
       throw err;
     } finally {
@@ -196,12 +258,16 @@ export const useAuthStore = defineStore('auth', () => {
     resetStatus();
     try {
       const data = await apiPost('/auth/reset-password', payload);
-      message.value = data?.message || 'Password reset.';
-      notify.success(message.value);
+      message.value = data?.message || '';
+      if (message.value) {
+        notify.success(message.value);
+      }
       return data;
     } catch (err: any) {
-      error.value = err.message || 'Reset failed.';
-      notify.error(error.value);
+      error.value = err.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
       fieldErrors.value = err.errors || null;
       throw err;
     } finally {
@@ -219,20 +285,26 @@ export const useAuthStore = defineStore('auth', () => {
         try {
           await apiPost('/api/client/unclaim/', { client_id: clientId });
         } catch (err: any) {
-          error.value = err?.message || 'Failed to unclaim worker. Please try again.';
-          notify.error(error.value);
+          error.value = err?.message || '';
+          if (error.value) {
+            notify.error(error.value);
+          }
         } finally {
           window.localStorage.removeItem('savenload_client_id');
         }
       }
       const data = await apiPost('/auth/logout', {});
       user.value = null;
-      message.value = data?.message || 'Logged out.';
-      notify.success(message.value);
+      message.value = data?.message || '';
+      if (message.value) {
+        notify.success(message.value);
+      }
       return data;
     } catch (err: any) {
-      error.value = err.message || 'Logout failed.';
-      notify.error(error.value);
+      error.value = err.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
       throw err;
     } finally {
       loading.value = false;
@@ -248,7 +320,9 @@ export const useAuthStore = defineStore('auth', () => {
     fieldErrors,
     otpEmail,
     isLoggingOut,
+    isBootstrapped,
     initCsrf,
+    bootstrap,
     resetStatus,
     login,
     register,

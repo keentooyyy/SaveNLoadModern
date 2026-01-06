@@ -82,7 +82,7 @@ async function apiGet(path: string, params?: Record<string, string>) {
   }
 
   if (!response.ok) {
-    const error = new Error(data?.error || 'Request failed');
+    const error = new Error(data?.error || data?.message || '');
     (error as any).status = response.status;
     (error as any).data = data;
     throw error;
@@ -111,7 +111,7 @@ async function apiPost(path: string, body: Record<string, unknown>) {
   }
 
   if (!response.ok) {
-    const error = new Error(data?.error || data?.message || 'Request failed');
+    const error = new Error(data?.error || data?.message || '');
     (error as any).status = response.status;
     (error as any).data = data;
     throw error;
@@ -138,7 +138,7 @@ async function apiDelete(path: string) {
   }
 
   if (!response.ok) {
-    const error = new Error(data?.error || data?.message || 'Request failed');
+    const error = new Error(data?.error || data?.message || '');
     (error as any).status = response.status;
     (error as any).data = data;
     throw error;
@@ -167,7 +167,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       games.value = (data?.available_games || []).map(normalizeGameImage);
       return data;
     } catch (err: any) {
-      error.value = err?.message || 'Failed to load dashboard.';
+      error.value = err?.message || '';
       throw err;
     } finally {
       loading.value = false;
@@ -182,7 +182,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       games.value = (data?.games || []).map(normalizeGameImage);
       return data;
     } catch (err: any) {
-      error.value = err?.message || 'Failed to load games.';
+      error.value = err?.message || '';
       throw err;
     } finally {
       loading.value = false;
@@ -196,8 +196,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const data = await apiPost(`/games/${gameId}/save/`, {});
       return data;
     } catch (err: any) {
-      error.value = err?.message || 'Failed to save game.';
-      notify.error(error.value);
+      error.value = err?.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
       throw err;
     } finally {
       operationLoading.value = false;
@@ -211,8 +213,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const data = await apiPost(`/games/${gameId}/load/`, {});
       return data;
     } catch (err: any) {
-      error.value = err?.message || 'Failed to load game.';
-      notify.error(error.value);
+      error.value = err?.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
       throw err;
     } finally {
       operationLoading.value = false;
@@ -226,8 +230,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const data = await apiPost(`/games/${gameId}/load/`, { save_folder_number: folderNumber });
       return data;
     } catch (err: any) {
-      error.value = err?.message || 'Failed to load game.';
-      notify.error(error.value);
+      error.value = err?.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
       throw err;
     } finally {
       operationLoading.value = false;

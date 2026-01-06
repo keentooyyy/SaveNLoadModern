@@ -122,13 +122,13 @@ const performSearch = async (query: string) => {
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) {
-      searchError.value = data?.error || 'Failed to search games.';
+      searchError.value = data?.error || data?.message || '';
       searchResults.value = [];
     } else {
       searchResults.value = data?.games || [];
     }
   } catch {
-    searchError.value = 'Failed to search games.';
+    searchError.value = '';
     searchResults.value = [];
   } finally {
     searchLoading.value = false;
@@ -166,14 +166,6 @@ const onReset = () => {
 const onSubmit = async () => {
   const name = gameName.value.trim();
   const locations = saveLocations.value.map(location => location.trim()).filter(Boolean);
-  if (!name || locations.length === 0) {
-    const t = (window as any).toastr;
-    if (t?.error) {
-      t.error('Game name and at least one save file location are required.');
-    }
-    return;
-  }
-
   saving.value = true;
   try {
     await store.createGame({

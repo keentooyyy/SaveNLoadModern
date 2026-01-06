@@ -113,6 +113,21 @@ const pagination = ref({
   has_previous: false
 });
 
+const notify = {
+  success: (msg: string) => {
+    const t = (window as any).toastr;
+    if (t?.success) {
+      t.success(msg);
+    }
+  },
+  error: (msg: string) => {
+    const t = (window as any).toastr;
+    if (t?.error) {
+      t.error(msg);
+    }
+  }
+};
+
 const loadUsers = async (page = 1) => {
   loading.value = true;
   error.value = '';
@@ -126,7 +141,7 @@ const loadUsers = async (page = 1) => {
       has_previous: false
     };
   } catch (err: any) {
-    error.value = err?.message || 'Failed to load users.';
+    error.value = err?.message || '';
   } finally {
     loading.value = false;
   }
@@ -161,13 +176,28 @@ const waitForDeletion = async (operationId: string) => {
     try {
       const data = await store.checkOperationStatus(operationId);
       if (data?.completed || data?.status === 'completed') {
-        return true;
+        return { status: 'completed', message: data?.message || '' };
       }
       if (data?.failed || data?.status === 'failed') {
-        return false;
+        return { status: 'failed', message: data?.message || data?.error || '' };
       }
     } catch {
-      return false;
+      return { status: 'failed', message: '' };
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  return { status: 'failed', message: '' };
+};
+
+const waitForRemoval = async (userId: number) => {
+  const maxAttempts = 5;
+  const delayMs = 800;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    await loadUsers(pagination.value.page);
+    if (!users.value.some((user) => user.id === userId)) {
+      return true;
     }
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
@@ -190,12 +220,26 @@ const onDelete = async (user: UserItem) => {
   try {
     const data = await store.deleteUser(user.id);
     const operationId = data?.operation_id;
+    let completionMessage = data?.message || '';
     if (operationId) {
-      await waitForDeletion(operationId);
+      const result = await waitForDeletion(operationId);
+      if (result.status !== 'completed') {
+        throw new Error(result.message);
+      }
+      completionMessage = result.message;
     }
-    await loadUsers(pagination.value.page);
+    const removed = await waitForRemoval(user.id);
+    if (!removed) {
+      users.value = users.value.filter((item) => item.id !== user.id);
+    }
+    if (completionMessage) {
+      notify.success(completionMessage);
+    }
   } catch (err: any) {
-    error.value = err?.message || 'Failed to delete user.';
+    error.value = err?.message || '';
+    if (error.value) {
+      notify.error(error.value);
+    }
   } finally {
     loading.value = false;
   }

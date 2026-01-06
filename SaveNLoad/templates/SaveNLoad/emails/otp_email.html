@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Password Reset OTP - Save N Load</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #1c222f;
+            color: #ffffff;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #283144;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        .email-header {
+            background: linear-gradient(135deg, #283144 0%, #1c222f 100%);
+            padding: 40px 30px;
+            text-align: center;
+            border-bottom: 2px solid #5a8dee;
+        }
+        .logo {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .logo svg {
+            width: 60px;
+            height: 60px;
+        }
+        .email-body {
+            padding: 40px 30px;
+            background-color: #283144;
+        }
+        .greeting {
+            font-size: 18px;
+            color: #ffffff;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .message {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+        .otp-container {
+            background-color: #1c222f;
+            border-radius: 12px;
+            padding: 30px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        .otp-label {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .otp-code-box {
+            background-color: #283046;
+            border: 2px solid #5a8dee;
+            border-radius: 12px;
+            padding: 20px 30px;
+            margin: 20px auto;
+            display: inline-block;
+            text-align: center;
+            min-width: 200px;
+            transition: all 0.2s ease;
+        }
+        .otp-code-box:hover {
+            background-color: rgba(90, 141, 238, 0.1);
+            border-color: #699AF9;
+            box-shadow: 0 4px 12px rgba(90, 141, 238, 0.3);
+        }
+        .otp-code {
+            font-size: 36px;
+            font-weight: bold;
+            color: #5a8dee;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 8px;
+            user-select: all;
+            -webkit-user-select: all;
+            -moz-user-select: all;
+            cursor: text;
+            margin: 0;
+        }
+        .expiry-info {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .expiry-info strong {
+            color: #5a8dee;
+        }
+        .warning {
+            background-color: rgba(220, 53, 69, 0.1);
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 25px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .email-footer {
+            background-color: #1c222f;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .footer-text {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.5);
+            line-height: 1.6;
+        }
+        .footer-link {
+            color: #5a8dee;
+            text-decoration: none;
+        }
+            @media only screen and (max-width: 600px) {
+            .email-container {
+                margin: 0;
+                border-radius: 0;
+            }
+            .email-header, .email-body, .email-footer {
+                padding: 30px 20px;
+            }
+            .otp-code {
+                font-size: 28px;
+                letter-spacing: 4px;
+            }
+            .otp-code-box {
+                padding: 15px 20px;
+                min-width: 180px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div style="padding: 20px; background-color: #1c222f; min-height: 100vh;">
+        <div class="email-container">
+            <!-- Header -->
+            <div class="email-header">
+                <div class="logo">
+                    <img src="{{ icon_url }}" alt="Save N Load" style="width: 60px; height: 60px;">
+                </div>
+                <h1 style="margin: 0; font-size: 28px; color: #ffffff; font-weight: 600;">Save N Load</h1>
+            </div>
+            
+            <!-- Body -->
+            <div class="email-body">
+                <div class="greeting">
+                    {% if username %}Hello {{ username }},{% else %}Hello,{% endif %}
+                </div>
+                
+                <div class="message">
+                    You have requested to reset your password for your Save N Load account. Use the OTP code below to complete the reset process.
+                </div>
+                
+                <!-- OTP Container -->
+                <div class="otp-container">
+                    <div class="otp-label">Your Verification Code</div>
+                    <div class="otp-code-box">
+                        <p class="otp-code">{{ otp_code }}</p>
+                    </div>
+                    <div class="expiry-info">
+                        <strong>Expires in 10 minutes</strong>
+                    </div>
+                </div>
+                
+                <div class="warning">
+                    <strong>Security Notice:</strong> If you did not request this password reset, please ignore this email. Your account remains secure.
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="email-footer">
+                <div class="footer-text">
+                    This is an automated message from Save N Load.<br>
+                    Please do not reply to this email.<br>
+                    <a href="#" class="footer-link">Visit our website</a> | <a href="#" class="footer-link">Support</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

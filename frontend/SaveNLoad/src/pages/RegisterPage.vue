@@ -27,7 +27,7 @@
         />
       </div>
       <div class="d-grid">
-        <IconButton type="submit" variant="secondary" class="text-white fw-bold mt-3 py-2" :disabled="loading">
+        <IconButton type="submit" variant="secondary" class="text-white fw-bold mt-3 py-2" :disabled="loading" :loading="loading">
           REGISTER
         </IconButton>
       </div>
@@ -40,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue';
+import { reactive, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
@@ -61,6 +61,22 @@ const form = reactive({
 
 const loading = computed(() => store.loading);
 const fieldErrors = computed(() => store.fieldErrors);
+
+const clearFieldError = (key: string) => {
+  if (store.fieldErrors && store.fieldErrors[key]) {
+    const next = { ...store.fieldErrors };
+    delete next[key];
+    store.fieldErrors = Object.keys(next).length ? next : null;
+  }
+  if (store.error) {
+    store.error = '';
+  }
+};
+
+watch(() => form.username, () => clearFieldError('username'));
+watch(() => form.email, () => clearFieldError('email'));
+watch(() => form.password, () => clearFieldError('password'));
+watch(() => form.repeatPassword, () => clearFieldError('repeatPassword'));
 
 const onSubmit = async () => {
   try {

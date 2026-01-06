@@ -90,8 +90,8 @@ const onSubmit = async () => {
     onReset();
   } catch (err: any) {
     const t = (window as any).toastr;
-    if (t?.error) {
-      t.error(err?.message || 'Failed to update account.');
+    if (t?.error && err?.message) {
+      t.error(err.message);
     }
   } finally {
     saving.value = false;

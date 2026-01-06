@@ -52,7 +52,7 @@ async function apiGet(path: string, params?: Record<string, string>) {
   }
 
   if (!response.ok) {
-    const error = new Error(data?.error || data?.message || 'Request failed');
+    const error = new Error(data?.error || data?.message || '');
     (error as any).status = response.status;
     (error as any).data = data;
     throw error;
@@ -81,7 +81,7 @@ async function apiPost(path: string, body: Record<string, unknown>) {
   }
 
   if (!response.ok) {
-    const error = new Error(data?.error || data?.message || 'Request failed');
+    const error = new Error(data?.error || data?.message || '');
     (error as any).status = response.status;
     (error as any).data = data;
     throw error;
@@ -108,7 +108,7 @@ async function apiDelete(path: string) {
   }
 
   if (!response.ok) {
-    const error = new Error(data?.error || data?.message || 'Request failed');
+    const error = new Error(data?.error || data?.message || '');
     (error as any).status = response.status;
     (error as any).data = data;
     throw error;
@@ -126,11 +126,15 @@ export const useSettingsStore = defineStore('settings', () => {
     error.value = '';
     try {
       const data = await apiPost('/games/create/', payload);
-      notify.success(data?.message || 'Game created.');
+      if (data?.message) {
+        notify.success(data.message);
+      }
       return data;
     } catch (err: any) {
-      error.value = err?.message || 'Failed to create game.';
-      notify.error(error.value);
+      error.value = err?.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
       throw err;
     } finally {
       loading.value = false;
@@ -143,13 +147,14 @@ export const useSettingsStore = defineStore('settings', () => {
 
   const resetUserPassword = async (userId: number) => {
     const data = await apiPost(`/users/${userId}/reset-password/`, {});
-    notify.success(data?.message || 'Password reset.');
+    if (data?.message) {
+      notify.success(data.message);
+    }
     return data;
   };
 
   const deleteUser = async (userId: number) => {
     const data = await apiDelete(`/users/${userId}/delete/`);
-    notify.success(data?.message || 'User deleted.');
     return data;
   };
 
@@ -169,7 +174,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   const cleanupQueue = async (type: string) => {
     const data = await apiPost('/operations/queue/cleanup/', { type });
-    notify.success(data?.message || 'Operations cleared.');
+    if (data?.message) {
+      notify.success(data.message);
+    }
     return data;
   };
 
@@ -180,7 +187,9 @@ export const useSettingsStore = defineStore('settings', () => {
     confirm_password?: string;
   }) => {
     const data = await apiPost('/account/update/', payload);
-    notify.success(data?.message || 'Account updated.');
+    if (data?.message) {
+      notify.success(data.message);
+    }
     return data;
   };
 

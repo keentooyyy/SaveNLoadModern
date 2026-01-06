@@ -228,7 +228,7 @@ def forgot_password_view(request):
     try:
         user = SimpleUsers.objects.get(email__iexact=email)
     except SimpleUsers.DoesNotExist:
-        return Response({'message': 'If the email exists, an OTP was sent.'}, status=status.HTTP_200_OK)
+        return _json_error('No account found for that email address.', http_status=status.HTTP_404_NOT_FOUND)
 
     try:
         otp = PasswordResetOTP.generate_otp(user, user.email, expiry_minutes=10)
@@ -241,7 +241,7 @@ def forgot_password_view(request):
     except Exception:
         return _json_error('An error occurred. Please try again later.', http_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    return Response({'message': 'If the email exists, an OTP was sent.'}, status=status.HTTP_200_OK)
+    return Response({'message': 'An OTP code was sent to your email.'}, status=status.HTTP_200_OK)
 
 
 @api_view(["POST"])
@@ -266,11 +266,11 @@ def verify_otp_view(request):
                     http_status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
         except SimpleUsers.DoesNotExist:
-            return Response({'message': 'If the email exists, an OTP was sent.'}, status=status.HTTP_200_OK)
+            return _json_error('No account found for that email address.', http_status=status.HTTP_404_NOT_FOUND)
         except Exception:
             return _json_error('An error occurred. Please try again later.', http_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        return Response({'message': 'If the email exists, an OTP was sent.'}, status=status.HTTP_200_OK)
+        return Response({'message': 'OTP code sent.'}, status=status.HTTP_200_OK)
 
     if not otp_code:
         return _json_error('OTP code is required.')
@@ -429,3 +429,22 @@ def ws_token_view(request):
 
     token = issue_ui_ws_token(user.id)
     return Response({'token': token}, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def me_view(request):
+    user = get_current_user(request)
+    if not user:
+        return _json_error('Not authenticated.', http_status=status.HTTP_401_UNAUTHORIZED)
+
+    return Response(
+        {
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'role': user.role
+            }
+        },
+        status=status.HTTP_200_OK
+    )

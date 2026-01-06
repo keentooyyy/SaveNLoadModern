@@ -6,7 +6,7 @@
         <TextInput v-model="email" type="email" placeholder="Enter your email" :invalid="!!fieldErrors?.email" required />
       </div>
       <div class="d-grid">
-        <IconButton type="submit" variant="secondary" class="text-white fw-bold mt-3 py-2" :disabled="loading">
+        <IconButton type="submit" variant="secondary" class="text-white fw-bold mt-3 py-2" :disabled="loading" :loading="loading">
           SEND OTP
         </IconButton>
       </div>

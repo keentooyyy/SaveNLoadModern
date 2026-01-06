@@ -164,10 +164,12 @@ const claimWorker = async (clientId: string) => {
     }
 
     if (!response.ok) {
-      throw new Error(data?.error || data?.message || 'Failed to claim worker.');
+      throw new Error(data?.error || data?.message || '');
     }
 
-    notify.success(data?.message || 'Worker claimed successfully.');
+    if (data?.message) {
+      notify.success(data.message);
+    }
     try {
       window.localStorage.setItem('savenload_client_id', clientId);
     } catch {
@@ -175,7 +177,9 @@ const claimWorker = async (clientId: string) => {
     }
     await router.push('/dashboard');
   } catch (error: any) {
-    notify.error(error?.message || 'An error occurred. Please try again.');
+    if (error?.message) {
+      notify.error(error.message);
+    }
   } finally {
     claimingId.value = null;
   }
@@ -187,7 +191,6 @@ const refreshList = () => {
 
 watch(availableWorkers, (available) => {
   if (available.length === 1 && !hasShownSingleAvailableToast.value) {
-    notify.info('One worker available. Select it to connect.');
     hasShownSingleAvailableToast.value = true;
   } else if (available.length !== 1) {
     hasShownSingleAvailableToast.value = false;
@@ -196,7 +199,6 @@ watch(availableWorkers, (available) => {
 
 watch(supportsWebSocket, (supported) => {
   if (!supported) {
-    notify.error('WebSockets are not available in this browser.');
     fetchWorkersSnapshot();
   }
 });

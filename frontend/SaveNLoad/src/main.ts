@@ -27,6 +27,7 @@ initToastr();
 router.isReady().then(async () => {
   const auth = useAuthStore();
   await auth.initCsrf();
+  await auth.bootstrap();
 });
 
 router.afterEach((to) => {

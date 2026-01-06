@@ -373,6 +373,11 @@ def check_operation_status(request, operation_id):
         operation_group = operation.get('operation_group') or ''
         if operation_type == 'delete' and operation_group == 'delete_older':
             success_message = 'Older saves deleted successfully.'
+        elif operation_type == 'delete' and (
+            operation_group == 'user_delete'
+            or (not operation.get('game_id') and not operation.get('save_folder_number'))
+        ):
+            success_message = 'User deleted successfully.'
         elif operation_type == 'delete':
             success_message = 'Save deleted successfully.'
         elif operation_type == 'save':
@@ -536,7 +541,8 @@ def backup_all_saves(request, game_id):
 
     return create_operation_response(
         operation_id,
-        client_worker
+        client_worker,
+        message='Opening save location...'
     )
 
 
@@ -722,7 +728,8 @@ def open_save_location(request, game_id):
     path_count = len(save_paths)
     return create_operation_response(
         operation_id,
-        client_worker
+        client_worker,
+        message='Opening save location...'
     )
 
 
@@ -787,5 +794,6 @@ def open_backup_location(request, game_id):
 
     return create_operation_response(
         operation_id,
-        client_worker
+        client_worker,
+        message='Opening backup location...'
     )

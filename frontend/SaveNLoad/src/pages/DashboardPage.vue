@@ -120,19 +120,14 @@ const notify = {
     if (t?.error) {
       t.error(msg);
     }
+  },
+  info: (msg: string) => {
+    const t = (window as any).toastr;
+    if (t?.info) {
+      t.info(msg);
+    }
   }
 };
-
-const HIDE_IN_OPERATION_MODAL_MESSAGES = [
-  "Oops! You don't have any save files to save. Maybe you haven't played the game yet, or the save location is incorrect.",
-  'The save directory is empty. There are no files to save. Make sure you have played the game and saved your progress.'
-];
-
-const shouldHideOperationDetail = (message: string) =>
-  HIDE_IN_OPERATION_MODAL_MESSAGES.some((hiddenMessage) => message.includes(hiddenMessage));
-
-const isOperationBlockedMessage = (message: string) =>
-  HIDE_IN_OPERATION_MODAL_MESSAGES.some((hiddenMessage) => message.includes(hiddenMessage));
 
 const handleAuthError = async (err: any) => {
   const status = err?.status;
@@ -257,8 +252,8 @@ const pollOperations = async (
           try {
             const response = await store.checkOperationStatus(id);
             return response?.data || response;
-          } catch (err) {
-            return { failed: true, message: 'Failed to check status.' };
+          } catch {
+            return { failed: true };
           }
         })
       );
@@ -284,31 +279,19 @@ const pollOperations = async (
         .map((item) => item?.message || item?.result_data?.message)
         .find((msg) => msg);
 
-      if (latestMessage && isOperationBlockedMessage(latestMessage)) {
-        operationModal.variant = 'danger';
-        operationModal.statusText = 'Operation failed';
-        operationModal.detail = '';
-        operationModal.progress = 100;
-        operationModal.closable = true;
-        if (!errorToastShown) {
-          notify.error(latestMessage);
-          errorToastShown = true;
-        }
-        completed = true;
-        continue;
-      }
-
       operationModal.statusText = latestMessage || 'Processing...';
       operationModal.detail = `${completedCount}/${totalCount} completed`;
 
       if (completedCount === totalCount) {
         completed = true;
         if (failedCount === 0) {
-          const successDetail = serverSuccessMessage || 'Operation completed successfully.';
+          const successDetail = serverSuccessMessage || '';
           operationModal.variant = 'success';
-          operationModal.statusText = 'All operations complete';
+          operationModal.statusText = serverSuccessMessage || 'All operations complete';
           operationModal.detail = successDetail;
-          notify.success(successDetail);
+          if (successDetail) {
+            notify.success(successDetail);
+          }
           const normalizedLabel = label.toLowerCase();
           const isBackup = isBackupLabel(label);
           if (normalizedLabel.includes('save') && !isBackup) {
@@ -353,13 +336,14 @@ const pollOperations = async (
           operationModal.variant = 'warning';
           operationModal.statusText = 'Partially complete';
           operationModal.detail = `${totalCount - failedCount} succeeded, ${failedCount} failed.`;
-          notify.error('Some operations failed. Check your saves for details.');
         } else {
-          const errorMessage = results.find((item) => item?.message)?.message || 'Operation failed.';
+          const errorMessage = results.find((item) => item?.message)?.message || '';
           operationModal.variant = 'danger';
           operationModal.statusText = 'Operation failed';
-          operationModal.detail = shouldHideOperationDetail(errorMessage) ? '' : errorMessage;
-          notify.error(errorMessage);
+          operationModal.detail = errorMessage;
+          if (errorMessage) {
+            notify.error(errorMessage);
+          }
           errorToastShown = true;
         }
         operationModal.progress = 100;
@@ -370,10 +354,9 @@ const pollOperations = async (
     } catch (err) {
       operationModal.variant = 'danger';
       operationModal.statusText = 'Operation failed';
-      operationModal.detail = 'Unable to read operation status.';
+      operationModal.detail = '';
       operationModal.progress = 100;
       operationModal.closable = true;
-      notify.error('Unable to read operation status.');
       completed = true;
     }
   }
@@ -485,7 +468,7 @@ const loadSaveFolders = async () => {
     const data = await store.listSaveFolders(selectedGameId.value);
     saveFolders.value = data?.save_folders || [];
   } catch (err: any) {
-    saveFoldersError.value = err?.message || 'Failed to load saves.';
+    saveFoldersError.value = err?.message || '';
   } finally {
     saveFoldersLoading.value = false;
   }
@@ -568,6 +551,9 @@ const onDeleteAllSaves = async () => {
     );
   } catch (err: any) {
     await handleAuthError(err);
+    if (err?.message) {
+      notify.error(err.message);
+    }
   }
 };
 
@@ -576,8 +562,10 @@ const onOpenSaveLocation = async () => {
     return;
   }
   try {
-    await store.openSaveLocation(selectedGameId.value);
-    notify.success('Save Location Opened.');
+    const data = await store.openSaveLocation(selectedGameId.value);
+    if (data?.message) {
+      notify.success(data.message);
+    }
   } catch (err: any) {
     await handleAuthError(err);
   }
@@ -586,12 +574,13 @@ const onOpenSaveLocation = async () => {
 const onOpenBackupLocation = async () => {
   const zipPath = sanitizeZipPath(backupModal.zipPath);
   if (!zipPath || !backupModal.gameId) {
-    notify.error('Backup path not available yet.');
     return;
   }
   try {
-    await store.openBackupLocation(backupModal.gameId, zipPath);
-    notify.success('Opening backup location...');
+    const data = await store.openBackupLocation(backupModal.gameId, zipPath);
+    if (data?.message) {
+      notify.success(data.message);
+    }
   } catch (err: any) {
     await handleAuthError(err);
   }

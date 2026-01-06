@@ -90,7 +90,7 @@ const loadStats = async () => {
     const data = await store.queueStats();
     stats.value = data?.data || data || stats.value;
   } catch (err: any) {
-    error.value = err?.message || 'Failed to load queue stats.';
+    error.value = err?.message || '';
   } finally {
     loading.value = false;
   }

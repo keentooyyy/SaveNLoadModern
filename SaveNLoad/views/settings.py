@@ -569,6 +569,7 @@ def _queue_user_deletion_operations(user, admin_user, request=None):
         operation_id = create_operation(
             {
                 'operation_type': OperationType.DELETE,
+                'operation_group': 'user_delete',
                 'user_id': user.id,
                 'game_id': None,
                 'local_save_path': '',

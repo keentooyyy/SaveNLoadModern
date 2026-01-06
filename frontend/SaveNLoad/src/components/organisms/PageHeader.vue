@@ -1,5 +1,5 @@
 <template>
-  <div class="d-flex align-items-center shadow bg-primary py-3">
+  <div class="d-flex align-items-center shadow bg-primary py-3 page-header">
     <div class="d-flex align-items-center justify-content-between gap-3 w-100 px-4">
       <div class="d-flex align-items-center gap-3">
         <span
@@ -28,4 +28,7 @@ defineProps({
 </script>
 
 <style scoped>
+.page-header {
+  min-height: 82px;
+}
 </style>

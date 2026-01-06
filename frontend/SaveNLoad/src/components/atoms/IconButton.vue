@@ -1,6 +1,7 @@
 <template>
-  <button :type="type" class="btn" :class="[variantClass, sizeClass]" :disabled="disabled">
-    <i v-if="icon" class="fas" :class="[icon, iconClass, iconGapClass]"></i>
+  <button :type="type" class="btn" :class="[variantClass, sizeClass]" :disabled="disabled || loading">
+    <i v-if="loading" class="fas fa-spinner fa-spin me-1" aria-hidden="true"></i>
+    <i v-else-if="icon" class="fas" :class="[icon, iconClass, iconGapClass]"></i>
     <slot />
   </button>
 </template>
@@ -15,7 +16,8 @@ const props = defineProps({
   icon: { type: String, default: '' },
   iconClass: { type: String, default: '' },
   iconPosition: { type: String, default: 'left' },
-  disabled: { type: Boolean, default: false }
+  disabled: { type: Boolean, default: false },
+  loading: { type: Boolean, default: false }
 });
 
 const slots = useSlots();
