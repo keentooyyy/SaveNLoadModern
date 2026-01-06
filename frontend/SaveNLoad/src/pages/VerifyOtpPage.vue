@@ -21,7 +21,14 @@
         </div>
       </div>
       <div class="d-grid mt-2">
-        <IconButton type="button" variant="secondary" class="text-white fw-bold py-2" :disabled="loading" :loading="loading" @click="onResend">
+        <IconButton
+          type="button"
+          variant="secondary"
+          class="text-white fw-bold py-2"
+          :disabled="isResending || isVerifying"
+          :loading="isResending"
+          @click="onResend"
+        >
           RESEND CODE
         </IconButton>
       </div>
@@ -65,6 +72,10 @@ watch(
 
 const loading = computed(() => store.loading);
 const fieldErrors = computed(() => store.fieldErrors);
+const verifying = ref(false);
+const resending = ref(false);
+const isVerifying = computed(() => loading.value || verifying.value);
+const isResending = computed(() => loading.value || resending.value);
 
 const clearFieldError = (key: string) => {
   if (store.fieldErrors && store.fieldErrors[key]) {
@@ -129,19 +140,31 @@ const onOtpPaste = (event: ClipboardEvent) => {
 };
 
 const onSubmit = async () => {
+  if (isVerifying.value) {
+    return;
+  }
+  verifying.value = true;
   try {
     await store.verifyOtp({ email: email.value, otp_code: otpCode.value });
     await router.push('/reset-password');
   } catch {
     // handled by store
+  } finally {
+    verifying.value = false;
   }
 };
 
 const onResend = async () => {
+  if (isResending.value) {
+    return;
+  }
+  resending.value = true;
   try {
     await store.resendOtp({ email: email.value });
   } catch {
     // handled by store
+  } finally {
+    resending.value = false;
   }
 };
 </script>

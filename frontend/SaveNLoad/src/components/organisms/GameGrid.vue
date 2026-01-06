@@ -39,6 +39,12 @@
           </div>
         </div>
       </div>
+      <div v-else-if="searching" class="col-12">
+        <div class="d-flex justify-content-center align-items-center py-4 text-white-50 gap-2">
+          <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+          <span>Searching games...</span>
+        </div>
+      </div>
       <div
         v-else
         v-for="game in games"
@@ -81,7 +87,8 @@ defineProps({
   games: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   savingId: { type: Number, default: null },
-  loadingId: { type: Number, default: null }
+  loadingId: { type: Number, default: null },
+  searching: { type: Boolean, default: false }
 });
 
 const emit = defineEmits(['search', 'open', 'save', 'load']);

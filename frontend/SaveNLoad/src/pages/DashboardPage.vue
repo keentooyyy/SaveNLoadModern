@@ -2,7 +2,7 @@
   <AppLayout>
     <div class="container-fluid px-0">
       <PageHeader title="Home" />
-      <RecentList :items="recentGames" :loading="recentLoading" @select="onRecentSelect" />
+      <RecentList :items="recentGames" :loading="recentLoading" :searching="searching" @select="onRecentSelect" />
       <GameGrid
         v-model:search="searchQuery"
         v-model:sort="sortBy"
@@ -10,6 +10,7 @@
         :loading="gamesLoading"
         :saving-id="savingGameId"
         :loading-id="loadingGameId"
+        :searching="searching"
         @search="onSearch"
         @open="onOpenGame"
         @save="onSaveGame"
@@ -80,6 +81,8 @@ const saveFoldersLoading = ref(false);
 const saveFoldersError = ref('');
 const savingGameId = ref<number | null>(null);
 const loadingGameId = ref<number | null>(null);
+const searching = ref(false);
+let searchRequestId = 0;
 
 const operationModal = reactive({
   open: false,
@@ -229,6 +232,18 @@ const isBackupLabel = (label: string) => {
   return normalized.includes('backup') || normalized.includes('backing up') || normalized.includes('back up');
 };
 
+const isMissingSaveMessage = (message: string) => {
+  if (!message) {
+    return false;
+  }
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('save directory is empty')
+    || normalized.includes('no files to save')
+    || normalized.includes("don't have any save files")
+  );
+};
+
 const extractZipPath = (response: any) => {
   const payload = response?.data ?? response;
   const result = payload?.result_data;
@@ -302,6 +317,7 @@ const pollOperations = async (
       const totalCount = results.length;
       const completedCount = results.filter((item) => item?.completed).length;
       const failedCount = results.filter((item) => item?.failed).length;
+      const resolvedCount = completedCount + failedCount;
       const progressValues = results
         .map((item) => calculatePercent(item?.progress))
         .filter((value) => typeof value === 'number');
@@ -320,10 +336,11 @@ const pollOperations = async (
         .map((item) => item?.message || item?.result_data?.message)
         .find((msg) => msg);
 
-      operationModal.statusText = latestMessage || 'Processing...';
+      const displayStatus = isMissingSaveMessage(latestMessage || '') ? '' : (latestMessage || 'Processing...');
+      operationModal.statusText = displayStatus || 'Processing...';
       operationModal.detail = `${completedCount}/${totalCount} completed`;
 
-      if (completedCount === totalCount) {
+      if (resolvedCount === totalCount) {
         completed = true;
         if (failedCount === 0) {
           const successDetail = serverSuccessMessage || '';
@@ -381,11 +398,13 @@ const pollOperations = async (
           const errorMessage = results.find((item) => item?.message)?.message || '';
           operationModal.variant = 'danger';
           operationModal.statusText = 'Operation failed';
-          operationModal.detail = errorMessage;
-          if (errorMessage) {
-            notify.error(errorMessage);
-          }
+          const missingSave = isMissingSaveMessage(errorMessage);
+          operationModal.detail = missingSave ? '' : errorMessage;
+          notify.error(errorMessage || 'Operation failed.');
           errorToastShown = true;
+          if (missingSave) {
+            closeOperationModal();
+          }
         }
         operationModal.progress = 100;
         operationModal.closable = true;
@@ -413,10 +432,16 @@ const pollOperations = async (
 
 
 const onSearch = async ({ query, sort }: { query: string; sort: string }) => {
+  const requestId = ++searchRequestId;
+  searching.value = true;
   try {
     await store.searchGames(query, sort);
   } catch (err: any) {
     await handleAuthError(err);
+  } finally {
+    if (requestId === searchRequestId) {
+      searching.value = false;
+    }
   }
 };
 

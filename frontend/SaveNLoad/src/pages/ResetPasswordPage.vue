@@ -18,7 +18,13 @@
         />
       </div>
       <div class="d-grid">
-        <IconButton type="submit" variant="secondary" class="text-white fw-bold mt-3 py-2" :disabled="loading" :loading="loading">
+        <IconButton
+          type="submit"
+          variant="secondary"
+          class="text-white fw-bold mt-3 py-2"
+          :disabled="isSubmitting"
+          :loading="isSubmitting"
+        >
           RESET PASSWORD
         </IconButton>
       </div>
@@ -31,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue';
+import { reactive, computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
@@ -49,8 +55,14 @@ const form = reactive({
 
 const loading = computed(() => store.loading);
 const fieldErrors = computed(() => store.fieldErrors);
+const submitting = ref(false);
+const isSubmitting = computed(() => loading.value || submitting.value);
 
 const onSubmit = async () => {
+  if (isSubmitting.value) {
+    return;
+  }
+  submitting.value = true;
   try {
     await store.resetPassword({
       new_password: form.newPassword,
@@ -59,6 +71,8 @@ const onSubmit = async () => {
     await router.push('/login');
   } catch {
     // handled by store
+  } finally {
+    submitting.value = false;
   }
 };
 </script>

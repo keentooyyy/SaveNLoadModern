@@ -31,7 +31,7 @@
                 <div class="mt-1">
                   <span class="badge bg-success">Online</span>
                   <span v-if="worker.claimed" class="badge bg-warning text-dark ms-2">
-                    Claimed by: {{ worker.linked_user || 'Unknown' }}
+                    Claimed by: {{ worker.linked_user === authStore.user?.username ? 'You' : (worker.linked_user || 'Unknown') }}
                   </span>
                   <span v-else class="badge bg-secondary ms-2">Unclaimed</span>
                 </div>
@@ -72,13 +72,17 @@
 
 <script setup lang="ts">
 import BareLayout from '@/layouts/BareLayout.vue';
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useWorkerListSocket } from '@/composables/useWorkerListSocket';
+import { useDashboardStore } from '@/stores/dashboard';
+import { useAuthStore } from '@/stores/auth';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 const router = useRouter();
 const { workers } = useWorkerListSocket({ reloadOnClose: false });
+const dashboardStore = useDashboardStore();
+const authStore = useAuthStore();
 
 const claimingId = ref<string | null>(null);
 const hasShownSingleAvailableToast = ref(false);
@@ -202,6 +206,22 @@ watch(availableWorkers, (available) => {
     hasShownSingleAvailableToast.value = true;
   } else if (available.length !== 1) {
     hasShownSingleAvailableToast.value = false;
+  }
+});
+
+onMounted(async () => {
+  try {
+    const data = await dashboardStore.bootstrapDashboard();
+    if (data?.user) {
+      authStore.user = data.user as any;
+    }
+    await router.replace('/dashboard');
+  } catch (err: any) {
+    const status = err?.status;
+    if (status === 401) {
+      await router.replace('/');
+    }
+    // If 503 or other errors, stay on the page.
   }
 });
 

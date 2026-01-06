@@ -27,7 +27,13 @@
         />
       </div>
       <div class="d-grid">
-        <IconButton type="submit" variant="secondary" class="text-white fw-bold mt-3 py-2" :disabled="loading" :loading="loading">
+        <IconButton
+          type="submit"
+          variant="secondary"
+          class="text-white fw-bold mt-3 py-2"
+          :disabled="isSubmitting"
+          :loading="isSubmitting"
+        >
           REGISTER
         </IconButton>
       </div>
@@ -40,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch } from 'vue';
+import { reactive, computed, watch, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
@@ -61,6 +67,8 @@ const form = reactive({
 
 const loading = computed(() => store.loading);
 const fieldErrors = computed(() => store.fieldErrors);
+const submitting = ref(false);
+const isSubmitting = computed(() => loading.value || submitting.value);
 
 const clearFieldError = (key: string) => {
   if (store.fieldErrors && store.fieldErrors[key]) {
@@ -79,6 +87,10 @@ watch(() => form.password, () => clearFieldError('password'));
 watch(() => form.repeatPassword, () => clearFieldError('repeatPassword'));
 
 const onSubmit = async () => {
+  if (isSubmitting.value) {
+    return;
+  }
+  submitting.value = true;
   try {
     await store.register({
       username: form.username,
@@ -89,6 +101,8 @@ const onSubmit = async () => {
     await router.push('/login');
   } catch {
     // handled by store
+  } finally {
+    submitting.value = false;
   }
 };
 </script>

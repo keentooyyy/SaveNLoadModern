@@ -18,25 +18,28 @@
           </div>
           <div v-else-if="!results.length" class="text-center py-4">
             <p class="text-white-50 mb-0">No games found.</p>
-          </div>
-          <div v-else class="list-group list-group-flush">
+        </div>
+          <div v-else class="search-results">
             <div
               v-for="game in results"
               :key="game.id"
-              class="list-group-item list-group-item-action bg-primary text-white border-secondary d-flex align-items-center gap-3"
+              class="bg-primary text-white d-flex align-items-center gap-3 result-item"
+              role="button"
+              tabindex="0"
               @click="emit('select', game)"
+              @keydown.enter.prevent="emit('select', game)"
             >
-              <div v-if="game.banner" class="flex-shrink-0 rounded overflow-hidden bg-dark" style="width: 60px; height: 60px;">
+              <div v-if="game.banner" class="flex-shrink-0 rounded overflow-hidden bg-dark thumb">
                 <img :src="game.banner" :alt="game.name" class="w-100 h-100 object-fit-cover" referrerpolicy="no-referrer" />
               </div>
-              <div v-else class="flex-shrink-0 rounded bg-dark d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+              <div v-else class="flex-shrink-0 rounded bg-dark d-flex align-items-center justify-content-center thumb">
                 <i class="fas fa-gamepad text-white-50 fs-4"></i>
               </div>
               <div class="flex-grow-1 min-w-0">
                 <div class="fw-semibold text-truncate">
                   {{ formatTitle(game) }}
                 </div>
-                <div class="text-white-50 small text-truncate">{{ game.company || '' }}</div>
+                <div class="text-white-50 small text-truncate">{{ formatSubtitle(game) }}</div>
               </div>
             </div>
           </div>
@@ -80,7 +83,42 @@ const formatTitle = (game: any) => {
   const year = game?.year || '';
   return year ? `${title} (${year})` : title;
 };
+
+const formatSubtitle = (game: any) => {
+  const genres = game?.genres;
+  if (Array.isArray(genres) && genres.length) {
+    return genres.join(', ');
+  }
+  if (typeof genres === 'string' && genres.trim()) {
+    return genres;
+  }
+  return game?.company || '';
+};
 </script>
 
 <style scoped>
+.result-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  padding: 0.75rem 1rem;
+}
+
+.result-item:hover,
+.result-item:focus-visible {
+  background-color: var(--primary-opacity-20) !important;
+  border-color: var(--white-opacity-20);
+  outline: none;
+}
+
+.result-item .thumb {
+  width: 60px;
+  height: 60px;
+}
+
+.search-results {
+  border-radius: 0;
+}
 </style>

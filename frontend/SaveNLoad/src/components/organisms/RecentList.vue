@@ -1,7 +1,13 @@
 <template>
   <div class="container-fluid px-4 pt-3 pb-2 position-relative">
     <div class="d-flex align-items-center justify-content-between mb-2">
-      <h6 class="text-white mb-0 fs-6 fw-medium">Recently played games</h6>
+      <div class="d-flex align-items-center gap-3">
+        <h6 class="text-white mb-0 fs-6 fw-medium">Recently played games</h6>
+        <div v-if="searching" class="text-white-50 small d-flex align-items-center gap-2">
+          <i class="fas fa-spinner fa-spin"></i>
+          <span>Searching games...</span>
+        </div>
+      </div>
       <div class="d-flex gap-2">
         <button
           class="btn btn-outline-light btn-sm"
@@ -56,7 +62,8 @@ const emit = defineEmits(['select']);
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
-  loading: { type: Boolean, default: false }
+  loading: { type: Boolean, default: false },
+  searching: { type: Boolean, default: false }
 });
 
 const scrollContainer = ref<HTMLElement | null>(null);

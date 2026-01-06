@@ -6,7 +6,13 @@
         <TextInput v-model="email" type="email" placeholder="Enter your email" :invalid="!!fieldErrors?.email" required />
       </div>
       <div class="d-grid">
-        <IconButton type="submit" variant="secondary" class="text-white fw-bold mt-3 py-2" :disabled="loading" :loading="loading">
+        <IconButton
+          type="submit"
+          variant="secondary"
+          class="text-white fw-bold mt-3 py-2"
+          :disabled="isSubmitting"
+          :loading="isSubmitting"
+        >
           SEND OTP
         </IconButton>
       </div>
@@ -33,13 +39,21 @@ const email = ref('');
 
 const loading = computed(() => store.loading);
 const fieldErrors = computed(() => store.fieldErrors);
+const submitting = ref(false);
+const isSubmitting = computed(() => loading.value || submitting.value);
 
 const onSubmit = async () => {
+  if (isSubmitting.value) {
+    return;
+  }
+  submitting.value = true;
   try {
     await store.forgotPassword({ email: email.value });
     await router.push('/verify-otp');
   } catch {
     // handled by store
+  } finally {
+    submitting.value = false;
   }
 };
 </script>
