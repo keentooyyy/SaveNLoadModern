@@ -122,7 +122,6 @@ def save_game(request, game_id):
             return create_operation_response(
                 operation_id,
                 client_worker,
-                message='Save operation queued',
                 extra_data={'save_folder_number': save_folder.folder_number}
             )
 
@@ -165,7 +164,6 @@ def save_game(request, game_id):
             operation_ids.append(operation_id)
 
         return json_response_success(
-            message=f'Save operations queued for {len(save_paths)} location(s)',
             data={
                 'operation_ids': operation_ids,
                 'save_folder_number': save_folder.folder_number,
@@ -254,7 +252,6 @@ def load_game(request, game_id):
         return create_operation_response(
             operation_id,
             client_worker,
-            message='Load operation queued',
             extra_data={'save_folder_number': save_folder_number}
         )
 
@@ -291,7 +288,6 @@ def load_game(request, game_id):
         operation_ids.append(operation_id)
 
     return json_response_success(
-        message=f'Load operations queued for {len(load_paths)} location(s)',
         data={
             'operation_ids': operation_ids,
             'save_folder_number': save_folder_number,
@@ -371,12 +367,31 @@ def check_operation_status(request, operation_id):
             except Exception:
                 result_data = result_data_str
 
+    success_message = None
+    if status_value == OperationStatus.COMPLETED:
+        operation_type = operation.get('type') or ''
+        operation_group = operation.get('operation_group') or ''
+        if operation_type == 'delete' and operation_group == 'delete_older':
+            success_message = 'Older saves deleted successfully.'
+        elif operation_type == 'delete':
+            success_message = 'Save deleted successfully.'
+        elif operation_type == 'save':
+            success_message = 'Game saved successfully.'
+        elif operation_type == 'load':
+            success_message = 'Game loaded successfully.'
+        elif operation_type == 'backup':
+            success_message = 'Backup successful.'
+        elif operation_type == 'open_folder':
+            success_message = 'Folder opened successfully.'
+        elif isinstance(result_data, dict):
+            success_message = result_data.get('message') or None
+
     return json_response_success(
         data={
             'status': status_value,
             'completed': status_value == OperationStatus.COMPLETED,
             'failed': status_value == OperationStatus.FAILED,
-            'message': error_message,
+            'message': error_message if status_value == OperationStatus.FAILED else success_message,
             'result_data': result_data,
             'progress': {
                 'current': progress_current,
@@ -438,7 +453,6 @@ def delete_save_folder(request, game_id, folder_number):
         return create_operation_response(
             operation_id,
             client_worker,
-            message='Delete operation queued',
             extra_data={'save_folder_number': folder_number}
         )
 
@@ -522,8 +536,7 @@ def backup_all_saves(request, game_id):
 
     return create_operation_response(
         operation_id,
-        client_worker,
-        message='Backup operation queued'
+        client_worker
     )
 
 
@@ -531,7 +544,7 @@ def backup_all_saves(request, game_id):
 @authentication_classes([])
 def delete_all_saves(request, game_id):
     """
-    Delete all save folders for a game (from SMB and database).
+    Delete all save folders for a game except the latest one (from SMB and database).
     """
     user = get_current_user(request)
     if not user:
@@ -553,6 +566,14 @@ def delete_all_saves(request, game_id):
 
         if not save_folders.exists():
             return json_response_error('No save folders found for this game', status=404)
+
+        latest_save = SaveFolder.get_latest(user, game)
+        if not latest_save:
+            return json_response_error('No save folders found for this game', status=404)
+
+        save_folders = save_folders.exclude(id=latest_save.id)
+        if not save_folders.exists():
+            return json_response_error('No older save folders found for this game', status=404)
 
         client_worker, error_response = get_client_worker_or_error(user, request)
         if error_response:
@@ -582,6 +603,7 @@ def delete_all_saves(request, game_id):
                 operation_id = create_operation(
                     {
                         'operation_type': OperationType.DELETE,
+                        'operation_group': 'delete_older',
                         'user_id': user.id,
                         'game_id': game.id,
                         'local_save_path': '',
@@ -605,10 +627,9 @@ def delete_all_saves(request, game_id):
         if not operation_ids:
             if invalid_folders:
                 return json_response_error('No valid save folders found to delete', status=404)
-            return json_response_error('No save folders found for this game', status=404)
+            return json_response_error('No older save folders found for this game', status=404)
 
         return json_response_success(
-            message=f'Delete operations queued for {len(operation_ids)} save folder(s)',
             data={
                 'operation_ids': operation_ids,
                 'total_count': len(operation_ids),
@@ -699,10 +720,72 @@ def open_save_location(request, game_id):
     )
 
     path_count = len(save_paths)
-    message = f'Open folder operation queued ({path_count} location{"s" if path_count > 1 else ""})'
+    return create_operation_response(
+        operation_id,
+        client_worker
+    )
+
+
+@api_view(["POST"])
+@authentication_classes([])
+def open_backup_location(request, game_id):
+    """
+    Open the folder that contains a backup zip file.
+    """
+    from SaveNLoad.models.operation_constants import OperationType
+    import json
+    from pathlib import PurePosixPath, PureWindowsPath
+    import os
+
+    user = get_current_user(request)
+    if not user:
+        return Response(
+            {'error': 'Not authenticated. Please log in.', 'requires_login': True},
+            status=401
+        )
+
+    game, error_response = get_game_or_error(game_id)
+    if error_response:
+        return error_response
+
+    data, error_response = parse_json_body(request)
+    if error_response:
+        return error_response
+
+    zip_path = (data.get('zip_path') or '').strip()
+    if not zip_path:
+        return json_response_error('zip_path is required', status=400)
+
+    posix_folder = str(PurePosixPath(zip_path).parent)
+    windows_folder = str(PureWindowsPath(zip_path).parent)
+    folder_path = windows_folder or posix_folder
+    if not folder_path or folder_path == '.':
+        return json_response_error('Invalid zip_path', status=400)
+
+    client_worker, error_response = get_client_worker_or_error(user, request)
+    if error_response:
+        return error_response
+
+    paths_data = {
+        'paths': [folder_path],
+        'create_folders': False
+    }
+    paths_json = json.dumps(paths_data)
+
+    operation_id = create_operation(
+        {
+            'operation_type': OperationType.OPEN_FOLDER,
+            'user_id': user.id,
+            'game_id': game.id,
+            'local_save_path': paths_json,
+            'save_folder_number': None,
+            'smb_path': None,
+            'path_index': None
+        },
+        client_worker
+    )
 
     return create_operation_response(
         operation_id,
-        client_worker,
-        message=message
+        client_worker
     )

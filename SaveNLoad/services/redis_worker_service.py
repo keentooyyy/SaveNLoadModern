@@ -329,6 +329,32 @@ def unclaim_worker(client_id):
     return True
 
 
+def unclaim_user_workers(user_id):
+    """
+    Unclaim all workers associated with a user.
+
+    Args:
+        user_id: User ID
+
+    Returns:
+        list of client_ids that were processed
+    """
+    redis_client = get_redis_client()
+    worker_ids = redis_client.smembers(f'user:{user_id}:workers') or []
+
+    processed = []
+    for raw_id in worker_ids:
+        client_id = raw_id.decode('utf-8') if isinstance(raw_id, bytes) else raw_id
+        if not client_id:
+            continue
+        # Ensure the user set is cleared even if worker info is missing.
+        redis_client.srem(f'user:{user_id}:workers', client_id)
+        unclaim_worker(client_id)
+        processed.append(client_id)
+
+    return processed
+
+
 def get_user_workers(user_id):
     """
     Get all workers for a user
@@ -543,4 +569,3 @@ def _notify_ui_user_worker_status(user_id):
         send_ui_user_worker_status(user_id, has_online_worker(user_id))
     except Exception as e:
         print(f"UI user status update failed: {e}")
-

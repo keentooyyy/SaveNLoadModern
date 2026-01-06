@@ -92,6 +92,7 @@ import InputGroup from '@/components/molecules/InputGroup.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
 import SectionTitle from '@/components/atoms/SectionTitle.vue';
 import { useSettingsStore } from '@/stores/settings';
+import { useConfirm } from '@/composables/useConfirm';
 
 type UserItem = {
   id: number;
@@ -100,6 +101,7 @@ type UserItem = {
 };
 
 const store = useSettingsStore();
+const { requestConfirm } = useConfirm();
 const searchQuery = ref('');
 const users = ref<UserItem[]>([]);
 const loading = ref(false);
@@ -139,7 +141,13 @@ const goToPage = (page: number) => {
 };
 
 const onReset = async (user: UserItem) => {
-  if (!window.confirm(`Reset password for ${user.username}?`)) {
+  const confirmed = await requestConfirm({
+    title: 'Reset Password',
+    message: `Reset password for ${user.username}?`,
+    confirmText: 'Reset',
+    variant: 'danger'
+  });
+  if (!confirmed) {
     return;
   }
   await store.resetUserPassword(user.id);
@@ -168,7 +176,13 @@ const waitForDeletion = async (operationId: string) => {
 };
 
 const onDelete = async (user: UserItem) => {
-  if (!window.confirm(`Delete user ${user.username}? This cannot be undone.`)) {
+  const confirmed = await requestConfirm({
+    title: 'Delete User',
+    message: `Delete user ${user.username}? This cannot be undone.`,
+    confirmText: 'Delete',
+    variant: 'danger'
+  });
+  if (!confirmed) {
     return;
   }
   loading.value = true;

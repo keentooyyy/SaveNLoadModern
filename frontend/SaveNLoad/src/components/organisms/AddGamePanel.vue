@@ -55,7 +55,7 @@
       @select="onSelectGame"
     />
     <Teleport to="body">
-      <div v-if="searchLoading" class="search-overlay">
+      <div v-if="searchLoading" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-75">
         <div class="text-center text-white">
           <div class="spinner-border" role="status" aria-live="polite">
             <span class="visually-hidden">Loading...</span>
@@ -189,13 +189,4 @@ const onSubmit = async () => {
 </script>
 
 <style scoped>
-.search-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--overlay-bg);
-}
 </style>

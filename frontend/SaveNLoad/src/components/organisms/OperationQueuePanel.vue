@@ -67,10 +67,12 @@ import CollapsibleCard from '@/components/molecules/CollapsibleCard.vue';
 import IconButton from '@/components/atoms/IconButton.vue';
 import SectionTitle from '@/components/atoms/SectionTitle.vue';
 import { useSettingsStore } from '@/stores/settings';
+import { useConfirm } from '@/composables/useConfirm';
 
 const store = useSettingsStore();
 const loading = ref(false);
 const error = ref('');
+const { requestConfirm } = useConfirm();
 const stats = ref({
   total: 0,
   by_status: {
@@ -95,7 +97,13 @@ const loadStats = async () => {
 };
 
 const clearAll = async () => {
-  if (!window.confirm('Clear all operations?')) {
+  const confirmed = await requestConfirm({
+    title: 'Clear Operations',
+    message: 'Clear all operations?',
+    confirmText: 'Clear',
+    variant: 'danger'
+  });
+  if (!confirmed) {
     return;
   }
   await store.cleanupQueue('all');

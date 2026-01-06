@@ -194,11 +194,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
     error.value = '';
     try {
       const data = await apiPost(`/games/${gameId}/save/`, {});
-      const message = data?.message || 'Save queued.';
-      const normalizedMessage = message.toLowerCase();
-      if (!normalizedMessage.includes('operations queued') && !normalizedMessage.includes('save operation queued')) {
-        notify.success(message);
-      }
       return data;
     } catch (err: any) {
       error.value = err?.message || 'Failed to save game.';
@@ -214,10 +209,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
     error.value = '';
     try {
       const data = await apiPost(`/games/${gameId}/load/`, {});
-      const message = data?.message || 'Load queued.';
-      if (!message.toLowerCase().includes('operations queued')) {
-        notify.success(message);
-      }
       return data;
     } catch (err: any) {
       error.value = err?.message || 'Failed to load game.';
@@ -233,10 +224,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
     error.value = '';
     try {
       const data = await apiPost(`/games/${gameId}/load/`, { save_folder_number: folderNumber });
-      const message = data?.message || 'Load queued.';
-      if (!message.toLowerCase().includes('operations queued')) {
-        notify.success(message);
-      }
       return data;
     } catch (err: any) {
       error.value = err?.message || 'Failed to load game.';
@@ -265,6 +252,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
   const openSaveLocation = async (gameId: number) => {
     return apiPost(`/games/${gameId}/open-save-location/`, {});
+  };
+
+  const openBackupLocation = async (gameId: number, zipPath: string) => {
+    return apiPost(`/games/${gameId}/open-backup-location/`, { zip_path: zipPath });
   };
 
   const checkOperationStatus = async (operationId: string) => {
@@ -320,6 +311,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     backupAllSaves,
     deleteAllSaves,
     openSaveLocation,
+    openBackupLocation,
     checkOperationStatus,
     touchRecentGame
   };

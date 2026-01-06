@@ -22,6 +22,7 @@
     :save-folders="saveFolders"
     :loading="saveFoldersLoading"
     :error="saveFoldersError"
+    :is-admin="isAdmin"
     @load="onLoadSaveFolder"
     @delete="onDeleteSaveFolder"
     @backup-all="onBackupAllSaves"
@@ -39,6 +40,12 @@
     :closable="operationModal.closable"
     @close="closeOperationModal"
   />
+  <BackupCompleteModal
+    :open="backupModal.open"
+    :zip-path="backupModal.zipPath"
+    @close="closeBackupModal"
+    @open-location="onOpenBackupLocation"
+  />
 </template>
 
 <script setup lang="ts">
@@ -49,11 +56,14 @@ import RecentList from '@/components/organisms/RecentList.vue';
 import GameGrid from '@/components/organisms/GameGrid.vue';
 import GameSavesModal from '@/components/organisms/GameSavesModal.vue';
 import OperationProgressModal from '@/components/organisms/OperationProgressModal.vue';
+import BackupCompleteModal from '@/components/organisms/BackupCompleteModal.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useDashboardStore } from '@/stores/dashboard';
+import { useConfirm } from '@/composables/useConfirm';
 
 const router = useRouter();
 const store = useDashboardStore();
+const { requestConfirm } = useConfirm();
 
 const searchQuery = ref('');
 const sortBy = ref('name_asc');
@@ -62,6 +72,7 @@ const games = computed(() => store.games);
 const recentGames = computed(() => store.recentGames);
 const recentLoading = computed(() => store.loading && recentGames.value.length === 0);
 const gamesLoading = computed(() => store.loading && games.value.length === 0);
+const isAdmin = computed(() => store.isAdmin);
 const selectedGameTitle = ref('');
 const selectedGameId = ref<number | null>(null);
 const saveFolders = ref<any[]>([]);
@@ -79,6 +90,13 @@ const operationModal = reactive({
   progress: 0,
   variant: 'info',
   closable: false
+});
+
+const backupModal = reactive({
+  open: false,
+  zipPath: '',
+  gameId: null as number | null,
+  pending: false
 });
 
 let successCloseTimer: number | null = null;
@@ -140,6 +158,52 @@ const openOperationModal = (title: string, subtitle: string, detail: string) => 
 const closeOperationModal = () => {
   clearSuccessCloseTimer();
   operationModal.open = false;
+  if (backupModal.pending) {
+    backupModal.pending = false;
+    backupModal.open = true;
+  }
+};
+
+const closeBackupModal = () => {
+  backupModal.open = false;
+};
+
+const sanitizeZipPath = (value: string) => {
+  if (!value) {
+    return '';
+  }
+  const marker = 'Backup saved to:';
+  const index = value.indexOf(marker);
+  const trimmed = (index >= 0 ? value.slice(index + marker.length) : value).trim();
+  return trimmed.replace(/^["']|["']$/g, '');
+};
+
+const showBackupModal = (zipPath: string, gameId: number | null) => {
+  backupModal.zipPath = sanitizeZipPath(zipPath);
+  backupModal.gameId = gameId;
+  backupModal.pending = true;
+  if (!operationModal.open) {
+    backupModal.pending = false;
+    backupModal.open = true;
+  }
+};
+
+const isBackupLabel = (label: string) => {
+  const normalized = label.toLowerCase();
+  return normalized.includes('backup') || normalized.includes('backing up') || normalized.includes('back up');
+};
+
+const extractZipPath = (response: any) => {
+  const payload = response?.data ?? response;
+  const result = payload?.result_data;
+  if (result?.zip_path) {
+    return sanitizeZipPath(result.zip_path);
+  }
+  const message = result?.message || '';
+  if (typeof message === 'string') {
+    return sanitizeZipPath(message);
+  }
+  return '';
 };
 
 const normalizeOperationIds = (data: any) => {
@@ -216,6 +280,9 @@ const pollOperations = async (
       const latestMessage = results
         .map((item) => item?.progress?.message || item?.message)
         .find((msg) => msg);
+      const serverSuccessMessage = results
+        .map((item) => item?.message || item?.result_data?.message)
+        .find((msg) => msg);
 
       if (latestMessage && isOperationBlockedMessage(latestMessage)) {
         operationModal.variant = 'danger';
@@ -234,18 +301,40 @@ const pollOperations = async (
       operationModal.statusText = latestMessage || 'Processing...';
       operationModal.detail = `${completedCount}/${totalCount} completed`;
 
-        if (completedCount === totalCount) {
-          completed = true;
+      if (completedCount === totalCount) {
+        completed = true;
         if (failedCount === 0) {
+          const successDetail = serverSuccessMessage || 'Operation completed successfully.';
           operationModal.variant = 'success';
           operationModal.statusText = 'All operations complete';
-          operationModal.detail = label.includes('Load') ? 'Game loaded successfully.' : 'Game saved successfully.';
-          notify.success(operationModal.detail);
-          if (label.toLowerCase().includes('save')) {
+          operationModal.detail = successDetail;
+          notify.success(successDetail);
+          const normalizedLabel = label.toLowerCase();
+          const isBackup = isBackupLabel(label);
+          if (normalizedLabel.includes('save') && !isBackup) {
             try {
               await store.loadDashboard();
             } catch {
               // Ignore refresh errors to avoid blocking success flow.
+            }
+          }
+          if (isBackup) {
+            let zipPath = '';
+            const backupResult = results.find((item) => item?.result_data?.zip_path);
+            if (backupResult?.result_data?.zip_path) {
+              zipPath = backupResult.result_data.zip_path;
+            } else {
+              try {
+                const backupStatuses = await Promise.all(
+                  operationIds.map(async (id) => store.checkOperationStatus(id))
+                );
+                zipPath = backupStatuses.map(extractZipPath).find((path) => path) || '';
+              } catch {
+                zipPath = '';
+              }
+            }
+            if (zipPath) {
+              showBackupModal(zipPath, selectedGameId.value);
             }
           }
           if (onSuccess) {
@@ -419,7 +508,13 @@ const onDeleteSaveFolder = async (folder: { folder_number: number }) => {
   if (!selectedGameId.value) {
     return;
   }
-  if (!window.confirm(`Delete save ${folder.folder_number}? This cannot be undone.`)) {
+  const confirmed = await requestConfirm({
+    title: 'Delete Save',
+    message: `Delete save ${folder.folder_number}? This cannot be undone.`,
+    confirmText: 'Delete',
+    variant: 'danger'
+  });
+  if (!confirmed) {
     return;
   }
   try {
@@ -453,13 +548,24 @@ const onDeleteAllSaves = async () => {
   if (!selectedGameId.value) {
     return;
   }
-  if (!window.confirm('Delete all saves for this game? This cannot be undone.')) {
+  const confirmed = await requestConfirm({
+    title: 'Delete Older Saves',
+    message: 'Delete older saves for this game? The latest save will be kept.',
+    confirmText: 'Delete',
+    variant: 'danger'
+  });
+  if (!confirmed) {
     return;
   }
   try {
     const data = await store.deleteAllSaves(selectedGameId.value);
     const operationIds = normalizeOperationIds(data);
-    await pollOperations(operationIds, 'Deleting saves', 'Deleting all saves...', loadSaveFolders);
+    await pollOperations(
+      operationIds,
+      'Deleting saves',
+      'Deleting older saves...',
+      loadSaveFolders
+    );
   } catch (err: any) {
     await handleAuthError(err);
   }
@@ -472,6 +578,20 @@ const onOpenSaveLocation = async () => {
   try {
     await store.openSaveLocation(selectedGameId.value);
     notify.success('Save Location Opened.');
+  } catch (err: any) {
+    await handleAuthError(err);
+  }
+};
+
+const onOpenBackupLocation = async () => {
+  const zipPath = sanitizeZipPath(backupModal.zipPath);
+  if (!zipPath || !backupModal.gameId) {
+    notify.error('Backup path not available yet.');
+    return;
+  }
+  try {
+    await store.openBackupLocation(backupModal.gameId, zipPath);
+    notify.success('Opening backup location...');
   } catch (err: any) {
     await handleAuthError(err);
   }

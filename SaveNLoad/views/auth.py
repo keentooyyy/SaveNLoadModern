@@ -23,6 +23,7 @@ from SaveNLoad.utils.jwt_utils import (
     revoke_all_refresh_tokens
 )
 from SaveNLoad.services.ws_ui_token_service import issue_ui_ws_token
+from SaveNLoad.services.redis_worker_service import unclaim_user_workers
 from SaveNLoad.views.input_sanitizer import (
     sanitize_username,
     sanitize_email,
@@ -397,6 +398,13 @@ def refresh_token_view(request):
 @permission_classes([AllowAny])
 @ratelimit(key='ip', rate='30/m', block=True)
 def logout_view(request):
+    user = get_current_user(request)
+    if user:
+        try:
+            unclaim_user_workers(user.id)
+        except Exception as exc:
+            print(f"ERROR: Failed to unclaim workers on logout for user_id={user.id}: {exc}")
+
     refresh_token = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME)
     if refresh_token:
         try:

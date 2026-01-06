@@ -1,12 +1,17 @@
 <template>
   <div>
     <div class="mb-3">
-      <div :id="bannerPreviewId" class="game-banner-preview">
+      <div
+        :id="bannerPreviewId"
+        class="d-flex align-items-center justify-content-center border border-secondary rounded bg-primary"
+        style="min-height: 200px;"
+      >
         <img
           v-if="bannerUrl"
-          class="game-banner-preview-img"
+          class="w-100 object-fit-contain bg-dark"
           :src="bannerUrl"
           alt="Game banner preview"
+          style="max-height: 200px;"
         />
       </div>
     </div>
@@ -102,22 +107,4 @@ const removeLocation = (index: number) => {
 </script>
 
 <style scoped>
-.game-banner-preview {
-  min-height: 200px;
-  max-width: 100%;
-  border: 1px solid var(--bs-secondary);
-  border-radius: 0.375rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--bs-primary);
-}
-
-.game-banner-preview-img {
-  width: 100%;
-  max-width: 100%;
-  height: 200px;
-  object-fit: contain;
-  background-color: var(--white-opacity-10);
-}
 </style>

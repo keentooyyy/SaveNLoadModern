@@ -35,7 +35,7 @@
         </div>
       </div>
       <div v-else-if="items.length" class="d-flex gap-2">
-        <div v-for="item in items" :key="item.id" class="flex-shrink-0 recent-game-card recent-game-card-width">
+        <div v-for="item in items" :key="item.id" class="flex-shrink-0 recent-game-card" style="width: 260px;">
           <GameCard :title="item.title" :footer="item.footer" :image="item.image" @click="emit('select', item)" />
         </div>
       </div>
@@ -139,10 +139,6 @@ watch(
 
 .recent-game-card:hover :deep(.card) {
   box-shadow: 0 4px 12px var(--black-opacity-30) !important;
-}
-
-.recent-game-card-width {
-  width: 260px;
 }
 
 .overflow-x-auto::-webkit-scrollbar {

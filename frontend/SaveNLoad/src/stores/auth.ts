@@ -218,11 +218,11 @@ export const useAuthStore = defineStore('auth', () => {
       if (clientId) {
         try {
           await apiPost('/api/client/unclaim/', { client_id: clientId });
-          window.localStorage.removeItem('savenload_client_id');
         } catch (err: any) {
           error.value = err?.message || 'Failed to unclaim worker. Please try again.';
           notify.error(error.value);
-          throw err;
+        } finally {
+          window.localStorage.removeItem('savenload_client_id');
         }
       }
       const data = await apiPost('/auth/logout', {});

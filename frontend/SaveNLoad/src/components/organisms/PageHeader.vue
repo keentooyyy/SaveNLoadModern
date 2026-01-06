@@ -1,5 +1,5 @@
 <template>
-  <div class="d-flex align-items-center shadow-md bg-primary page-header-height">
+  <div class="d-flex align-items-center shadow bg-primary py-3">
     <div class="d-flex align-items-center justify-content-between gap-3 w-100 px-4">
       <div class="d-flex align-items-center gap-3">
         <span
@@ -28,7 +28,4 @@ defineProps({
 </script>
 
 <style scoped>
-.page-header-height {
-  height: 82px;
-}
 </style>

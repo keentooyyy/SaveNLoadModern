@@ -1,14 +1,14 @@
 <template>
   <BareLayout>
-    <div class="container d-flex align-items-center justify-content-center min-vh-80">
-      <div class="text-center w-100 max-width-600">
+    <div class="container d-flex align-items-center justify-content-center" style="min-height: 80vh;">
+      <div class="text-center w-100" style="max-width: 600px;">
         <div class="mb-4">
           <img src="/images/icon.png" alt="Worker Missing" width="80" height="80" />
         </div>
         <h2 class="text-white mb-3">Worker Missing</h2>
         <p class="text-white-50 mb-4">To use the application you need to have a client worker running.</p>
 
-        <div class="p-3 mb-4 rounded d-flex align-items-start worker-id-hint">
+        <div class="p-3 mb-4 rounded d-flex align-items-start bg-primary bg-opacity-10 border border-primary text-white">
           <i class="fas fa-info-circle me-3 mt-1 fs-5"></i>
           <div>
             <strong>Tip:</strong> The correct Worker ID contains your PC name + a unique code.<br />
@@ -50,7 +50,7 @@
         </div>
         <div v-else class="card bg-dark border-secondary p-4 text-center">
           <div class="mb-3">
-            <div class="spinner-border text-white spinner-lg" role="status">
+            <div class="spinner-border text-white" role="status" style="width: 3rem; height: 3rem;">
               <span class="visually-hidden">Loading...</span>
             </div>
           </div>
@@ -209,22 +209,4 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.worker-id-hint {
-  background-color: var(--primary-opacity-15);
-  border: 1px solid var(--primary-opacity-30);
-  color: var(--color-primary-bootstrap);
-}
-
-.min-vh-80 {
-  min-height: 80vh;
-}
-
-.max-width-600 {
-  max-width: 600px;
-}
-
-.spinner-lg {
-  width: 3rem;
-  height: 3rem;
-}
 </style>

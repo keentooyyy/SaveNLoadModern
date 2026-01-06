@@ -47,6 +47,7 @@ def create_operation(operation_data, client_id):
         # Core identifiers and status.
         'id': operation_id,
         'type': operation_data['operation_type'],
+        'operation_group': operation_data.get('operation_group', ''),
         'status': OperationStatus.PENDING,
         'client_id': client_id,
         'user_id': str(operation_data['user_id']),
@@ -250,6 +251,7 @@ def get_operation(operation_id):
     return {
         'id': operation_hash.get('id'),
         'type': operation_hash.get('type'),
+        'operation_group': operation_hash.get('operation_group', ''),
         'status': operation_hash.get('status'),
         'client_id': operation_hash.get('client_id'),
         'user_id': int(operation_hash['user_id']) if operation_hash.get('user_id') else None,
@@ -393,4 +395,3 @@ def get_operations_by_user(user_id, game_id=None, operation_type=None):
             operations.append(get_operation(operation_hash.get('id')))
     
     return [op for op in operations if op]
-

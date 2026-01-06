@@ -10,6 +10,7 @@ urlpatterns = [
     path('games/<int:game_id>/backup-all-saves/', save_load_api.backup_all_saves, name='backup_all_saves'),
     path('games/<int:game_id>/delete-all-saves/', save_load_api.delete_all_saves, name='delete_all_saves'),
     path('games/<int:game_id>/open-save-location/', save_load_api.open_save_location, name='open_save_location'),
+    path('games/<int:game_id>/open-backup-location/', save_load_api.open_backup_location, name='open_backup_location'),
     path('games/<int:game_id>/save-location/', save_load_api.get_game_save_location, name='get_game_save_location'),
     path('operations/<str:operation_id>/status/', save_load_api.check_operation_status, name='check_operation_status'),
 ]

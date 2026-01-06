@@ -1,12 +1,12 @@
 <template>
   <div class="modal fade" id="gameSearchModal" tabindex="-1" aria-labelledby="gameSearchModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered modal-lg modal-search-dialog">
-      <div class="modal-content bg-primary text-white border-0">
-        <div class="modal-header bg-primary border-secondary">
+    <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered modal-lg" style="max-width: 900px;">
+      <div class="modal-content bg-primary text-white border-0 rounded-3 shadow-lg border border-secondary">
+        <div class="modal-header bg-primary border-secondary px-4 py-3">
           <h5 class="modal-title text-white" id="gameSearchModalLabel">Select Item</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body bg-primary modal-search-body overflow-y-auto">
+        <div class="modal-body bg-primary overflow-auto px-4 py-3" style="max-height: 500px;">
           <div v-if="loading" class="text-center py-4">
             <div class="spinner-border text-secondary" role="status">
               <span class="visually-hidden">Loading...</span>
@@ -19,29 +19,29 @@
           <div v-else-if="!results.length" class="text-center py-4">
             <p class="text-white-50 mb-0">No games found.</p>
           </div>
-          <div v-else class="p-0 m-0">
+          <div v-else class="list-group list-group-flush">
             <div
               v-for="game in results"
               :key="game.id"
-              class="search-list-item"
+              class="list-group-item list-group-item-action bg-primary text-white border-secondary d-flex align-items-center gap-3"
               @click="emit('select', game)"
             >
-              <div v-if="game.banner" class="search-img-container">
+              <div v-if="game.banner" class="flex-shrink-0 rounded overflow-hidden bg-dark" style="width: 60px; height: 60px;">
                 <img :src="game.banner" :alt="game.name" class="w-100 h-100 object-fit-cover" referrerpolicy="no-referrer" />
               </div>
-              <div v-else class="search-img-container d-flex align-items-center justify-content-center">
+              <div v-else class="flex-shrink-0 rounded bg-dark d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
                 <i class="fas fa-gamepad text-white-50 fs-4"></i>
               </div>
-              <div class="search-text-container">
-                <div class="search-title">
+              <div class="flex-grow-1 min-w-0">
+                <div class="fw-semibold text-truncate">
                   {{ formatTitle(game) }}
                 </div>
-                <div class="search-subtitle">{{ game.company || '' }}</div>
+                <div class="text-white-50 small text-truncate">{{ game.company || '' }}</div>
               </div>
             </div>
           </div>
         </div>
-        <div class="modal-footer bg-primary border-secondary d-flex gap-2">
+        <div class="modal-footer bg-primary border-secondary d-flex gap-2 px-4 py-3">
           <InputGroup
             button-first
             v-model="query"
@@ -83,57 +83,4 @@ const formatTitle = (game: any) => {
 </script>
 
 <style scoped>
-.modal-search-dialog {
-  max-width: 900px;
-}
-
-.modal-search-body {
-  max-height: 500px;
-}
-
-.search-list-item {
-  display: flex;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  border-bottom: 1px solid var(--white-opacity-08);
-}
-
-.search-list-item:hover {
-  background-color: var(--primary-opacity-15);
-}
-
-.search-img-container {
-  flex-shrink: 0;
-  width: 60px;
-  height: 60px;
-  margin-right: 1rem;
-  border-radius: 4px;
-  overflow: hidden;
-  background-color: var(--white-opacity-10);
-}
-
-.search-text-container {
-  flex: 1;
-  min-width: 0;
-}
-
-.search-title {
-  color: var(--color-white);
-  font-size: 1rem;
-  font-weight: 500;
-  margin-bottom: 0.25rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.search-subtitle {
-  color: var(--white-opacity-50);
-  font-size: 0.875rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 </style>

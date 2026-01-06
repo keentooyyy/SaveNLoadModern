@@ -1,12 +1,8 @@
 <template>
-  <div class="bare-layout">
+  <div class="min-vh-100 w-100">
     <slot />
   </div>
 </template>
 
 <style scoped>
-.bare-layout {
-  min-height: 100vh;
-  width: 100%;
-}
 </style>
