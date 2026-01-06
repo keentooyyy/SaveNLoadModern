@@ -46,17 +46,42 @@ const ensureCsrf = async () => {
   return getCookie('csrftoken');
 };
 
-async function apiPost(path: string, body: Record<string, unknown>) {
+const refreshSession = async () => {
   const csrfToken = await ensureCsrf();
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${API_BASE}/auth/refresh`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
       'X-CSRFToken': csrfToken
     },
-    credentials: 'include',
-    body: JSON.stringify(body)
+    credentials: 'include'
   });
+  return response.ok;
+};
+
+const requestWithRetry = async (makeRequest: () => Promise<Response>) => {
+  let response = await makeRequest();
+  if (response.status === 401) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      response = await makeRequest();
+    }
+  }
+  return response;
+};
+
+async function apiPost(path: string, body: Record<string, unknown>) {
+  const csrfToken = await ensureCsrf();
+  const response = await requestWithRetry(() => (
+    fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
+      },
+      credentials: 'include',
+      body: JSON.stringify(body)
+    })
+  ));
 
   let data: any = null;
   try {
@@ -97,10 +122,12 @@ export const useAuthStore = defineStore('auth', () => {
   };
 
   const fetchCurrentUser = async () => {
-    const response = await fetch(`${API_BASE}/auth/me`, {
-      method: 'GET',
-      credentials: 'include'
-    });
+    const response = await requestWithRetry(() => (
+      fetch(`${API_BASE}/auth/me`, {
+        method: 'GET',
+        credentials: 'include'
+      })
+    ));
 
     if (response.ok) {
       const data = await response.json();

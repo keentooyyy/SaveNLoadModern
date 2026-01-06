@@ -18,7 +18,7 @@
           <div class="modal-body bg-primary px-4 py-3">
             <p class="text-white-50 mb-0">{{ state.message }}</p>
           </div>
-          <div class="modal-footer bg-primary border-secondary d-flex justify-content-end px-4 py-3">
+          <div class="modal-footer bg-primary border-secondary border-top-0 d-flex justify-content-end px-4 py-3">
             <button class="btn btn-outline-secondary text-white" type="button" @click="cancelAction">
               {{ state.cancelText }}
             </button>

@@ -65,7 +65,7 @@ def register_client(request):
 
     except Exception as e:
         print(f"ERROR: Failed to register client: {e}")
-        return json_response_error(str(e), status=500)
+        return json_response_error('Failed to register client', status=500)
 
 
 @api_view(["POST"])
@@ -87,7 +87,7 @@ def unregister_client(request):
 
     except Exception as e:
         print(f"ERROR: Failed to unregister client: {e}")
-        return json_response_error(str(e), status=500)
+        return json_response_error('Failed to unregister client', status=500)
 
 
 @api_view(["GET"])
@@ -148,7 +148,7 @@ def claim_worker(request):
 
     except Exception as e:
         print(f"ERROR: Failed to claim worker: {e}")
-        return json_response_error(str(e), status=500)
+        return json_response_error('Failed to claim worker', status=500)
 
 
 @api_view(["POST"])
@@ -188,4 +188,4 @@ def unclaim_worker(request):
 
     except Exception as e:
         print(f"ERROR: Failed to unclaim worker: {e}")
-        return json_response_error(str(e), status=500)
+        return json_response_error('Failed to unclaim worker', status=500)

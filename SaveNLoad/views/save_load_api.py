@@ -3,6 +3,7 @@ DRF API endpoints for save/load operations.
 These endpoints are used by the client worker to perform save/load operations.
 """
 from rest_framework.decorators import api_view, authentication_classes
+from django.views.decorators.csrf import csrf_protect
 from rest_framework.response import Response
 
 from SaveNLoad.services.redis_operation_service import create_operation
@@ -52,6 +53,7 @@ def _build_full_remote_path(username: str, game_name: str, save_folder_number: i
 
 @api_view(["POST"])
 @authentication_classes([])
+@csrf_protect
 def save_game(request, game_id):
     """
     Save game endpoint - queues operation for client worker.
@@ -175,11 +177,12 @@ def save_game(request, game_id):
         import traceback
         print(f"ERROR in save_game: {e}")
         print(traceback.format_exc())
-        return json_response_error(f'Failed to save game: {str(e)}', status=500)
+        return json_response_error('Failed to save game', status=500)
 
 
 @api_view(["POST"])
 @authentication_classes([])
+@csrf_protect
 def load_game(request, game_id):
     """
     Load game endpoint - queues operation for client worker.
@@ -410,6 +413,7 @@ def check_operation_status(request, operation_id):
 
 @api_view(["DELETE"])
 @authentication_classes([])
+@csrf_protect
 def delete_save_folder(request, game_id, folder_number):
     """
     Delete a save folder (from SMB and database).
@@ -463,7 +467,7 @@ def delete_save_folder(request, game_id, folder_number):
 
     except Exception as e:
         print(f"ERROR: Failed to delete save folder: {e}")
-        return json_response_error(f'Failed to delete save folder: {str(e)}', status=500)
+        return json_response_error('Failed to delete save folder', status=500)
 
 
 @api_view(["GET"])
@@ -504,6 +508,7 @@ def list_save_folders(request, game_id):
 
 @api_view(["POST"])
 @authentication_classes([])
+@csrf_protect
 def backup_all_saves(request, game_id):
     """
     Backup all save files for a game - queues operation for client worker.
@@ -548,6 +553,7 @@ def backup_all_saves(request, game_id):
 
 @api_view(["DELETE"])
 @authentication_classes([])
+@csrf_protect
 def delete_all_saves(request, game_id):
     """
     Delete all save folders for a game except the latest one (from SMB and database).
@@ -645,7 +651,7 @@ def delete_all_saves(request, game_id):
 
     except Exception as e:
         print(f"ERROR: Failed to delete all saves: {e}")
-        return json_response_error(f'Failed to delete all saves: {str(e)}', status=500)
+        return json_response_error('Failed to delete all saves', status=500)
 
 
 @api_view(["GET"])
@@ -677,6 +683,7 @@ def get_game_save_location(request, game_id):
 
 @api_view(["POST"])
 @authentication_classes([])
+@csrf_protect
 def open_save_location(request, game_id):
     """
     Open the save file location for a game - queues operation for client worker.
@@ -735,6 +742,7 @@ def open_save_location(request, game_id):
 
 @api_view(["POST"])
 @authentication_classes([])
+@csrf_protect
 def open_backup_location(request, game_id):
     """
     Open the folder that contains a backup zip file.
@@ -743,6 +751,7 @@ def open_backup_location(request, game_id):
     import json
     from pathlib import PurePosixPath, PureWindowsPath
     import os
+    from SaveNLoad.services.redis_operation_service import get_operations_by_user
 
     user = get_current_user(request)
     if not user:
@@ -762,6 +771,31 @@ def open_backup_location(request, game_id):
     zip_path = (data.get('zip_path') or '').strip()
     if not zip_path:
         return json_response_error('zip_path is required', status=400)
+
+    def _resolve_zip_path(operation):
+        result_data = operation.get('result_data') or {}
+        if isinstance(result_data, dict):
+            for key in ('zip_path', 'message'):
+                candidate = result_data.get(key)
+                if candidate:
+                    return str(candidate)
+            nested = result_data.get('result_data')
+            if isinstance(nested, dict):
+                for key in ('zip_path', 'message'):
+                    candidate = nested.get(key)
+                    if candidate:
+                        return str(candidate)
+        return None
+
+    backup_ops = get_operations_by_user(user.id, game_id=game.id, operation_type='backup')
+    valid_paths = [
+        _resolve_zip_path(op)
+        for op in backup_ops
+        if op and op.get('status') == 'completed'
+    ]
+    valid_paths = {path for path in valid_paths if path}
+    if zip_path not in valid_paths:
+        return json_response_error('Invalid zip_path', status=400)
 
     posix_folder = str(PurePosixPath(zip_path).parent)
     windows_folder = str(PureWindowsPath(zip_path).parent)

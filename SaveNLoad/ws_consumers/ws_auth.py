@@ -50,12 +50,7 @@ def get_ws_user(scope) -> Optional[object]:
 
     cookies = _parse_cookies(scope.get('headers'))
     access_name = settings.AUTH_ACCESS_COOKIE_NAME
-    refresh_name = settings.AUTH_REFRESH_COOKIE_NAME
     token = cookies.get(access_name)
-    token_kind = 'access'
-    if not token:
-        token = cookies.get(refresh_name)
-        token_kind = 'refresh'
     if not token:
         if settings.DEBUG:
             cookie_names = ','.join(sorted(cookies.keys()))
@@ -63,7 +58,7 @@ def get_ws_user(scope) -> Optional[object]:
         return None
     try:
         from SaveNLoad.utils.jwt_utils import decode_token
-        payload = decode_token(token, token_kind)
+        payload = decode_token(token, 'access')
         user_id = int(payload.get('sub', 0))
     except Exception:
         return None

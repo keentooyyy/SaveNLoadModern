@@ -2,7 +2,7 @@ from datetime import timedelta
 
 import jwt
 from django.conf import settings
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect
 from django_ratelimit.decorators import ratelimit
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.decorators import api_view, permission_classes
@@ -95,6 +95,7 @@ def csrf_view(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @ratelimit(key='ip', rate='5/m', block=True)
+@csrf_protect
 def login_view(request):
     username_or_email = request.data.get('username', '').strip()
     password = request.data.get('password') or ''
@@ -169,6 +170,7 @@ def login_view(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @ratelimit(key='ip', rate='3/m', block=True)
+@csrf_protect
 def register_view(request):
     username = sanitize_username(request.data.get('username'))
     email = sanitize_email(request.data.get('email'))
@@ -218,6 +220,7 @@ def register_view(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @ratelimit(key='ip', rate='5/m', block=True)
+@csrf_protect
 def forgot_password_view(request):
     raw_email = request.data.get('email', '').strip()
     email = sanitize_email(raw_email)
@@ -247,6 +250,7 @@ def forgot_password_view(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @ratelimit(key='ip', rate='5/m', block=True)
+@csrf_protect
 def verify_otp_view(request):
     email = sanitize_email(request.data.get('email', '').strip())
     otp_code = (request.data.get('otp_code') or '').strip()
@@ -293,6 +297,7 @@ def verify_otp_view(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @ratelimit(key='ip', rate='5/m', block=True)
+@csrf_protect
 def reset_password_view(request):
     reset_token = request.COOKIES.get(settings.AUTH_RESET_COOKIE_NAME)
     if not reset_token:
@@ -339,6 +344,7 @@ def reset_password_view(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @ratelimit(key='ip', rate='30/m', block=True)
+@csrf_protect
 def refresh_token_view(request):
     refresh_token = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME)
     if not refresh_token:
@@ -397,6 +403,7 @@ def refresh_token_view(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @ratelimit(key='ip', rate='30/m', block=True)
+@csrf_protect
 def logout_view(request):
     user = get_current_user(request)
     if user:
@@ -422,6 +429,7 @@ def logout_view(request):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@csrf_protect
 def ws_token_view(request):
     user = get_current_user(request)
     if not user:

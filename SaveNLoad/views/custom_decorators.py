@@ -138,10 +138,6 @@ def get_current_user(request):
         token = request.COOKIES.get(settings.AUTH_ACCESS_COOKIE_NAME)
 
     if not token:
-        token = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME)
-        token_kind = 'refresh'
-
-    if not token:
         return None
 
     try:

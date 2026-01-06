@@ -62,6 +62,29 @@ const ensureCsrf = async () => {
   return getCookie('csrftoken');
 };
 
+const refreshSession = async () => {
+  const csrfToken = await ensureCsrf();
+  const response = await fetch(`${API_BASE}/auth/refresh`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': csrfToken
+    },
+    credentials: 'include'
+  });
+  return response.ok;
+};
+
+const requestWithRetry = async (makeRequest: () => Promise<Response>) => {
+  let response = await makeRequest();
+  if (response.status === 401) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      response = await makeRequest();
+    }
+  }
+  return response;
+};
+
 async function apiGet(path: string, params?: Record<string, string>) {
   const url = new URL(`${API_BASE}${path}`, window.location.origin);
   if (params) {
@@ -72,7 +95,9 @@ async function apiGet(path: string, params?: Record<string, string>) {
     });
   }
 
-  const response = await fetch(url.toString(), { credentials: 'include' });
+  const response = await requestWithRetry(() => (
+    fetch(url.toString(), { credentials: 'include' })
+  ));
 
   let data: any = null;
   try {
@@ -93,15 +118,17 @@ async function apiGet(path: string, params?: Record<string, string>) {
 
 async function apiPost(path: string, body: Record<string, unknown>) {
   const csrfToken = await ensureCsrf();
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': csrfToken
-    },
-    credentials: 'include',
-    body: JSON.stringify(body)
-  });
+  const response = await requestWithRetry(() => (
+    fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
+      },
+      credentials: 'include',
+      body: JSON.stringify(body)
+    })
+  ));
 
   let data: any = null;
   try {
@@ -122,13 +149,15 @@ async function apiPost(path: string, body: Record<string, unknown>) {
 
 async function apiDelete(path: string) {
   const csrfToken = await ensureCsrf();
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: 'DELETE',
-    headers: {
-      'X-CSRFToken': csrfToken
-    },
-    credentials: 'include'
-  });
+  const response = await requestWithRetry(() => (
+    fetch(`${API_BASE}${path}`, {
+      method: 'DELETE',
+      headers: {
+        'X-CSRFToken': csrfToken
+      },
+      credentials: 'include'
+    })
+  ));
 
   let data: any = null;
   try {

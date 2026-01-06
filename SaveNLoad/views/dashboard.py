@@ -3,6 +3,7 @@ Shared helpers and DRF views for dashboard data.
 """
 from datetime import timedelta
 
+from django.conf import settings
 from django.db.models import Subquery, OuterRef, F
 from django.db.models.functions import Lower
 from django.utils import timezone
@@ -13,6 +14,7 @@ from rest_framework.response import Response
 from SaveNLoad.models import Game
 from SaveNLoad.models.save_folder import SaveFolder
 from SaveNLoad.services.redis_worker_service import get_user_workers
+from SaveNLoad.services.ws_ui_token_service import issue_ui_ws_token
 from SaveNLoad.utils.image_utils import get_image_url_or_fallback
 from SaveNLoad.views.custom_decorators import get_current_user
 from SaveNLoad.views.input_sanitizer import sanitize_search_query
@@ -90,6 +92,33 @@ def _available_games_payload(user, queryset):
     return games
 
 
+def _dashboard_payload(user):
+    annotated_games = _get_annotated_games(user)
+    recent_db_games = annotated_games.filter(
+        user_last_played__isnull=False
+    ).order_by('-user_last_played')[:10]
+
+    recent_games = []
+    for game in recent_db_games:
+        recent_games.append({
+            'id': game.id,
+            'title': game.name,
+            'image': get_image_url_or_fallback(game),
+            'footer': format_last_played(game.user_last_played),
+            'last_played_timestamp': game.user_last_played.isoformat() if game.user_last_played else None
+        })
+
+    available_db_games = annotated_games.order_by(Lower('name'), 'id')
+    available_games = _available_games_payload(user, available_db_games)
+
+    return {
+        'user': _user_payload(user),
+        'is_admin': user.is_admin(),
+        'recent_games': recent_games,
+        'available_games': available_games
+    }
+
+
 @api_view(["GET"])
 def dashboard_view(request):
     user = get_current_user(request)
@@ -109,33 +138,31 @@ def dashboard_view(request):
             status=status.HTTP_503_SERVICE_UNAVAILABLE
         )
 
-    annotated_games = _get_annotated_games(user)
-    recent_db_games = annotated_games.filter(
-        user_last_played__isnull=False
-    ).order_by('-user_last_played')[:10]
+    return Response(_dashboard_payload(user), status=status.HTTP_200_OK)
 
-    recent_games = []
-    for game in recent_db_games:
-        recent_games.append({
-            'id': game.id,
-            'title': game.name,
-            'image': get_image_url_or_fallback(game),
-            'footer': format_last_played(game.user_last_played),
-            'last_played_timestamp': game.user_last_played.isoformat() if game.user_last_played else None
-        })
 
-    available_db_games = annotated_games.order_by(Lower('name'), 'id')
-    available_games = _available_games_payload(user, available_db_games)
+@api_view(["GET"])
+def dashboard_bootstrap_view(request):
+    user = get_current_user(request)
+    if not user:
+        return Response(
+            {'error': 'Not authenticated. Please log in.', 'requires_login': True},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
 
-    return Response(
-        {
-            'user': _user_payload(user),
-            'is_admin': user.is_admin(),
-            'recent_games': recent_games,
-            'available_games': available_games
-        },
-        status=status.HTTP_200_OK
-    )
+    payload = _dashboard_payload(user)
+    payload['version'] = settings.APP_VERSION
+    payload['ws_token'] = issue_ui_ws_token(user.id)
+
+    worker_ids = get_user_workers(user.id)
+    if not worker_ids:
+        payload['error'] = (
+            'Client worker not connected. Please ensure the client worker is running and claimed.'
+        )
+        payload['requires_worker'] = True
+        return Response(payload, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    return Response(payload, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])

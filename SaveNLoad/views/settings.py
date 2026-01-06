@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 from django.core.files import File
 from django.db import models
 from rest_framework.decorators import api_view, authentication_classes
+from django.views.decorators.csrf import csrf_protect
 from rest_framework.response import Response
 
 from SaveNLoad.models import Game
@@ -80,6 +81,7 @@ def search_game(request):
 
 @api_view(["POST"])
 @authentication_classes([])
+@csrf_protect
 def create_game(request):
     """
     Create a new game (Admin only).
@@ -168,11 +170,12 @@ def create_game(request):
         )
     except Exception as e:
         print(f"ERROR: Error creating game: {str(e)}")
-        return json_response_error(f'Failed to create game: {str(e)}', status=500)
+        return json_response_error('Failed to create game', status=500)
 
 
 @api_view(["POST"])
 @authentication_classes([])
+@csrf_protect
 def update_account_settings(request):
     """
     Update account settings (email and/or password).
@@ -401,6 +404,7 @@ def operation_queue_stats(request):
 
 @api_view(["POST"])
 @authentication_classes([])
+@csrf_protect
 def operation_queue_cleanup(request):
     """
     Cleanup operation queue (Admin only).
@@ -535,7 +539,7 @@ def list_users(request):
         )
     except Exception as e:
         print(f"ERROR: Error listing users: {str(e)}")
-        return json_response_error(f'Failed to list users: {str(e)}', status=500)
+        return json_response_error('Failed to list users', status=500)
 
 
 def _queue_user_deletion_operations(user, admin_user, request=None):
@@ -623,6 +627,7 @@ def _handle_user_deletion(request, user, admin_user):
 
 @api_view(["DELETE", "POST"])
 @authentication_classes([])
+@csrf_protect
 def delete_user(request, user_id):
     """
     Delete a user account (Admin only).
@@ -649,11 +654,12 @@ def delete_user(request, user_id):
         return _handle_user_deletion(request, target_user, admin_user)
     except Exception as e:
         print(f"ERROR: Error deleting user: {str(e)}")
-        return json_response_error(f'Failed to delete user: {str(e)}', status=500)
+        return json_response_error('Failed to delete user', status=500)
 
 
 @api_view(["POST"])
 @authentication_classes([])
+@csrf_protect
 def reset_user_password(request, user_id):
     """
     Reset a user's password to default constant (Admin only).
@@ -701,9 +707,8 @@ def reset_user_password(request, user_id):
                     'username': target_user.username,
                     'email': target_user.email,
                 },
-                'password': default_password
             }
         )
     except Exception as e:
         print(f"ERROR: Error resetting user password: {str(e)}")
-        return json_response_error(f'Failed to reset password: {str(e)}', status=500)
+        return json_response_error('Failed to reset password', status=500)

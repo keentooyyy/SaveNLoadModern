@@ -98,13 +98,22 @@ const backupModal = reactive({
   gameId: null as number | null,
   pending: false
 });
+const restoreGameSavesModal = ref(false);
 
 let successCloseTimer: number | null = null;
+let backupCloseTimer: number | null = null;
 
 const clearSuccessCloseTimer = () => {
   if (successCloseTimer !== null) {
     window.clearTimeout(successCloseTimer);
     successCloseTimer = null;
+  }
+};
+
+const clearBackupCloseTimer = () => {
+  if (backupCloseTimer !== null) {
+    window.clearTimeout(backupCloseTimer);
+    backupCloseTimer = null;
   }
 };
 
@@ -140,6 +149,12 @@ const handleAuthError = async (err: any) => {
 
 const openOperationModal = (title: string, subtitle: string, detail: string) => {
   clearSuccessCloseTimer();
+  const modalEl = document.getElementById('gameSavesModal');
+  if (modalEl?.classList.contains('show')) {
+    restoreGameSavesModal.value = true;
+    const bootstrapModal = (window as any)?.bootstrap?.Modal?.getOrCreateInstance(modalEl);
+    bootstrapModal?.hide();
+  }
   operationModal.open = true;
   operationModal.title = title;
   operationModal.subtitle = subtitle;
@@ -156,11 +171,31 @@ const closeOperationModal = () => {
   if (backupModal.pending) {
     backupModal.pending = false;
     backupModal.open = true;
+    clearBackupCloseTimer();
+    backupCloseTimer = window.setTimeout(() => {
+      if (backupModal.open) {
+        closeBackupModal();
+      }
+    }, 6000);
+    return;
+  }
+  if (restoreGameSavesModal.value && !backupModal.open) {
+    const modalEl = document.getElementById('gameSavesModal');
+    const bootstrapModal = (window as any)?.bootstrap?.Modal?.getOrCreateInstance(modalEl);
+    bootstrapModal?.show();
+    restoreGameSavesModal.value = false;
   }
 };
 
 const closeBackupModal = () => {
+  clearBackupCloseTimer();
   backupModal.open = false;
+  if (restoreGameSavesModal.value && !operationModal.open) {
+    const modalEl = document.getElementById('gameSavesModal');
+    const bootstrapModal = (window as any)?.bootstrap?.Modal?.getOrCreateInstance(modalEl);
+    bootstrapModal?.show();
+    restoreGameSavesModal.value = false;
+  }
 };
 
 const sanitizeZipPath = (value: string) => {
@@ -180,6 +215,12 @@ const showBackupModal = (zipPath: string, gameId: number | null) => {
   if (!operationModal.open) {
     backupModal.pending = false;
     backupModal.open = true;
+    clearBackupCloseTimer();
+    backupCloseTimer = window.setTimeout(() => {
+      if (backupModal.open) {
+        closeBackupModal();
+      }
+    }, 6000);
   }
 };
 
@@ -581,6 +622,7 @@ const onOpenBackupLocation = async () => {
     if (data?.message) {
       notify.success(data.message);
     }
+    closeBackupModal();
   } catch (err: any) {
     await handleAuthError(err);
   }
@@ -597,5 +639,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('dashboard:reset', resetDashboardFilters);
+  clearBackupCloseTimer();
 });
 </script>

@@ -43,16 +43,14 @@ DEBUG = os.getenv('DEBUG', 'False') == 'True'
 # Production: LAN access (localhost + local network)
 # For local production deployment accessible via LAN (192.168.88.0/24)
 if not DEBUG:
-    # Allow localhost and LAN IPs via environment variable
-    # Set ALLOWED_HOSTS in .env as comma-separated values to restrict
-    # If not set, allows all hosts (suitable for local-only deployment)
+    # Allow localhost and LAN IPs via environment variable.
+    # Set ALLOWED_HOSTS in .env as comma-separated values to restrict.
     allowed_hosts_env = os.getenv('ALLOWED_HOSTS', '')
     if allowed_hosts_env:
         ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(',')]
     else:
-        # Default: Allow all hosts for local LAN deployment (192.168.88.0/24)
-        # This is safe for local-only deployment where you control the network
-        ALLOWED_HOSTS = ['*']
+        # Safe default: require explicit host allowlist outside DEBUG.
+        ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 else:
     ALLOWED_HOSTS = ['*']
 
@@ -230,14 +228,14 @@ if not DEBUG:
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
     SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SECURE = False  # Set to True only with HTTPS
+    SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'True') == 'True'
     SESSION_COOKIE_SAMESITE = 'Lax'
 
 # JWT Auth (Cookie-based)
 AUTH_ACCESS_COOKIE_NAME = os.getenv('AUTH_ACCESS_COOKIE_NAME', 'snl_access')
 AUTH_REFRESH_COOKIE_NAME = os.getenv('AUTH_REFRESH_COOKIE_NAME', 'snl_refresh')
 AUTH_RESET_COOKIE_NAME = os.getenv('AUTH_RESET_COOKIE_NAME', 'snl_reset')
-AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', 'False') == 'True'
+AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', 'True' if not DEBUG else 'False') == 'True'
 AUTH_COOKIE_SAMESITE = os.getenv('AUTH_COOKIE_SAMESITE', 'Lax')
 AUTH_ACCESS_TOKEN_MINUTES = int(os.getenv('AUTH_ACCESS_TOKEN_MINUTES', '15'))
 AUTH_REFRESH_TOKEN_DAYS = int(os.getenv('AUTH_REFRESH_TOKEN_DAYS', '14'))

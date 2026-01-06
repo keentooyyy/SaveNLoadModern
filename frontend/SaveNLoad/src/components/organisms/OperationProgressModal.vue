@@ -1,32 +1,42 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="operation-modal-backdrop" role="presentation" @click.self="onClose">
-      <div class="operation-modal-card bg-primary text-white border-0" role="dialog" aria-modal="true" :aria-labelledby="titleId">
-        <header class="operation-modal-header bg-primary border-secondary">
-          <h5 :id="titleId" class="mb-0">{{ title }}</h5>
-          <button
-            v-if="closable"
-            class="btn-close btn-close-white ms-auto"
-            type="button"
-            aria-label="Close"
-            @click="onClose"
-          ></button>
-        </header>
+    <div v-if="open">
+      <div
+        class="modal fade show d-block"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="titleId"
+        @click.self="onClose"
+      >
+        <div class="modal-dialog modal-dialog-centered operation-modal-dialog">
+          <div class="modal-content bg-primary text-white border-0">
+            <header class="modal-header bg-primary border-secondary">
+              <h5 :id="titleId" class="mb-0">{{ title }}</h5>
+              <button
+                v-if="closable"
+                class="btn-close btn-close-white ms-auto"
+                type="button"
+                aria-label="Close"
+                @click="onClose"
+              ></button>
+            </header>
 
-        <div class="operation-modal-body bg-primary">
-          <div class="operation-progress">
-            <div class="operation-progress-track">
-              <div class="operation-progress-bar" :class="variantClass" :style="{ width: `${progress}%` }"></div>
+            <div class="modal-body bg-primary">
+              <div class="operation-progress">
+                <div class="operation-progress-track">
+                  <div class="operation-progress-bar" :class="variantClass" :style="{ width: `${progress}%` }"></div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                  <span class="text-white fw-medium">{{ statusText }}</span>
+                  <span class="text-white-50 small">{{ Math.round(progress) }}%</span>
+                </div>
+                <p v-if="detail" class="text-white-50 small mt-2 mb-0">{{ detail }}</p>
+              </div>
             </div>
-            <div class="d-flex justify-content-between align-items-center mt-2">
-              <span class="text-white fw-medium">{{ statusText }}</span>
-              <span class="text-white-50 small">{{ Math.round(progress) }}%</span>
-            </div>
-            <p v-if="detail" class="text-white-50 small mt-2 mb-0">{{ detail }}</p>
           </div>
         </div>
-        
       </div>
+      <div class="modal-backdrop fade show"></div>
     </div>
   </Teleport>
 </template>
@@ -84,34 +94,13 @@ const onClose = () => {
 </script>
 
 <style scoped>
-.operation-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  z-index: 1200;
+.operation-modal-dialog {
+  max-width: 520px;
 }
 
-.operation-modal-card {
-  width: min(520px, 100%);
+.modal-content {
   border-radius: 12px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
   overflow: hidden;
-}
-
-.operation-modal-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--white-opacity-10);
-}
-
-.operation-modal-body {
-  padding: 1.25rem;
 }
 
 .operation-progress-track {
@@ -143,9 +132,4 @@ const onClose = () => {
   background: #bd362f;
 }
 
-.operation-modal-footer {
-  padding: 0 1.25rem 1.25rem;
-  display: flex;
-  justify-content: flex-end;
-}
 </style>

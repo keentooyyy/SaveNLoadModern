@@ -72,17 +72,16 @@
 
 <script setup lang="ts">
 import BareLayout from '@/layouts/BareLayout.vue';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useWorkerListSocket } from '@/composables/useWorkerListSocket';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 const router = useRouter();
-const { workers, supportsWebSocket } = useWorkerListSocket({ reloadOnClose: false });
+const { workers } = useWorkerListSocket({ reloadOnClose: false });
 
 const claimingId = ref<string | null>(null);
 const hasShownSingleAvailableToast = ref(false);
-const hasLoadedSnapshot = ref(false);
 
 const hasWorkers = computed(() => workers.value.length > 0);
 const availableWorkers = computed(() => workers.value.filter(worker => !worker.claimed));
@@ -122,20 +121,27 @@ const ensureCsrf = async () => {
   return getCookie('csrftoken');
 };
 
-const fetchWorkersSnapshot = async () => {
-  if (hasLoadedSnapshot.value) {
-    return;
-  }
-  hasLoadedSnapshot.value = true;
-  try {
-    const response = await fetch(`${API_BASE}/api/client/unpaired/`, { credentials: 'include' });
-    const data = await response.json().catch(() => null);
-    if (response.ok && data?.workers) {
-      workers.value = data.workers;
+const refreshSession = async () => {
+  const csrfToken = await ensureCsrf();
+  const response = await fetch(`${API_BASE}/auth/refresh`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': csrfToken
+    },
+    credentials: 'include'
+  });
+  return response.ok;
+};
+
+const requestWithRetry = async (makeRequest: () => Promise<Response>) => {
+  let response = await makeRequest();
+  if (response.status === 401) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      response = await makeRequest();
     }
-  } catch {
-    // Ignore snapshot errors; WS can still update later.
   }
+  return response;
 };
 
 const claimWorker = async (clientId: string) => {
@@ -146,15 +152,17 @@ const claimWorker = async (clientId: string) => {
   try {
     claimingId.value = clientId;
     const csrfToken = await ensureCsrf();
-    const response = await fetch(`${API_BASE}/api/client/claim/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': csrfToken
-      },
-      credentials: 'include',
-      body: JSON.stringify({ client_id: clientId })
-    });
+    const response = await requestWithRetry(() => (
+      fetch(`${API_BASE}/api/client/claim/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken
+        },
+        credentials: 'include',
+        body: JSON.stringify({ client_id: clientId })
+      })
+    ));
 
     let data: any = null;
     try {
@@ -197,17 +205,6 @@ watch(availableWorkers, (available) => {
   }
 });
 
-watch(supportsWebSocket, (supported) => {
-  if (!supported) {
-    fetchWorkersSnapshot();
-  }
-});
-
-onMounted(async () => {
-  if (!workers.value.length) {
-    await fetchWorkersSnapshot();
-  }
-});
 </script>
 
 <style scoped>
