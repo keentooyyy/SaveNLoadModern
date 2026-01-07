@@ -6,8 +6,6 @@ import { useSettingsStore } from '@/stores/settings';
 import { useAuthStore } from '@/stores/auth';
 import { getSharedWsToken } from '@/utils/wsToken';
 
-const API_BASE = import.meta.env.VITE_API_BASE;
-
 export type WorkerSnapshot = {
   client_id: string;
   claimed: boolean;
@@ -40,43 +38,6 @@ export const useWorkerListSocket = (options: WorkerListOptions = {}) => {
   let reconnectTimer: number | null = null;
   let hasOpened = false;
   let shouldReconnect = true;
-
-  const getCookie = (name: string) => {
-    const match = document.cookie.match(new RegExp(`(^|;\\s*)${name}=([^;]*)`));
-    return match ? decodeURIComponent(match[2]) : '';
-  };
-
-  const ensureCsrf = async () => {
-    const token = getCookie('csrftoken');
-    if (token) {
-      return token;
-    }
-    await fetch(`${API_BASE}/auth/csrf`, { credentials: 'include' });
-    return getCookie('csrftoken');
-  };
-
-  const refreshSession = async () => {
-    const csrfToken = await ensureCsrf();
-    const response = await fetch(`${API_BASE}/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': csrfToken
-      },
-      credentials: 'include'
-    });
-    return response.ok;
-  };
-
-  const requestWithRetry = async (makeRequest: () => Promise<Response>) => {
-    let response = await makeRequest();
-    if (response.status === 401) {
-      const refreshed = await refreshSession();
-      if (refreshed) {
-        response = await makeRequest();
-      }
-    }
-    return response;
-  };
 
   const fetchWsToken = async () => getSharedWsToken(dashboardStore, settingsStore);
 

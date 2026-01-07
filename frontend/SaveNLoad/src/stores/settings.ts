@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-
-const API_BASE = import.meta.env.VITE_API_BASE;
+import { apiDelete, apiGet, apiPost } from '@/utils/apiClient';
 
 const notify = {
   success: (msg: string) => {
@@ -18,139 +17,9 @@ const notify = {
   }
 };
 
-const getCookie = (name: string) => {
-  const match = document.cookie.match(new RegExp(`(^|;\\s*)${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[2]) : '';
-};
-
-const ensureCsrf = async () => {
-  const token = getCookie('csrftoken');
-  if (token) {
-    return token;
-  }
-  await fetch(`${API_BASE}/auth/csrf`, { credentials: 'include' });
-  return getCookie('csrftoken');
-};
-
-const refreshSession = async () => {
-  const csrfToken = await ensureCsrf();
-  const response = await fetch(`${API_BASE}/auth/refresh`, {
-    method: 'POST',
-    headers: {
-      'X-CSRFToken': csrfToken
-    },
-    credentials: 'include'
-  });
-  return response.ok;
-};
-
-const requestWithRetry = async (makeRequest: () => Promise<Response>) => {
-  let response = await makeRequest();
-  if (response.status === 401) {
-    const refreshed = await refreshSession();
-    if (refreshed) {
-      response = await makeRequest();
-    }
-  }
-  return response;
-};
-
-async function apiGet(path: string, params?: Record<string, string>) {
-  const url = new URL(`${API_BASE}${path}`, window.location.origin);
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== '') {
-        url.searchParams.set(key, value);
-      }
-    });
-  }
-
-  const response = await requestWithRetry(() => (
-    fetch(url.toString(), { credentials: 'include' })
-  ));
-
-  let data: any = null;
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
-
-  if (!response.ok) {
-    const error = new Error(data?.error || data?.message || '');
-    (error as any).status = response.status;
-    (error as any).data = data;
-    throw error;
-  }
-
-  return data;
-}
-
-async function apiPost(path: string, body: Record<string, unknown>) {
-  const csrfToken = await ensureCsrf();
-  const response = await requestWithRetry(() => (
-    fetch(`${API_BASE}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': csrfToken
-      },
-      credentials: 'include',
-      body: JSON.stringify(body)
-    })
-  ));
-
-  let data: any = null;
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
-
-  if (!response.ok) {
-    const error = new Error(data?.error || data?.message || '');
-    (error as any).status = response.status;
-    (error as any).data = data;
-    throw error;
-  }
-
-  return data;
-}
-
-async function apiDelete(path: string) {
-  const csrfToken = await ensureCsrf();
-  const response = await requestWithRetry(() => (
-    fetch(`${API_BASE}${path}`, {
-      method: 'DELETE',
-      headers: {
-        'X-CSRFToken': csrfToken
-      },
-      credentials: 'include'
-    })
-  ));
-
-  let data: any = null;
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
-
-  if (!response.ok) {
-    const error = new Error(data?.error || data?.message || '');
-    (error as any).status = response.status;
-    (error as any).data = data;
-    throw error;
-  }
-
-  return data;
-}
-
 export const useSettingsStore = defineStore('settings', () => {
   const loading = ref(false);
   const error = ref('');
-  const currentUser = ref<any | null>(null);
-  const isAdmin = ref(false);
   const users = ref<any[]>([]);
   const usersPagination = ref({
     page: 1,
@@ -169,17 +38,23 @@ export const useSettingsStore = defineStore('settings', () => {
       failed: 0
     }
   });
-  const bootstrapLoaded = ref(false);
-  const bootstrapUsersLoaded = ref(false);
-  const bootstrapStatsLoaded = ref(false);
+  const usersLoaded = ref(false);
+  const statsLoaded = ref(false);
+  const lastUsersLoadedAt = ref(0);
+  const lastStatsLoadedAt = ref(0);
+  const lastUsersQuery = ref('');
+  const lastUsersPage = ref(1);
+  let usersPromise: Promise<any> | null = null;
+  let statsPromise: Promise<any> | null = null;
+  const USERS_TTL_MS = 30000;
+  const STATS_TTL_MS = 15000;
   const wsToken = ref('');
-  const bootstrapData = ref<any | null>(null);
+  const bootstrapLoaded = ref(false);
+  const bootstrapData = ref<{ user?: any | null; version?: string } | null>(null);
   let bootstrapPromise: Promise<any> | null = null;
   const resetState = () => {
     loading.value = false;
     error.value = '';
-    currentUser.value = null;
-    isAdmin.value = false;
     users.value = [];
     usersPagination.value = {
       page: 1,
@@ -198,10 +73,14 @@ export const useSettingsStore = defineStore('settings', () => {
         failed: 0
       }
     };
-    bootstrapLoaded.value = false;
-    bootstrapUsersLoaded.value = false;
-    bootstrapStatsLoaded.value = false;
+    usersLoaded.value = false;
+    statsLoaded.value = false;
+    lastUsersLoadedAt.value = 0;
+    lastStatsLoadedAt.value = 0;
+    lastUsersQuery.value = '';
+    lastUsersPage.value = 1;
     wsToken.value = '';
+    bootstrapLoaded.value = false;
     bootstrapData.value = null;
     bootstrapPromise = null;
   };
@@ -246,12 +125,31 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   };
 
-  const listUsers = async (query = '', page = 1) => {
-    const data = await apiGet('/users/', { q: query, page: String(page) });
-    users.value = data?.users || [];
-    usersPagination.value = data?.pagination || usersPagination.value;
-    bootstrapUsersLoaded.value = true;
-    return data;
+  const listUsers = async (query = '', page = 1, options: { force?: boolean } = {}) => {
+    const sameRequest = lastUsersQuery.value === query && lastUsersPage.value === page;
+    const isFresh = usersLoaded.value && Date.now() - lastUsersLoadedAt.value < USERS_TTL_MS;
+    if (!options.force && sameRequest && isFresh) {
+      return Promise.resolve({
+        users: users.value,
+        pagination: usersPagination.value
+      });
+    }
+    if (usersPromise && sameRequest) {
+      return usersPromise;
+    }
+    lastUsersQuery.value = query;
+    lastUsersPage.value = page;
+    usersPromise = (async () => {
+      const data = await apiGet('/users/', { q: query, page: String(page) });
+      users.value = data?.users || [];
+      usersPagination.value = data?.pagination || usersPagination.value;
+      usersLoaded.value = true;
+      lastUsersLoadedAt.value = Date.now();
+      return data;
+    })();
+    return usersPromise.finally(() => {
+      usersPromise = null;
+    });
   };
 
   const resetUserPassword = async (userId: number) => {
@@ -277,11 +175,24 @@ export const useSettingsStore = defineStore('settings', () => {
     return data;
   };
 
-  const queueStats = async () => {
-    const data = await apiGet('/operations/queue/stats/');
-    queueStatsData.value = data?.data || data || queueStatsData.value;
-    bootstrapStatsLoaded.value = true;
-    return data;
+  const queueStats = async (options: { force?: boolean } = {}) => {
+    const isFresh = statsLoaded.value && Date.now() - lastStatsLoadedAt.value < STATS_TTL_MS;
+    if (!options.force && isFresh) {
+      return Promise.resolve(queueStatsData.value);
+    }
+    if (statsPromise) {
+      return statsPromise;
+    }
+    statsPromise = (async () => {
+      const data = await apiGet('/operations/queue/stats/');
+      queueStatsData.value = data?.data || data || queueStatsData.value;
+      statsLoaded.value = true;
+      lastStatsLoadedAt.value = Date.now();
+      return data;
+    })();
+    return statsPromise.finally(() => {
+      statsPromise = null;
+    });
   };
 
   const cleanupQueue = async (type: string) => {
@@ -316,56 +227,40 @@ export const useSettingsStore = defineStore('settings', () => {
     error.value = '';
     bootstrapPromise = (async () => {
       try {
-        const data = await apiGet('/settings/bootstrap');
-        bootstrapData.value = data;
-        currentUser.value = data?.user || null;
-        isAdmin.value = !!data?.is_admin;
-        if (Array.isArray(data?.users)) {
-          users.value = data.users;
-          usersPagination.value = data?.pagination || usersPagination.value;
-          bootstrapUsersLoaded.value = true;
-        }
-        if (data?.queue_stats) {
-          queueStatsData.value = data.queue_stats;
-          bootstrapStatsLoaded.value = true;
-        }
-        if (data?.ws_token) {
-          wsToken.value = data.ws_token;
-        }
+        const [userPayload, versionPayload] = await Promise.all([
+          apiGet('/auth/me'),
+          apiGet('/meta/version').catch(() => null)
+        ]);
         bootstrapLoaded.value = true;
-        return data;
+        bootstrapData.value = {
+          user: userPayload?.user || null,
+          version: versionPayload?.version
+        };
+        return bootstrapData.value;
       } catch (err: any) {
         error.value = err?.message || '';
-        bootstrapPromise = null;
         throw err;
       } finally {
         loading.value = false;
+        bootstrapPromise = null;
       }
     })();
     return bootstrapPromise;
   };
 
-  const loadCurrentUser = async () => {
-    if (currentUser.value) {
-      return currentUser.value;
-    }
-    const data = await bootstrapSettings();
-    return data?.user || null;
-  };
-
   return {
     loading,
     error,
-    currentUser,
-    isAdmin,
     users,
     usersPagination,
     queueStatsData,
     wsToken,
     resetState,
+    usersLoaded,
+    statsLoaded,
+    lastUsersLoadedAt,
+    lastStatsLoadedAt,
     bootstrapLoaded,
-    bootstrapUsersLoaded,
-    bootstrapStatsLoaded,
     createGame,
     updateGame,
     listUsers,
@@ -375,7 +270,6 @@ export const useSettingsStore = defineStore('settings', () => {
     queueStats,
     cleanupQueue,
     updateAccount,
-    bootstrapSettings,
-    loadCurrentUser
+    bootstrapSettings
   };
 });

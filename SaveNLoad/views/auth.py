@@ -451,7 +451,8 @@ def me_view(request):
             'user': {
                 'id': user.id,
                 'username': user.username,
-                'role': user.role
+                'role': user.role,
+                'email': user.email
             }
         },
         status=status.HTTP_200_OK

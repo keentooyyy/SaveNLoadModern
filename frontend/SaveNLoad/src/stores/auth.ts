@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useSettingsStore } from '@/stores/settings';
+import { ensureCsrfToken, requestWithRetry, safeJsonParse } from '@/utils/apiClient';
 
 type AuthUser = {
   id: number;
@@ -31,43 +32,6 @@ const notify = {
       t.info(msg);
     }
   }
-};
-
-const getCookie = (name: string) => {
-  const match = document.cookie.match(new RegExp(`(^|;\\s*)${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[2]) : '';
-};
-
-const ensureCsrf = async () => {
-  const token = getCookie('csrftoken');
-  if (token) {
-    return token;
-  }
-  await fetch(`${API_BASE}/auth/csrf`, { credentials: 'include' });
-  return getCookie('csrftoken');
-};
-
-const refreshSession = async () => {
-  const csrfToken = await ensureCsrf();
-  const response = await fetch(`${API_BASE}/auth/refresh`, {
-    method: 'POST',
-    headers: {
-      'X-CSRFToken': csrfToken
-    },
-    credentials: 'include'
-  });
-  return response.ok;
-};
-
-const requestWithRetry = async (makeRequest: () => Promise<Response>) => {
-  let response = await makeRequest();
-  if (response.status === 401) {
-    const refreshed = await refreshSession();
-    if (refreshed) {
-      response = await makeRequest();
-    }
-  }
-  return response;
 };
 
 const buildErrorMessage = (data: any) => {
@@ -104,7 +68,7 @@ const buildErrorMessage = (data: any) => {
 };
 
 async function apiPost(path: string, body: Record<string, unknown>) {
-  const csrfToken = await ensureCsrf();
+  const csrfToken = await ensureCsrfToken();
   const response = await requestWithRetry(() => (
     fetch(`${API_BASE}${path}`, {
       method: 'POST',
@@ -117,13 +81,7 @@ async function apiPost(path: string, body: Record<string, unknown>) {
     })
   ));
 
-  let data: any = null;
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
-
+  const data = await safeJsonParse(response);
   if (!response.ok) {
     const error = new Error(buildErrorMessage(data));
     (error as any).status = response.status;
@@ -152,7 +110,7 @@ export const useAuthStore = defineStore('auth', () => {
   };
 
   const initCsrf = async () => {
-    await ensureCsrf();
+    await ensureCsrfToken();
   };
 
   const fetchCurrentUser = async () => {
@@ -187,7 +145,7 @@ export const useAuthStore = defineStore('auth', () => {
     ].includes(path);
   };
 
-  const bootstrap = async () => {
+  const bootstrap = async (options: { force?: boolean } = {}) => {
     if (isBootstrapped.value) {
       return;
     }
@@ -195,7 +153,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (!bootstrapPromise) {
       bootstrapPromise = (async () => {
         try {
-          if (!isAuthPath()) {
+          if (options.force || !isAuthPath()) {
             await fetchCurrentUser();
           }
         } catch {

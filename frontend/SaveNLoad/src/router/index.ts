@@ -9,8 +9,6 @@ import SettingsPage from '@/pages/SettingsPage.vue';
 import WorkerRequiredPage from '@/pages/WorkerRequiredPage.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useDashboardStore } from '@/stores/dashboard';
-import { useMetaStore } from '@/stores/meta';
-import { useSettingsStore } from '@/stores/settings';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -28,22 +26,20 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
-    if (to.path === '/dashboard') {
+  await auth.bootstrap({ force: !!to.meta?.authPage });
+
+  if (to.path === '/dashboard') {
     const dashboard = useDashboardStore();
-    const meta = useMetaStore();
 
     const clientId = window.localStorage.getItem('savenload_client_id');
     if (!clientId) {
-      return true; // skip bootstrap when no worker is linked
+      return true; // skip dashboard load when no worker is linked
     }
 
     try {
-      const data = await dashboard.bootstrapDashboard();
+      const data = await dashboard.loadDashboard();
       if (data?.user) {
         auth.user = data.user as any;
-      }
-      if (data?.version) {
-        meta.setVersion(data.version);
       }
     } catch (err: any) {
       const status = err?.status;
@@ -54,26 +50,6 @@ router.beforeEach(async (to) => {
         return { path: '/worker-required' };
       }
     }
-  }
-  else if (to.path === '/settings') {
-    const settingsStore = useSettingsStore();
-    const meta = useMetaStore();
-    try {
-      const data = await settingsStore.bootstrapSettings();
-      if (data?.user) {
-        auth.user = data.user as any;
-      }
-      if (data?.version) {
-        meta.setVersion(data.version);
-      }
-    } catch (err: any) {
-      const status = err?.status;
-      if (status === 401) {
-        return { path: '/' };
-      }
-    }
-  } else {
-    await auth.bootstrap();
   }
   const isAuthed = !!auth.user;
 

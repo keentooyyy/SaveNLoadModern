@@ -55,21 +55,18 @@ import IconButton from '@/components/atoms/IconButton.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
 import TextInput from '@/components/atoms/TextInput.vue';
 import { useSettingsStore } from '@/stores/settings';
+import { useAuthStore } from '@/stores/auth';
 
 const store = useSettingsStore();
+const authStore = useAuthStore();
 const email = ref('');
 const currentPassword = ref('');
 const newPassword = ref('');
 const confirmPassword = ref('');
 const saving = ref(false);
 
-const loadProfile = async () => {
-  try {
-    const user = await store.loadCurrentUser();
-    email.value = user?.email || '';
-  } catch {
-    // Ignore profile load errors.
-  }
+const loadProfile = () => {
+  email.value = authStore.user?.email || '';
 };
 
 const onReset = () => {
@@ -98,7 +95,5 @@ const onSubmit = async () => {
   }
 };
 
-onMounted(() => {
-  loadProfile();
-});
+onMounted(loadProfile);
 </script>

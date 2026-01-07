@@ -128,11 +128,11 @@ const notify = {
   }
 };
 
-const loadUsers = async (page = 1) => {
+const loadUsers = async (page = 1, options: { force?: boolean } = {}) => {
   loading.value = true;
   error.value = '';
   try {
-    const data = await store.listUsers(searchQuery.value.trim(), page);
+    const data = await store.listUsers(searchQuery.value.trim(), page, options);
     users.value = data?.users || [];
     pagination.value = data?.pagination || {
       page,
@@ -195,7 +195,7 @@ const waitForRemoval = async (userId: number) => {
   const delayMs = 800;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    await loadUsers(pagination.value.page);
+    await loadUsers(pagination.value.page, { force: true });
     if (!users.value.some((user) => user.id === userId)) {
       return true;
     }
@@ -246,7 +246,7 @@ const onDelete = async (user: UserItem) => {
 };
 
 onMounted(() => {
-  if (store.bootstrapUsersLoaded) {
+  if (store.usersLoaded && store.users.length) {
     users.value = store.users;
     pagination.value = store.usersPagination;
     return;

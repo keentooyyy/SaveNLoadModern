@@ -83,11 +83,11 @@ const stats = ref({
   }
 });
 
-const loadStats = async () => {
+const loadStats = async (options: { force?: boolean } = {}) => {
   loading.value = true;
   error.value = '';
   try {
-    const data = await store.queueStats();
+    const data = await store.queueStats(options);
     stats.value = data?.data || data || stats.value;
   } catch (err: any) {
     error.value = err?.message || '';
@@ -107,11 +107,11 @@ const clearAll = async () => {
     return;
   }
   await store.cleanupQueue('all');
-  loadStats();
+  loadStats({ force: true });
 };
 
 onMounted(() => {
-  if (store.bootstrapStatsLoaded) {
+  if (store.statsLoaded) {
     stats.value = store.queueStatsData;
     return;
   }

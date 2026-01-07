@@ -4,7 +4,6 @@ DRF API endpoints for settings and admin operations.
 import os
 from urllib.parse import urlparse
 
-from django.conf import settings
 from django.core.files import File
 from django.db import models
 from rest_framework.decorators import api_view, authentication_classes
@@ -23,7 +22,6 @@ from SaveNLoad.views.api_helpers import (
     cleanup_operations_by_status,
     cleanup_operations_by_age
 )
-from SaveNLoad.services.ws_ui_token_service import issue_ui_ws_token
 from SaveNLoad.views.custom_decorators import get_current_user
 from SaveNLoad.views.rawg_api import search_games as rawg_search_games
 
@@ -454,42 +452,6 @@ def update_account_settings(request):
         return json_response_success(message=message)
 
     return json_response_success(message='No changes made.')
-
-
-@api_view(["GET"])
-@authentication_classes([])
-def settings_bootstrap_view(request):
-    """
-    Get settings page data in a single request.
-    """
-    user, error_response = _require_user(request)
-    if error_response:
-        return error_response
-
-    payload = {
-        'user': _user_payload(user),
-        'is_admin': user.is_admin(),
-        'version': settings.APP_VERSION,
-        'ws_token': issue_ui_ws_token(user.id)
-    }
-
-    if user.is_admin():
-        users_payload, error_response = _list_users_payload(request, user)
-        if error_response:
-            return error_response
-        payload['users'] = users_payload.get('users', [])
-        payload['pagination'] = users_payload.get('pagination', {
-            'page': 1,
-            'page_size': 25,
-            'total_count': 0,
-            'total_pages': 1,
-            'has_next': False,
-            'has_previous': False
-        })
-
-        payload['queue_stats'] = _queue_stats_payload()
-
-    return json_response_success(data=payload)
 
 
 @api_view(["GET"])

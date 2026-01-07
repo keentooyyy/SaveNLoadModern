@@ -81,8 +81,8 @@ const loadGame = async () => {
   loading.value = true;
   error.value = '';
   try {
-    if (!dashboardStore.bootstrapLoaded) {
-      await dashboardStore.bootstrapDashboard();
+    if (!dashboardStore.dashboardLoaded) {
+      await dashboardStore.loadDashboard();
     }
     const game = dashboardStore.games.find((item) => item.id === gameId.value);
     if (!game) {

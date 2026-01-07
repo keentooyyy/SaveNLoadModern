@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import { apiDelete, apiGet, apiPost } from '@/utils/apiClient';
 
 type DashboardUser = {
   id: number;
@@ -49,134 +50,6 @@ const normalizeGameImage = (game: GameSummary) => ({
   image: resolveMediaUrl(game.image || '')
 });
 
-const getCookie = (name: string) => {
-  const match = document.cookie.match(new RegExp(`(^|;\\s*)${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[2]) : '';
-};
-
-const ensureCsrf = async () => {
-  const token = getCookie('csrftoken');
-  if (token) {
-    return token;
-  }
-  await fetch(`${API_BASE}/auth/csrf`, { credentials: 'include' });
-  return getCookie('csrftoken');
-};
-
-const refreshSession = async () => {
-  const csrfToken = await ensureCsrf();
-  const response = await fetch(`${API_BASE}/auth/refresh`, {
-    method: 'POST',
-    headers: {
-      'X-CSRFToken': csrfToken
-    },
-    credentials: 'include'
-  });
-  return response.ok;
-};
-
-const requestWithRetry = async (makeRequest: () => Promise<Response>) => {
-  let response = await makeRequest();
-  if (response.status === 401) {
-    const refreshed = await refreshSession();
-    if (refreshed) {
-      response = await makeRequest();
-    }
-  }
-  return response;
-};
-
-async function apiGet(path: string, params?: Record<string, string>) {
-  const url = new URL(`${API_BASE}${path}`, window.location.origin);
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== '') {
-        url.searchParams.set(key, value);
-      }
-    });
-  }
-
-  const response = await requestWithRetry(() => (
-    fetch(url.toString(), { credentials: 'include' })
-  ));
-
-  let data: any = null;
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
-
-  if (!response.ok) {
-    const error = new Error(data?.error || data?.message || '');
-    (error as any).status = response.status;
-    (error as any).data = data;
-    throw error;
-  }
-
-  return data;
-}
-
-async function apiPost(path: string, body: Record<string, unknown>) {
-  const csrfToken = await ensureCsrf();
-  const response = await requestWithRetry(() => (
-    fetch(`${API_BASE}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': csrfToken
-      },
-      credentials: 'include',
-      body: JSON.stringify(body)
-    })
-  ));
-
-  let data: any = null;
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
-
-  if (!response.ok) {
-    const error = new Error(data?.error || data?.message || '');
-    (error as any).status = response.status;
-    (error as any).data = data;
-    throw error;
-  }
-
-  return data;
-}
-
-async function apiDelete(path: string) {
-  const csrfToken = await ensureCsrf();
-  const response = await requestWithRetry(() => (
-    fetch(`${API_BASE}${path}`, {
-      method: 'DELETE',
-      headers: {
-        'X-CSRFToken': csrfToken
-      },
-      credentials: 'include'
-    })
-  ));
-
-  let data: any = null;
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
-
-  if (!response.ok) {
-    const error = new Error(data?.error || data?.message || '');
-    (error as any).status = response.status;
-    (error as any).data = data;
-    throw error;
-  }
-
-  return data;
-}
-
 export const useDashboardStore = defineStore('dashboard', () => {
   const user = ref<DashboardUser | null>(null);
   const isAdmin = ref(false);
@@ -185,52 +58,56 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const loading = ref(false);
   const operationLoading = ref(false);
   const error = ref('');
-  const appVersion = ref('');
   const wsToken = ref('');
-  const bootstrapLoaded = ref(false);
+  const dashboardLoaded = ref(false);
+  const bootstrapLoaded = dashboardLoaded;
+  const lastLoadedAt = ref(0);
+  let loadPromise: Promise<any> | null = null;
+  const DASHBOARD_TTL_MS = 30000;
+
+  const buildSnapshot = () => ({
+    user: user.value,
+    is_admin: isAdmin.value,
+    recent_games: recentGames.value,
+    available_games: games.value
+  });
 
   const applyDashboardPayload = (data: any) => {
     user.value = data?.user || null;
     isAdmin.value = !!data?.is_admin;
     recentGames.value = (data?.recent_games || []).map(normalizeGameImage);
     games.value = (data?.available_games || []).map(normalizeGameImage);
-    if (data?.version) {
-      appVersion.value = data.version;
-    }
     if (data?.ws_token) {
       wsToken.value = data.ws_token;
     }
   };
 
-  const bootstrapDashboard = async () => {
+  const loadDashboard = async (options: { force?: boolean } = {}) => {
+    const isFresh = dashboardLoaded.value && Date.now() - lastLoadedAt.value < DASHBOARD_TTL_MS;
+    if (!options.force && isFresh && user.value) {
+      return Promise.resolve(buildSnapshot());
+    }
+    if (loadPromise) {
+      return loadPromise;
+    }
     loading.value = true;
     error.value = '';
-    try {
-      const data = await apiGet('/dashboard/bootstrap');
-      applyDashboardPayload(data);
-      bootstrapLoaded.value = true;
-      return data;
-    } catch (err: any) {
-      error.value = err?.message || '';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
-  };
-
-  const loadDashboard = async () => {
-    loading.value = true;
-    error.value = '';
-    try {
-      const data = await apiGet('/dashboard');
-      applyDashboardPayload(data);
-      return data;
-    } catch (err: any) {
-      error.value = err?.message || '';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+    loadPromise = (async () => {
+      try {
+        const data = await apiGet('/dashboard');
+        applyDashboardPayload(data);
+        dashboardLoaded.value = true;
+        lastLoadedAt.value = Date.now();
+        return data;
+      } catch (err: any) {
+        error.value = err?.message || '';
+        throw err;
+      } finally {
+        loading.value = false;
+        loadPromise = null;
+      }
+    })();
+    return loadPromise;
   };
 
   const searchGames = async (query: string, sort: string) => {
@@ -386,10 +263,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
     loading,
     operationLoading,
     error,
-    appVersion,
     wsToken,
+    dashboardLoaded,
     bootstrapLoaded,
-    bootstrapDashboard,
+    lastLoadedAt,
+    bootstrapDashboard: loadDashboard,
     loadDashboard,
     searchGames,
     saveGame,

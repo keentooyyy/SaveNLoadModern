@@ -68,7 +68,6 @@ import { onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useMetaStore } from '@/stores/meta';
-import { useDashboardStore } from '@/stores/dashboard';
 import { useRoute } from 'vue-router';
 
 defineProps({
@@ -80,15 +79,7 @@ const route = useRoute();
 const router = useRouter();
 const store = useAuthStore();
 const metaStore = useMetaStore();
-const dashboardStore = useDashboardStore();
 const versionLabel = computed(() => metaStore.versionLabel);
-
-const normalizeVersion = (raw: string) => {
-  if (!raw) {
-    return 'v--';
-  }
-  return raw.startsWith('v') ? raw : `v${raw}`;
-};
 
 const isActive = (path: string) => route.path === path;
 
@@ -107,10 +98,6 @@ const onLogout = async () => {
 };
 
 onMounted(async () => {
-  if (dashboardStore.appVersion) {
-    metaStore.setVersion(dashboardStore.appVersion);
-    return;
-  }
   await metaStore.loadVersion();
 });
 </script>

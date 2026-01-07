@@ -3,7 +3,6 @@ from django.urls import path
 from SaveNLoad.views import settings as settings_view
 
 urlpatterns = [
-    path('settings/bootstrap', settings_view.settings_bootstrap_view, name='settings_bootstrap'),
     path('settings/search', settings_view.search_game, name='search_game'),
     path('games/create/', settings_view.create_game, name='create_game'),
     path('account/update/', settings_view.update_account_settings, name='update_account_settings'),

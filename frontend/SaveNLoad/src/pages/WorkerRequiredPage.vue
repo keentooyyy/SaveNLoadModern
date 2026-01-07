@@ -72,16 +72,14 @@
 
 <script setup lang="ts">
 import BareLayout from '@/layouts/BareLayout.vue';
-import { computed, ref, watch, onMounted } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useWorkerListSocket } from '@/composables/useWorkerListSocket';
-import { useDashboardStore } from '@/stores/dashboard';
 import { useAuthStore } from '@/stores/auth';
+import { apiPost } from '@/utils/apiClient';
 
-const API_BASE = import.meta.env.VITE_API_BASE;
 const router = useRouter();
 const { workers } = useWorkerListSocket({ reloadOnClose: false });
-const dashboardStore = useDashboardStore();
 const authStore = useAuthStore();
 
 const claimingId = ref<string | null>(null);
@@ -111,43 +109,6 @@ const notify = {
   }
 };
 
-const getCookie = (name: string) => {
-  const match = document.cookie.match(new RegExp(`(^|;\\s*)${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[2]) : '';
-};
-
-const ensureCsrf = async () => {
-  const token = getCookie('csrftoken');
-  if (token) {
-    return token;
-  }
-  await fetch(`${API_BASE}/auth/csrf`, { credentials: 'include' });
-  return getCookie('csrftoken');
-};
-
-const refreshSession = async () => {
-  const csrfToken = await ensureCsrf();
-  const response = await fetch(`${API_BASE}/auth/refresh`, {
-    method: 'POST',
-    headers: {
-      'X-CSRFToken': csrfToken
-    },
-    credentials: 'include'
-  });
-  return response.ok;
-};
-
-const requestWithRetry = async (makeRequest: () => Promise<Response>) => {
-  let response = await makeRequest();
-  if (response.status === 401) {
-    const refreshed = await refreshSession();
-    if (refreshed) {
-      response = await makeRequest();
-    }
-  }
-  return response;
-};
-
 const claimWorker = async (clientId: string) => {
   if (claimingId.value) {
     return;
@@ -155,30 +116,7 @@ const claimWorker = async (clientId: string) => {
 
   try {
     claimingId.value = clientId;
-    const csrfToken = await ensureCsrf();
-    const response = await requestWithRetry(() => (
-      fetch(`${API_BASE}/api/client/claim/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrfToken
-        },
-        credentials: 'include',
-        body: JSON.stringify({ client_id: clientId })
-      })
-    ));
-
-    let data: any = null;
-    try {
-      data = await response.json();
-    } catch {
-      data = null;
-    }
-
-    if (!response.ok) {
-      throw new Error(data?.error || data?.message || '');
-    }
-
+    const data = await apiPost('/api/client/claim/', { client_id: clientId });
     if (data?.message) {
       notify.success(data.message);
     }
@@ -206,22 +144,6 @@ watch(availableWorkers, (available) => {
     hasShownSingleAvailableToast.value = true;
   } else if (available.length !== 1) {
     hasShownSingleAvailableToast.value = false;
-  }
-});
-
-onMounted(async () => {
-  try {
-    const data = await dashboardStore.bootstrapDashboard();
-    if (data?.user) {
-      authStore.user = data.user as any;
-    }
-    await router.replace('/dashboard');
-  } catch (err: any) {
-    const status = err?.status;
-    if (status === 401) {
-      await router.replace('/');
-    }
-    // If 503 or other errors, stay on the page.
   }
 });
 

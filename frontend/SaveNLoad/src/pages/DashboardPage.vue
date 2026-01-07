@@ -742,8 +742,8 @@ const onEditGame = () => {
 onMounted(async () => {
   window.addEventListener('dashboard:reset', resetDashboardFilters);
   try {
-    if (!store.bootstrapLoaded) {
-      await store.bootstrapDashboard();
+    if (!store.dashboardLoaded) {
+      await store.loadDashboard();
     }
   } catch (err: any) {
     await handleAuthError(err);
