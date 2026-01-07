@@ -12,12 +12,8 @@
     <div class="mb-4">
       <SectionTitle text="Queue Statistics" />
       <div class="text-white">
-        <div v-if="loading" class="text-center py-3">
-          <div class="spinner-border text-light" role="status">
-            <span class="visually-hidden">Loading...</span>
-          </div>
-        </div>
-        <div v-else-if="error" class="text-center py-3 text-white-50">{{ error }}</div>
+        <LoadingState v-if="loading" />
+        <EmptyState v-else-if="error" :message="error" />
         <div v-else class="d-flex flex-column gap-2">
           <div class="d-flex justify-content-between">
             <span>Total</span>
@@ -68,6 +64,8 @@ import IconButton from '@/components/atoms/IconButton.vue';
 import SectionTitle from '@/components/atoms/SectionTitle.vue';
 import { useSettingsStore } from '@/stores/settings';
 import { useConfirm } from '@/composables/useConfirm';
+import LoadingState from '@/components/molecules/LoadingState.vue';
+import EmptyState from '@/components/molecules/EmptyState.vue';
 
 const store = useSettingsStore();
 const loading = ref(false);

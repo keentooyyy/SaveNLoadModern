@@ -2,8 +2,8 @@
   <Teleport to="body">
     <div v-if="open" class="modal fade show backup-complete-modal" tabindex="-1" role="dialog" aria-modal="true" :aria-labelledby="titleId">
       <div class="modal-dialog modal-dialog-centered" style="max-width: 520px;">
-        <div class="modal-content bg-primary text-white border-0 rounded-3 shadow-lg border border-secondary">
-          <div class="modal-header bg-primary border-secondary px-4 py-3">
+        <div class="modal-content modal-shell">
+          <div class="modal-header modal-shell__header">
             <div class="d-flex flex-column gap-1">
               <h5 :id="titleId" class="modal-title text-white mb-0">Backup Complete</h5>
             </div>
@@ -15,7 +15,7 @@
             ></button>
           </div>
 
-          <div class="modal-body bg-primary px-4 py-3">
+          <div class="modal-body modal-shell__body">
             <p class="text-white mb-3">Your backup has been saved successfully.</p>
             <div class="card bg-dark border-secondary mb-3">
               <div class="card-body py-2">
@@ -25,7 +25,7 @@
             </div>
           </div>
 
-          <div class="modal-footer bg-primary border-secondary d-flex justify-content-end px-4 py-3">
+          <div class="modal-footer modal-shell__footer d-flex justify-content-end">
             <button class="btn btn-outline-secondary text-white" type="button" @click="onClose">Close</button>
             <button
               v-if="zipPath"

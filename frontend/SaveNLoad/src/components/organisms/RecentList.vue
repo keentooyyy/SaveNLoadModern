@@ -31,21 +31,13 @@
       @scroll="updateScrollState"
       @wheel="handleWheel"
     >
-      <div v-if="loading" class="d-flex justify-content-center align-items-center w-100 py-3">
-        <div class="spinner-border text-light" role="status">
-          <span class="visually-hidden">Loading...</span>
-        </div>
-      </div>
+      <LoadingState v-if="loading" wrapper-class="w-100" />
       <div v-else-if="items.length" class="d-flex gap-2">
         <div v-for="item in items" :key="item.id" class="flex-shrink-0 recent-game-card" style="width: 260px;">
           <GameCard :title="item.title" :footer="item.footer" :image="item.image" @click="emit('select', item)" />
         </div>
       </div>
-      <div v-else class="flex-shrink-0 w-100">
-        <div class="text-center py-3">
-          <p class="text-white-50 mb-0">No recently played games</p>
-        </div>
-      </div>
+      <EmptyState v-else wrapper-class="flex-shrink-0 w-100" message="No recently played games" />
     </div>
   </div>
 </template>
@@ -53,6 +45,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import GameCard from '@/components/molecules/GameCard.vue';
+import LoadingState from '@/components/molecules/LoadingState.vue';
+import EmptyState from '@/components/molecules/EmptyState.vue';
 
 const emit = defineEmits(['select']);
 

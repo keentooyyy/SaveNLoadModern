@@ -1,5 +1,5 @@
 <template>
-  <div class="card shadow-lg bg-primary text-white">
+  <div class="card shadow-lg card-primary">
     <div class="card-body p-3 p-md-4">
       <div class="text-center mb-4">
         <img src="/images/icon.png" alt="Save N Load" width="50" height="50" />

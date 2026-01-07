@@ -9,8 +9,8 @@
         @click.self="onClose"
       >
         <div class="modal-dialog modal-dialog-centered operation-modal-dialog">
-          <div class="modal-content bg-primary text-white border-0">
-            <header class="modal-header bg-primary border-secondary">
+          <div class="modal-content modal-shell">
+            <header class="modal-header modal-shell__header">
               <h5 :id="titleId" class="mb-0">{{ title }}</h5>
               <button
                 v-if="closable"
@@ -21,7 +21,7 @@
               ></button>
             </header>
 
-            <div class="modal-body bg-primary">
+            <div class="modal-body modal-shell__body">
               <div class="operation-progress">
                 <div class="operation-progress-track">
                   <div class="operation-progress-bar" :class="variantClass" :style="{ width: `${progress}%` }"></div>

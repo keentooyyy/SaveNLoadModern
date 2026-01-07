@@ -48,6 +48,39 @@ body {
     min-height: 100vh;
 }
 
+/* Modal shell shared styling */
+.modal-shell {
+    background-color: var(--color-primary);
+    color: var(--color-white);
+    border: 1px solid var(--white-opacity-10);
+    border-radius: 0.75rem;
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+}
+
+.modal-shell__header,
+.modal-shell__body,
+.modal-shell__footer {
+    background-color: var(--color-primary);
+    border-color: var(--white-opacity-10);
+    padding: 1rem 1.5rem;
+}
+
+.modal-shell__footer {
+    border-top: 0;
+}
+
+/* Shared auth footer styling */
+.auth-footer {
+    margin-top: 1rem;
+}
+
+/* Shared card variants */
+.card-primary {
+    background-color: var(--color-primary);
+    color: var(--color-white);
+    border: 0;
+}
+
 
 /* Placeholder text for primary background inputs */
 .bg-primary::placeholder {

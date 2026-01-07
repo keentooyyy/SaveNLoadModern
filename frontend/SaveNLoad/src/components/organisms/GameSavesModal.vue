@@ -1,8 +1,8 @@
 <template>
   <div class="modal fade" id="gameSavesModal" tabindex="-1" aria-labelledby="gameSavesModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content bg-primary text-white border-0 rounded-3 shadow-lg border border-secondary">
-          <div class="modal-header bg-primary border-secondary px-4 py-3">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content modal-shell">
+          <div class="modal-header modal-shell__header">
             <div class="d-flex flex-column gap-1">
               <h5 class="modal-title text-white" id="gameSavesModalLabel">
                 Available Saves<span v-if="title"> · {{ title }}</span>
@@ -11,42 +11,32 @@
             </div>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
-          <div class="modal-body bg-primary overflow-auto px-4 py-3" style="max-height: 70vh;">
-          <SaveActionsBar
-            :loading="loading"
-            :has-saves="!!saveFolders.length"
-            @open-location="emit('open-location')"
-            @backup-all="emit('backup-all')"
-            @delete-all="emit('delete-all')"
-          />
-
-          <div v-if="loading" class="text-center py-4">
-            <div class="spinner-border text-secondary" role="status">
-              <span class="visually-hidden">Loading...</span>
-            </div>
-            <p class="text-white-50 mt-2">Loading saves...</p>
-          </div>
-
-          <div v-else-if="error" class="text-center py-4">
-            <p class="text-white-50 mb-0">{{ error }}</p>
-          </div>
-
-          <div v-else-if="!saveFolders.length" class="text-center py-4">
-            <p class="text-white-50 mb-0">No saves available</p>
-          </div>
-
-          <div v-else class="d-grid gap-2">
-            <SaveFolderItem
-              v-for="folder in saveFolders"
-              :key="folder.folder_number"
-              :folder="folder"
-              @load="emit('load', folder)"
-              @delete="emit('delete', folder)"
+          <div class="modal-body modal-shell__body overflow-auto" style="max-height: 70vh;">
+            <SaveActionsBar
+              :loading="loading"
+              :has-saves="!!saveFolders.length"
+              @open-location="emit('open-location')"
+              @backup-all="emit('backup-all')"
+              @delete-all="emit('delete-all')"
             />
+
+            <LoadingState v-if="loading" message="Loading saves..." spinner-class="text-secondary" />
+            <EmptyState v-else-if="error" :message="error" />
+            <EmptyState v-else-if="!saveFolders.length" message="No saves available" />
+
+            <div v-else class="d-grid gap-2">
+              <SaveFolderItem
+                v-for="folder in saveFolders"
+                :key="folder.folder_number"
+                :folder="folder"
+                @load="emit('load', folder)"
+                @delete="emit('delete', folder)"
+              />
+            </div>
           </div>
         </div>
         <div
-          class="modal-footer bg-primary border-secondary d-flex align-items-center px-4 py-3"
+          class="modal-footer modal-shell__footer d-flex align-items-center"
           :class="isAdmin ? 'justify-content-between' : 'justify-content-end'"
         >
           <div v-if="isAdmin" class="d-flex gap-2 modal-footer-admin">
@@ -71,6 +61,8 @@
 <script setup lang="ts">
 import SaveActionsBar from '@/components/molecules/SaveActionsBar.vue';
 import SaveFolderItem from '@/components/molecules/SaveFolderItem.vue';
+import LoadingState from '@/components/molecules/LoadingState.vue';
+import EmptyState from '@/components/molecules/EmptyState.vue';
 type SaveFolder = {
   folder_number: number;
   created_at: string;

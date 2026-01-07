@@ -1,24 +1,15 @@
 <template>
   <div class="modal fade" id="gameSearchModal" tabindex="-1" aria-labelledby="gameSearchModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered modal-lg" style="max-width: 900px;">
-      <div class="modal-content bg-primary text-white border-0 rounded-3 shadow-lg border border-secondary">
-        <div class="modal-header bg-primary border-secondary px-4 py-3">
+      <div class="modal-content modal-shell">
+        <div class="modal-header modal-shell__header">
           <h5 class="modal-title text-white" id="gameSearchModalLabel">Select Item</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body bg-primary overflow-auto px-4 py-3" style="max-height: 500px;">
-          <div v-if="loading" class="text-center py-4">
-            <div class="spinner-border text-secondary" role="status">
-              <span class="visually-hidden">Loading...</span>
-            </div>
-            <p class="text-white-50 mt-2">Searching...</p>
-          </div>
-          <div v-else-if="error" class="text-center py-4">
-            <p class="text-white-50 mb-0">{{ error }}</p>
-          </div>
-          <div v-else-if="!results.length" class="text-center py-4">
-            <p class="text-white-50 mb-0">No games found.</p>
-        </div>
+        <div class="modal-body modal-shell__body overflow-auto" style="max-height: 500px;">
+          <LoadingState v-if="loading" message="Searching..." spinner-class="text-secondary" />
+          <EmptyState v-else-if="error" :message="error" />
+          <EmptyState v-else-if="!results.length" message="No games found." />
           <div v-else class="search-results">
             <div
               v-for="game in results"
@@ -44,7 +35,7 @@
             </div>
           </div>
         </div>
-        <div class="modal-footer bg-primary border-secondary d-flex gap-2 px-4 py-3">
+        <div class="modal-footer modal-shell__footer d-flex gap-2">
           <InputGroup
             button-first
             v-model="query"
@@ -67,6 +58,8 @@
 <script setup lang="ts">
 import IconButton from '@/components/atoms/IconButton.vue';
 import InputGroup from '@/components/molecules/InputGroup.vue';
+import LoadingState from '@/components/molecules/LoadingState.vue';
+import EmptyState from '@/components/molecules/EmptyState.vue';
 
 const emit = defineEmits(['search', 'select']);
 

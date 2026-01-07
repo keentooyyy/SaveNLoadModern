@@ -32,14 +32,13 @@
           RESEND CODE
         </IconButton>
       </div>
-      <p class="text-white fs-6 text-center mt-3">
-        Remember your password?
-        <RouterLink to="/login" class="text-secondary text-decoration-none fs-6">Login</RouterLink>
-      </p>
-      <p class="text-white fs-6 text-center mt-2">
-        Wrong email?
-        <RouterLink to="/forgot-password" class="text-secondary text-decoration-none fs-6">Start Over</RouterLink>
-      </p>
+      <AuthFooterLink prefix="Remember your password? " link-text="Login" to="/login" />
+      <AuthFooterLink
+        prefix="Wrong email? "
+        link-text="Start Over"
+        to="/forgot-password"
+        text-class="mt-2"
+      />
     </form>
   </AuthLayout>
 </template>
@@ -51,6 +50,7 @@ import AuthLayout from '@/layouts/AuthLayout.vue';
 import { useAuthStore } from '@/stores/auth';
 import IconButton from '@/components/atoms/IconButton.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
+import AuthFooterLink from '@/components/molecules/AuthFooterLink.vue';
 
 const store = useAuthStore();
 const router = useRouter();

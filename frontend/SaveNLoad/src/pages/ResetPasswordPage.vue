@@ -28,10 +28,7 @@
           RESET PASSWORD
         </IconButton>
       </div>
-      <p class="text-white fs-6 text-center mt-3">
-        Remember your password?
-        <RouterLink to="/login" class="text-secondary text-decoration-none fs-6">Login</RouterLink>
-      </p>
+      <AuthFooterLink prefix="Remember your password? " link-text="Login" to="/login" />
     </form>
   </AuthLayout>
 </template>
@@ -44,6 +41,7 @@ import PasswordField from '@/components/molecules/PasswordField.vue';
 import { useAuthStore } from '@/stores/auth';
 import IconButton from '@/components/atoms/IconButton.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
+import AuthFooterLink from '@/components/molecules/AuthFooterLink.vue';
 
 const store = useAuthStore();
 const router = useRouter();

@@ -26,13 +26,9 @@
     <div class="mb-3">
       <SectionTitle text="All Users" />
       <div class="text-white">
-        <div v-if="loading" class="text-center py-3">
-          <div class="spinner-border text-light" role="status">
-            <span class="visually-hidden">Loading...</span>
-          </div>
-        </div>
-        <div v-else-if="error" class="text-center py-3 text-white-50">{{ error }}</div>
-        <div v-else-if="!users.length" class="text-center py-3 text-white-50">No users found.</div>
+        <LoadingState v-if="loading" />
+        <EmptyState v-else-if="error" :message="error" />
+        <EmptyState v-else-if="!users.length" message="No users found." />
         <div v-else class="table-responsive">
           <table class="table table-dark table-hover align-middle mb-0 manage-users-table">
             <thead>
@@ -93,6 +89,8 @@ import InputLabel from '@/components/atoms/InputLabel.vue';
 import SectionTitle from '@/components/atoms/SectionTitle.vue';
 import { useSettingsStore } from '@/stores/settings';
 import { useConfirm } from '@/composables/useConfirm';
+import LoadingState from '@/components/molecules/LoadingState.vue';
+import EmptyState from '@/components/molecules/EmptyState.vue';
 
 type UserItem = {
   id: number;

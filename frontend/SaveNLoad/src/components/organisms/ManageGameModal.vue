@@ -1,8 +1,8 @@
 <template>
   <div class="modal fade" id="gameManageModal" tabindex="-1" aria-labelledby="gameManageModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
-      <div class="modal-content bg-primary text-white border-0">
-        <div class="modal-header bg-primary border-0 d-flex align-items-center">
+      <div class="modal-content modal-shell">
+        <div class="modal-header modal-shell__header d-flex align-items-center">
           <ul class="nav nav-tabs border-0 mb-0" role="tablist">
             <li class="nav-item" role="presentation">
               <button
@@ -32,7 +32,7 @@
             </li>
           </ul>
         </div>
-        <div class="modal-body bg-primary" style="max-height: 70vh; overflow-y: auto;">
+        <div class="modal-body modal-shell__body" style="max-height: 70vh; overflow-y: auto;">
           <div class="tab-content">
             <div class="tab-pane fade show active" id="edit-pane" role="tabpanel">
               <form id="gameManageForm">
@@ -42,17 +42,12 @@
             </div>
             <div class="tab-pane fade" id="saves-pane" role="tabpanel">
               <div id="savesListContainer">
-                <div class="text-center py-4">
-                  <div class="spinner-border text-secondary" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                  </div>
-                  <p class="text-white-50 mt-2">Loading saves...</p>
-                </div>
+                <LoadingState message="Loading saves..." spinner-class="text-secondary" />
               </div>
             </div>
           </div>
         </div>
-        <div class="modal-footer bg-primary border-secondary d-flex justify-content-end">
+        <div class="modal-footer modal-shell__footer d-flex justify-content-end">
           <FormActions align-class="me-auto" id="edit-tab-buttons">
             <IconButton type="button" variant="outline-danger" class="text-white" icon="fa-trash-alt" id="deleteGameBtn">
               Delete
@@ -74,6 +69,7 @@
 import GameFormFields from '@/components/molecules/GameFormFields.vue';
 import FormActions from '@/components/molecules/FormActions.vue';
 import IconButton from '@/components/atoms/IconButton.vue';
+import LoadingState from '@/components/molecules/LoadingState.vue';
 </script>
 
 <style scoped>

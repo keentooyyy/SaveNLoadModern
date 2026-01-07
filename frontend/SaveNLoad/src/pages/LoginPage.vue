@@ -49,12 +49,12 @@
           LOGIN
         </IconButton>
       </div>
-      <p class="text-white fs-6 text-center mt-3">
-        Don't have an account?
-        <RouterLink to="/register" class="text-secondary text-decoration-none fs-6" tabindex="-1">
-          Create an account
-        </RouterLink>
-      </p>
+      <AuthFooterLink
+        prefix="Don't have an account? "
+        link-text="Create an account"
+        to="/register"
+        tabindex="-1"
+      />
     </form>
   </AuthLayout>
 </template>
@@ -69,6 +69,7 @@ import { useDashboardStore } from '@/stores/dashboard';
 import IconButton from '@/components/atoms/IconButton.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
 import TextInput from '@/components/atoms/TextInput.vue';
+import AuthFooterLink from '@/components/molecules/AuthFooterLink.vue';
 
 const store = useAuthStore();
 const dashboardStore = useDashboardStore();

@@ -1,8 +1,8 @@
 <template>
   <div class="container-fluid px-4 pt-3">
-    <div class="card shadow-lg bg-primary text-white border-0">
+    <div class="card shadow-lg card-primary">
       <button
-        class="card-header bg-primary text-white border-0 p-3 w-100 text-start d-flex justify-content-between align-items-center"
+        class="card-header text-white border-0 p-3 w-100 text-start d-flex justify-content-between align-items-center"
         :class="[headerClass, { active: isOpen }]"
         type="button"
         data-bs-toggle="collapse"

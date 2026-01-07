@@ -33,11 +33,7 @@
     </div>
     <div id="availableGamesContainer" class="row g-3">
       <div v-if="loading" class="col-12">
-        <div class="d-flex justify-content-center py-5">
-          <div class="spinner-border text-light" role="status">
-            <span class="visually-hidden">Loading...</span>
-          </div>
-        </div>
+        <LoadingState wrapper-class="py-5" />
       </div>
       <div v-else-if="searching" class="col-12">
         <div class="d-flex justify-content-center align-items-center py-4 text-white-50 gap-2">
@@ -70,9 +66,7 @@
         />
       </div>
       <div v-if="!loading && !games.length" class="col-12">
-        <div class="text-center py-5">
-          <p class="text-white-50 mb-2">No games available</p>
-        </div>
+        <EmptyState wrapper-class="py-5" message="No games available" />
       </div>
     </div>
   </div>
@@ -82,6 +76,8 @@
 import { onBeforeUnmount, watch } from 'vue';
 import GameCard from '@/components/molecules/GameCard.vue';
 import TextInput from '@/components/atoms/TextInput.vue';
+import LoadingState from '@/components/molecules/LoadingState.vue';
+import EmptyState from '@/components/molecules/EmptyState.vue';
 
 defineProps({
   games: { type: Array, default: () => [] },
