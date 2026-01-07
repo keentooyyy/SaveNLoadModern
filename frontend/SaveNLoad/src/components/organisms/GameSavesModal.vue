@@ -34,28 +34,27 @@
               />
             </div>
           </div>
-        </div>
-        <div
-          class="modal-footer modal-shell__footer d-flex align-items-center"
-          :class="isAdmin ? 'justify-content-between' : 'justify-content-end'"
-        >
-          <div v-if="isAdmin" class="d-flex gap-2 modal-footer-admin">
-            <button type="button" class="btn btn-outline-secondary text-white modal-footer-btn" @click="emit('edit-game')">
-              <i class="fas fa-edit me-1"></i>
-              Edit
-            </button>
-            <button type="button" class="btn btn-outline-danger text-white modal-footer-btn" @click="emit('delete-game')">
-              <i class="fas fa-trash me-1"></i>
-              Delete
+          <div
+            class="modal-footer modal-shell__footer d-flex align-items-center"
+            :class="isAdmin ? 'justify-content-between' : 'justify-content-end'"
+          >
+            <div v-if="isAdmin" class="d-flex gap-2 modal-footer-admin">
+              <button type="button" class="btn btn-outline-secondary text-white modal-footer-btn" @click="emit('edit-game')">
+                <i class="fas fa-edit me-1"></i>
+                Edit
+              </button>
+              <button type="button" class="btn btn-outline-danger text-white modal-footer-btn" @click="emit('delete-game')">
+                <i class="fas fa-trash me-1"></i>
+                Delete
+              </button>
+            </div>
+            <button type="button" class="btn btn-outline-secondary text-white modal-footer-btn" data-bs-dismiss="modal">
+              Close
             </button>
           </div>
-          <button type="button" class="btn btn-outline-secondary text-white modal-footer-btn" data-bs-dismiss="modal">
-            Close
-          </button>
         </div>
       </div>
     </div>
-  </div>
 </template>
 
 <script setup lang="ts">

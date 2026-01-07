@@ -50,9 +50,9 @@ body {
 
 /* Modal shell shared styling */
 .modal-shell {
-    background-color: var(--color-primary);
+    background-color: var(--bs-primary);
     color: var(--color-white);
-    border: 1px solid var(--white-opacity-10);
+    border: 1px solid var(--bs-secondary);
     border-radius: 0.75rem;
     box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175);
 }
@@ -60,8 +60,8 @@ body {
 .modal-shell__header,
 .modal-shell__body,
 .modal-shell__footer {
-    background-color: var(--color-primary);
-    border-color: var(--white-opacity-10);
+    background-color: var(--bs-primary);
+    border-color: var(--bs-secondary);
     padding: 1rem 1.5rem;
 }
 
@@ -76,7 +76,7 @@ body {
 
 /* Shared card variants */
 .card-primary {
-    background-color: var(--color-primary);
+    background-color: var(--bs-primary);
     color: var(--color-white);
     border: 0;
 }
