@@ -34,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, ref } from 'vue';
+import { reactive, computed, ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
@@ -73,4 +73,11 @@ const onSubmit = async () => {
     submitting.value = false;
   }
 };
+
+onMounted(async () => {
+  const config = await store.loadAuthConfig();
+  if (!config.emailEnabled || !config.emailRegistrationRequired) {
+    window.location.assign('/login');
+  }
+});
 </script>

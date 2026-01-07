@@ -387,6 +387,8 @@ def upgrade_view(request):
 def forgot_password_view(request):
     if not is_feature_enabled('feature.email.enabled'):
         return _feature_disabled_response('Email feature is disabled.')
+    if not get_setting_value('feature.email.registration_required', True):
+        return _feature_disabled_response('Email registration is disabled.')
     raw_email = request.data.get('email', '').strip()
     email = sanitize_email(raw_email)
 
@@ -419,6 +421,8 @@ def forgot_password_view(request):
 def verify_otp_view(request):
     if not is_feature_enabled('feature.email.enabled'):
         return _feature_disabled_response('Email feature is disabled.')
+    if not get_setting_value('feature.email.registration_required', True):
+        return _feature_disabled_response('Email registration is disabled.')
     email = sanitize_email(request.data.get('email', '').strip())
     otp_code = (request.data.get('otp_code') or '').strip()
     action = request.data.get('action', 'verify')
@@ -468,6 +472,8 @@ def verify_otp_view(request):
 def reset_password_view(request):
     if not is_feature_enabled('feature.email.enabled'):
         return _feature_disabled_response('Email feature is disabled.')
+    if not get_setting_value('feature.email.registration_required', True):
+        return _feature_disabled_response('Email registration is disabled.')
     reset_token = request.COOKIES.get(settings.AUTH_RESET_COOKIE_NAME)
     if not reset_token:
         return _json_error('Reset token missing or expired.', http_status=status.HTTP_401_UNAUTHORIZED)

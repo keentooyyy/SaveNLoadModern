@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { useAuthStore } from '@/stores/auth';
@@ -54,4 +54,11 @@ const onSubmit = async () => {
     submitting.value = false;
   }
 };
+
+onMounted(async () => {
+  const config = await store.loadAuthConfig();
+  if (!config.emailEnabled || !config.emailRegistrationRequired) {
+    window.location.assign('/login');
+  }
+});
 </script>

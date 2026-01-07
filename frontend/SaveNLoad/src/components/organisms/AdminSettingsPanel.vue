@@ -109,7 +109,7 @@
         </div>
       </div>
       <div v-if="form.guestEnabled" class="mb-3">
-        <InputLabel for-id="guestTtl" text="GUEST TTL (DAYS)" />
+        <InputLabel for-id="guestTtl" text="GUEST ACCOUNT EXPIRY (DAYS)" />
         <TextInput
           id="guestTtl"
           v-model="form.guestTtlDays"

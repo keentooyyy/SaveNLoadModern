@@ -85,7 +85,7 @@ const isActive = (path: string) => route.path === path;
 
 const onDashboardClick = () => {
   if (isActive('/dashboard')) {
-    window.dispatchEvent(new CustomEvent('dashboard:reset'));
+    window.location.assign('/dashboard');
   }
 };
 

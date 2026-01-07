@@ -44,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { useAuthStore } from '@/stores/auth';
@@ -167,6 +167,13 @@ const onResend = async () => {
     resending.value = false;
   }
 };
+
+onMounted(async () => {
+  const config = await store.loadAuthConfig();
+  if (!config.emailEnabled || !config.emailRegistrationRequired) {
+    window.location.assign('/login');
+  }
+});
 </script>
 
 <style scoped>

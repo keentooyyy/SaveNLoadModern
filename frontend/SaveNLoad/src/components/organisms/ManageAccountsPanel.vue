@@ -11,13 +11,10 @@
   >
     <div class="mb-4">
       <InputLabel text="SEARCH BY USERNAME OR EMAIL" label-class="mb-2" />
-      <InputGroup
+      <TextInput
         v-model="searchQuery"
         placeholder="Type username or email to search..."
-        button-label="Search"
-        button-icon="fa-search"
-        button-class="text-white"
-        @action="onSearch"
+        :disabled="loading"
       />
     </div>
 
@@ -82,10 +79,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import CollapsibleCard from '@/components/molecules/CollapsibleCard.vue';
-import InputGroup from '@/components/molecules/InputGroup.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
+import TextInput from '@/components/atoms/TextInput.vue';
 import SectionTitle from '@/components/atoms/SectionTitle.vue';
 import { useSettingsStore } from '@/stores/settings';
 import { useConfirm } from '@/composables/useConfirm';
@@ -104,6 +101,7 @@ const searchQuery = ref('');
 const users = ref<UserItem[]>([]);
 const loading = ref(false);
 const error = ref('');
+const isRefreshing = ref(false);
 const pagination = ref({
   page: 1,
   total_pages: 1,
@@ -126,11 +124,11 @@ const notify = {
   }
 };
 
-const loadUsers = async (page = 1, options: { force?: boolean } = {}) => {
+const loadUsers = async (page = 1) => {
   loading.value = true;
   error.value = '';
   try {
-    const data = await store.listUsers(searchQuery.value.trim(), page, options);
+    const data = await store.listUsers(searchQuery.value.trim(), page);
     users.value = data?.users || [];
     pagination.value = data?.pagination || {
       page,
@@ -143,10 +141,6 @@ const loadUsers = async (page = 1, options: { force?: boolean } = {}) => {
   } finally {
     loading.value = false;
   }
-};
-
-const onSearch = () => {
-  loadUsers(1);
 };
 
 const goToPage = (page: number) => {
@@ -188,19 +182,26 @@ const waitForDeletion = async (operationId: string) => {
   return { status: 'failed', message: '' };
 };
 
-const waitForRemoval = async (userId: number) => {
-  const maxAttempts = 5;
-  const delayMs = 800;
-
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    await loadUsers(pagination.value.page, { force: true });
-    if (!users.value.some((user) => user.id === userId)) {
-      return true;
-    }
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
+const openPanel = () => {
+  const collapseEl = document.getElementById('manageAccountsCollapse');
+  const bootstrap = (window as any)?.bootstrap;
+  if (!collapseEl || !bootstrap?.Collapse) {
+    return;
   }
+  const instance = bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
+  instance.show();
+};
 
-  return false;
+const refreshAndOpen = (delayMs = 0) => {
+  isRefreshing.value = true;
+  try {
+    window.sessionStorage.setItem('savenload_open_manage_accounts', '1');
+  } catch {
+    // ignore
+  }
+  window.setTimeout(() => {
+    window.location.reload();
+  }, Math.max(0, delayMs));
 };
 
 const onDelete = async (user: UserItem) => {
@@ -226,30 +227,44 @@ const onDelete = async (user: UserItem) => {
       }
       completionMessage = result.message;
     }
-    const removed = await waitForRemoval(user.id);
-    if (!removed) {
-      users.value = users.value.filter((item) => item.id !== user.id);
-    }
     if (completionMessage) {
       notify.success(completionMessage);
     }
+    refreshAndOpen(completionMessage ? 1800 : 0);
   } catch (err: any) {
     error.value = err?.message || '';
     if (error.value) {
       notify.error(error.value);
     }
   } finally {
-    loading.value = false;
+    if (!isRefreshing.value) {
+      loading.value = false;
+    }
   }
 };
 
-onMounted(() => {
-  if (store.usersLoaded && store.users.length) {
-    users.value = store.users;
-    pagination.value = store.usersPagination;
-    return;
+let searchTimer: number | null = null;
+
+watch(searchQuery, () => {
+  if (searchTimer) {
+    window.clearTimeout(searchTimer);
   }
-  loadUsers(1);
+  searchTimer = window.setTimeout(() => {
+    loadUsers(1);
+  }, 300);
+});
+
+onMounted(async () => {
+  await loadUsers(1);
+  try {
+    const shouldOpen = window.sessionStorage.getItem('savenload_open_manage_accounts') === '1';
+    if (shouldOpen) {
+      window.sessionStorage.removeItem('savenload_open_manage_accounts');
+      openPanel();
+    }
+  } catch {
+    // ignore
+  }
 });
 </script>
 

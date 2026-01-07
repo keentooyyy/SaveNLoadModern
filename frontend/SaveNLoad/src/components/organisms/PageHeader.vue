@@ -62,8 +62,7 @@ const props = defineProps({
   userRole: { type: String, default: '' }
 });
 
-const AVATAR_SEED_KEY = 'savenload_avatar_seed';
-const AVATAR_SEED_LABEL_KEY = 'savenload_avatar_seed_label';
+const AVATAR_SEED_PREFIX = 'savenload_avatar_seed_';
 const avatarSeed = ref('');
 const lastLabel = ref('');
 
@@ -77,14 +76,13 @@ const resolveSeed = (label: string) => {
   if (typeof window === 'undefined') {
     return randomId();
   }
-  const storedSeed = sessionStorage.getItem(AVATAR_SEED_KEY);
-  const storedLabel = sessionStorage.getItem(AVATAR_SEED_LABEL_KEY);
-  if (storedSeed && storedLabel === label && storedSeed !== 'undefined') {
+  const key = `${AVATAR_SEED_PREFIX}${label || 'user'}`;
+  const storedSeed = localStorage.getItem(key);
+  if (storedSeed && storedSeed !== 'undefined') {
     return storedSeed;
   }
   const newSeed = randomId();
-  sessionStorage.setItem(AVATAR_SEED_KEY, newSeed);
-  sessionStorage.setItem(AVATAR_SEED_LABEL_KEY, label);
+  localStorage.setItem(key, newSeed);
   return newSeed;
 };
 

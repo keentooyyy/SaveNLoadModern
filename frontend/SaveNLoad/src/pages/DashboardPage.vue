@@ -92,10 +92,13 @@ const isAdmin = computed(() => store.isAdmin);
 const headerName = computed(() => store.user?.username || authStore.user?.username || '');
 const headerRole = computed(() => (store.user?.role || authStore.user?.role || '').toUpperCase());
 const guestExpiresAt = computed(() => {
-  const value = authStore.user?.guest_expires_at;
+  const value = store.user?.guest_expires_at || authStore.user?.guest_expires_at;
   return value ? new Date(value) : null;
 });
-const showGuestBanner = computed(() => authStore.user?.is_guest && guestExpiresAt.value);
+const showGuestBanner = computed(() => {
+  const isGuest = store.user?.is_guest ?? authStore.user?.is_guest;
+  return !!isGuest && guestExpiresAt.value;
+});
 const isMigrating = computed(() => authStore.user?.guest_migration_status === 'migrating');
 const now = ref(Date.now());
 let bannerTimer: number | null = null;
@@ -511,16 +514,6 @@ const scrollToAvailableGames = () => {
   }
 };
 
-const resetDashboardFilters = async () => {
-  searchQuery.value = '';
-  sortBy.value = 'name_asc';
-  try {
-    await store.loadDashboard();
-  } catch {
-    // Ignore refresh errors to avoid blocking navigation.
-  }
-};
-
 const onRecentSelect = async (item: { title?: string }) => {
   const query = item?.title?.trim() || '';
   if (!query) {
@@ -586,15 +579,15 @@ const onQuickLoadGame = async (game: { id: number; title?: string }) => {
   }
 };
 
-const goToSettings = () => router.push('/settings');
-const goToProfile = () => router.push('/settings');
+const goToSettings = () => window.location.assign('/settings');
+const goToProfile = () => window.location.assign('/settings');
 const onLogout = async () => {
   try {
     await authStore.logout();
   } catch {
     // ignore
   } finally {
-    await router.push('/login');
+    window.location.assign('/login');
   }
 };
 
@@ -792,14 +785,6 @@ const onEditGame = () => {
   if (!selectedGameId.value) {
     return;
   }
-  if (!router.hasRoute('game-detail')) {
-    router.addRoute({
-      name: 'game-detail',
-      path: '/games/:id',
-      component: () => import('@/pages/GameDetailPage.vue'),
-      meta: { title: 'Game Details', requiresAuth: true }
-    });
-  }
   const modalEl = document.getElementById('gameSavesModal');
   const bootstrapModal = (window as any)?.bootstrap?.Modal?.getOrCreateInstance(modalEl);
   bootstrapModal?.hide();
@@ -807,22 +792,18 @@ const onEditGame = () => {
 };
 
 onMounted(async () => {
-  window.addEventListener('dashboard:reset', resetDashboardFilters);
   now.value = Date.now();
   bannerTimer = window.setInterval(() => {
     now.value = Date.now();
   }, 60000);
   try {
-    if (!store.dashboardLoaded) {
-      await store.loadDashboard();
-    }
+    await store.loadDashboard();
   } catch (err: any) {
     await handleAuthError(err);
   }
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener('dashboard:reset', resetDashboardFilters);
   clearBackupCloseTimer();
   if (bannerTimer) {
     clearInterval(bannerTimer);

@@ -9,7 +9,13 @@
         @settings="goToSettings"
         @logout="onLogout"
       />
-      <div>
+      <div v-if="isLoading" class="text-center py-5">
+        <div class="spinner-border text-secondary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-white-50 mt-2 mb-0">Loading settings...</p>
+      </div>
+      <div v-else>
         <AddGamePanel v-if="isAdmin" />
         <AdminSettingsPanel v-if="isAdmin" />
         <ManageAccountsPanel v-if="isAdmin" />
@@ -23,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import PageHeader from '@/components/organisms/PageHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import AddGamePanel from '@/components/organisms/AddGamePanel.vue';
@@ -34,10 +40,9 @@ import AccountSettingsPanel from '@/components/organisms/AccountSettingsPanel.vu
 import ManageGameModal from '@/components/organisms/ManageGameModal.vue';
 import GuestUpgradePanel from '@/components/organisms/GuestUpgradePanel.vue';
 import { useAuthStore } from '@/stores/auth';
-import { useRouter } from 'vue-router';
 
 const authStore = useAuthStore();
-const router = useRouter();
+const isLoading = ref(true);
 
 const headerName = computed(() => authStore.user?.username || '');
 const headerRole = computed(() => (authStore.user?.role || '').toUpperCase());
@@ -49,16 +54,31 @@ const resolveAdmin = (user: { role?: string } | null) => {
 const isAdmin = computed(() => resolveAdmin(authStore.user));
 const isGuest = computed(() => authStore.user?.is_guest);
 
-const goToSettings = () => router.push('/settings');
-const goToProfile = () => router.push('/settings');
+const goToSettings = () => window.location.assign('/settings');
+const goToProfile = () => window.location.assign('/settings');
 const onLogout = async () => {
   try {
     await authStore.logout();
   } catch {
     // ignore
   } finally {
-    await router.push('/login');
+    window.location.assign('/login');
   }
 };
+
+onMounted(async () => {
+  try {
+    await authStore.refreshUser();
+    if (!authStore.user) {
+      window.location.assign('/login');
+      return;
+    }
+  } catch {
+    window.location.assign('/login');
+    return;
+  } finally {
+    isLoading.value = false;
+  }
+});
 
 </script>

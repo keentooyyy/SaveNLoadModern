@@ -52,6 +52,7 @@
           type="submit"
           variant="secondary"
           class="text-white fw-bold"
+          icon="fa-user-check"
           :disabled="isSubmitting || migrationStatus === 'migrating'"
           :loading="isSubmitting"
         >
@@ -71,8 +72,12 @@ import PasswordField from '@/components/molecules/PasswordField.vue';
 import FormActions from '@/components/molecules/FormActions.vue';
 import IconButton from '@/components/atoms/IconButton.vue';
 import { useAuthStore } from '@/stores/auth';
+import { useSettingsStore } from '@/stores/settings';
 
 const authStore = useAuthStore();
+const settingsStore = useSettingsStore();
+
+const GUEST_CREDS_KEY = 'savenload_guest_credentials';
 
 const username = ref('');
 const email = ref('');
@@ -94,13 +99,60 @@ const onSubmit = async () => {
     return;
   }
   try {
-    await authStore.upgradeGuest({
+    const data = await authStore.upgradeGuest({
       username: trimmedUsername,
       email: email.value.trim(),
       password: password.value
     });
+    const operationId = data?.operation_id;
+    if (operationId) {
+      await pollUpgradeStatus(operationId);
+    } else {
+      await authStore.refreshUser();
+      if (!authStore.user?.is_guest) {
+        clearGuestCredentials();
+      }
+    }
   } catch {
     // errors handled by store
+  }
+};
+
+const pollUpgradeStatus = async (operationId: string) => {
+  const maxAttempts = 30;
+  const delayMs = 2000;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const status = await settingsStore.checkOperationStatus(operationId);
+      if (status?.completed || status?.failed) {
+        await authStore.refreshUser();
+        if (status?.completed && !authStore.user?.is_guest) {
+          clearGuestCredentials();
+        }
+        return;
+      }
+    } catch {
+      // ignore poll errors
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  await authStore.refreshUser();
+  if (!authStore.user?.is_guest) {
+    clearGuestCredentials();
+  }
+};
+
+const clearGuestCredentials = () => {
+  authStore.guestCredentials = null;
+  try {
+    window.sessionStorage.removeItem(GUEST_CREDS_KEY);
+  } catch {
+    // ignore
+  }
+  try {
+    window.localStorage.removeItem(GUEST_CREDS_KEY);
+  } catch {
+    // ignore
   }
 };
 
@@ -110,6 +162,26 @@ onMounted(() => {
   }
   if (authStore.guestCredentials?.password) {
     password.value = authStore.guestCredentials.password;
+  }
+  if (!username.value && authStore.user?.username) {
+    username.value = authStore.user.username;
+  }
+  if (!password.value) {
+    try {
+      const stored = window.sessionStorage.getItem(GUEST_CREDS_KEY)
+        || window.localStorage.getItem(GUEST_CREDS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as { username?: string; password?: string };
+        if (!username.value && parsed?.username) {
+          username.value = parsed.username;
+        }
+        if (!password.value && parsed?.password) {
+          password.value = parsed.password;
+        }
+      }
+    } catch {
+      // ignore
+    }
   }
 });
 </script>

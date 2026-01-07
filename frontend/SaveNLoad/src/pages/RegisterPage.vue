@@ -10,9 +10,15 @@
           required
         />
       </div>
-      <div class="mb-3">
+      <div v-if="showEmailField" class="mb-3">
         <InputLabel text="EMAIL" />
-        <TextInput v-model="form.email" type="email" placeholder="Enter your email" :invalid="!!fieldErrors?.email" required />
+        <TextInput
+          v-model="form.email"
+          type="email"
+          placeholder="Enter your email"
+          :invalid="!!fieldErrors?.email"
+          required
+        />
       </div>
       <div class="mb-3">
         <InputLabel text="PASSWORD" label-class="mb-0" />
@@ -43,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch, ref } from 'vue';
+import { reactive, computed, watch, ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
@@ -67,6 +73,7 @@ const loading = computed(() => store.loading);
 const fieldErrors = computed(() => store.fieldErrors);
 const submitting = ref(false);
 const isSubmitting = computed(() => loading.value || submitting.value);
+const showEmailField = computed(() => store.authConfig.emailRegistrationRequired);
 
 const clearFieldError = (key: string) => {
   if (store.fieldErrors && store.fieldErrors[key]) {
@@ -90,12 +97,15 @@ const onSubmit = async () => {
   }
   submitting.value = true;
   try {
-    await store.register({
+    const payload = {
       username: form.username,
-      email: form.email,
       password: form.password,
       repeatPassword: form.repeatPassword
-    });
+    } as { username: string; email?: string; password: string; repeatPassword: string };
+    if (showEmailField.value) {
+      payload.email = form.email;
+    }
+    await store.register(payload);
     await router.push('/login');
   } catch {
     // handled by store
@@ -103,4 +113,8 @@ const onSubmit = async () => {
     submitting.value = false;
   }
 };
+
+onMounted(async () => {
+  await store.loadAuthConfig();
+});
 </script>

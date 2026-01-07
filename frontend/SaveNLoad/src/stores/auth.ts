@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useSettingsStore } from '@/stores/settings';
-import { ensureCsrfToken, requestWithRetry, safeJsonParse } from '@/utils/apiClient';
+import { useDashboardStore } from '@/stores/dashboard';
+import { apiGet, ensureCsrfToken, requestWithRetry, safeJsonParse } from '@/utils/apiClient';
 
 type AuthUser = {
   id: number;
@@ -16,6 +17,33 @@ type AuthUser = {
 type FieldErrors = Record<string, string | string[]>;
 
 const API_BASE = import.meta.env.VITE_API_BASE;
+const GUEST_CREDS_KEY = 'savenload_guest_credentials';
+
+const loadGuestCreds = () => {
+  try {
+    const stored = window.sessionStorage.getItem(GUEST_CREDS_KEY)
+      || window.localStorage.getItem(GUEST_CREDS_KEY);
+    if (!stored) {
+      return null;
+    }
+    return JSON.parse(stored);
+  } catch {
+    return null;
+  }
+};
+
+const clearGuestCredsStorage = () => {
+  try {
+    window.sessionStorage.removeItem(GUEST_CREDS_KEY);
+  } catch {
+    // ignore
+  }
+  try {
+    window.localStorage.removeItem(GUEST_CREDS_KEY);
+  } catch {
+    // ignore
+  }
+};
 
 const notify = {
   success: (msg: string) => {
@@ -105,8 +133,11 @@ export const useAuthStore = defineStore('auth', () => {
   const otpEmail = ref('');
   const guestCredentials = ref<{ username: string; email: string; password: string } | null>(null);
   const isLoggingOut = ref(false);
-  const isBootstrapped = ref(false);
-  let bootstrapPromise: Promise<void> | null = null;
+  const suppressWorkerRedirect = ref(false);
+  const authConfig = ref({
+    emailEnabled: true,
+    emailRegistrationRequired: true
+  });
 
   const resetStatus = () => {
     message.value = '';
@@ -127,6 +158,13 @@ export const useAuthStore = defineStore('auth', () => {
     if (response.ok) {
       const data = await response.json();
       user.value = data?.user || null;
+      if (user.value?.is_guest && !guestCredentials.value) {
+        guestCredentials.value = loadGuestCreds();
+      }
+      if (user.value && !user.value.is_guest) {
+        guestCredentials.value = null;
+        clearGuestCredsStorage();
+      }
       return;
     }
 
@@ -138,39 +176,26 @@ export const useAuthStore = defineStore('auth', () => {
     throw new Error('Failed to load current user.');
   };
 
-  const isAuthPath = () => {
-    const path = window.location.pathname;
-    return [
-      '/',
-      '/login',
-      '/register',
-      '/forgot-password',
-      '/reset-password',
-      '/verify-otp'
-    ].includes(path);
+  const refreshUser = async () => {
+    await fetchCurrentUser();
   };
 
-  const bootstrap = async (options: { force?: boolean } = {}) => {
-    if (isBootstrapped.value) {
-      return;
+  const loadAuthConfig = async () => {
+    try {
+      const data = await apiGet('/settings/public');
+      authConfig.value = {
+        emailEnabled: data?.settings?.email_enabled ?? true,
+        emailRegistrationRequired: data?.settings?.email_registration_required ?? true
+      };
+    } catch {
+      authConfig.value = {
+        emailEnabled: true,
+        emailRegistrationRequired: true
+      };
     }
-
-    if (!bootstrapPromise) {
-      bootstrapPromise = (async () => {
-        try {
-          if (options.force || !isAuthPath()) {
-            await fetchCurrentUser();
-          }
-        } catch {
-          user.value = null;
-        } finally {
-          isBootstrapped.value = true;
-        }
-      })();
-    }
-
-    await bootstrapPromise;
+    return authConfig.value;
   };
+
 
   const login = async (payload: { username: string; password: string; rememberMe: boolean }) => {
     loading.value = true;
@@ -179,10 +204,8 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await apiPost('/auth/login', payload);
       user.value = data?.user || null;
       guestCredentials.value = null;
+      clearGuestCredsStorage();
       message.value = data?.message || '';
-      if (message.value) {
-        notify.success(message.value);
-      }
       return data;
     } catch (err: any) {
       error.value = err.message || '';
@@ -203,6 +226,15 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await apiPost('/auth/guest', {});
       user.value = data?.user || null;
       guestCredentials.value = data?.guest_credentials || null;
+      try {
+        if (guestCredentials.value) {
+          const serialized = JSON.stringify(guestCredentials.value);
+          window.sessionStorage.setItem(GUEST_CREDS_KEY, serialized);
+          window.localStorage.setItem(GUEST_CREDS_KEY, serialized);
+        }
+      } catch {
+        // ignore
+      }
       message.value = data?.message || '';
       if (message.value) {
         notify.success(message.value);
@@ -249,7 +281,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const register = async (payload: {
     username: string;
-    email: string;
+    email?: string;
     password: string;
     repeatPassword: string;
   }) => {
@@ -367,6 +399,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true;
     resetStatus();
     isLoggingOut.value = true;
+    const avatarKey = user.value?.username ? `savenload_avatar_seed_${user.value.username}` : null;
     try {
       const clientId = window.localStorage.getItem('savenload_client_id');
       if (clientId) {
@@ -384,11 +417,22 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await apiPost('/auth/logout', {});
       user.value = null;
       guestCredentials.value = null;
+      clearGuestCredsStorage();
+      const dashboardStore = useDashboardStore();
+      dashboardStore.resetState();
+      try {
+        await fetchCurrentUser();
+      } catch {
+        // ignore refresh errors
+      }
       const settingsStore = useSettingsStore();
       settingsStore.resetState();
       if (typeof window !== 'undefined') {
         window.sessionStorage.removeItem('savenload_avatar_seed');
         window.sessionStorage.removeItem('savenload_avatar_seed_label');
+        if (avatarKey) {
+          window.localStorage.removeItem(avatarKey);
+        }
       }
       message.value = data?.message || '';
       if (message.value) {
@@ -416,9 +460,9 @@ export const useAuthStore = defineStore('auth', () => {
     otpEmail,
     guestCredentials,
     isLoggingOut,
-    isBootstrapped,
+    suppressWorkerRedirect,
+    authConfig,
     initCsrf,
-    bootstrap,
     resetStatus,
     login,
     loginGuest,
@@ -428,6 +472,8 @@ export const useAuthStore = defineStore('auth', () => {
     verifyOtp,
     resendOtp,
     resetPassword,
-    logout
+    logout,
+    loadAuthConfig,
+    refreshUser
   };
 });

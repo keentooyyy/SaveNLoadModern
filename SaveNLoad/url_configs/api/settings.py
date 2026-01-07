@@ -6,6 +6,7 @@ urlpatterns = [
     path('admin/settings', settings_view.admin_settings, name='admin_settings'),
     path('admin/settings/reveal', settings_view.admin_settings_reveal, name='admin_settings_reveal'),
     path('admin/settings/health', settings_view.admin_settings_health, name='admin_settings_health'),
+    path('settings/public', settings_view.public_settings, name='public_settings'),
     path('settings/search', settings_view.search_game, name='search_game'),
     path('games/create/', settings_view.create_game, name='create_game'),
     path('account/update/', settings_view.update_account_settings, name='update_account_settings'),

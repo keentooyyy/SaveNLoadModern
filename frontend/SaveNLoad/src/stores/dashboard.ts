@@ -59,18 +59,17 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const operationLoading = ref(false);
   const error = ref('');
   const wsToken = ref('');
-  const dashboardLoaded = ref(false);
-  const bootstrapLoaded = dashboardLoaded;
-  const lastLoadedAt = ref(0);
-  let loadPromise: Promise<any> | null = null;
-  const DASHBOARD_TTL_MS = 30000;
 
-  const buildSnapshot = () => ({
-    user: user.value,
-    is_admin: isAdmin.value,
-    recent_games: recentGames.value,
-    available_games: games.value
-  });
+  const resetState = () => {
+    user.value = null;
+    isAdmin.value = false;
+    recentGames.value = [];
+    games.value = [];
+    loading.value = false;
+    operationLoading.value = false;
+    error.value = '';
+    wsToken.value = '';
+  };
 
   const applyDashboardPayload = (data: any) => {
     user.value = data?.user || null;
@@ -82,32 +81,19 @@ export const useDashboardStore = defineStore('dashboard', () => {
     }
   };
 
-  const loadDashboard = async (options: { force?: boolean } = {}) => {
-    const isFresh = dashboardLoaded.value && Date.now() - lastLoadedAt.value < DASHBOARD_TTL_MS;
-    if (!options.force && isFresh && user.value) {
-      return Promise.resolve(buildSnapshot());
-    }
-    if (loadPromise) {
-      return loadPromise;
-    }
+  const loadDashboard = async () => {
     loading.value = true;
     error.value = '';
-    loadPromise = (async () => {
-      try {
-        const data = await apiGet('/dashboard');
-        applyDashboardPayload(data);
-        dashboardLoaded.value = true;
-        lastLoadedAt.value = Date.now();
-        return data;
-      } catch (err: any) {
-        error.value = err?.message || '';
-        throw err;
-      } finally {
-        loading.value = false;
-        loadPromise = null;
-      }
-    })();
-    return loadPromise;
+    try {
+      const data = await apiGet('/dashboard');
+      applyDashboardPayload(data);
+      return data;
+    } catch (err: any) {
+      error.value = err?.message || '';
+      throw err;
+    } finally {
+      loading.value = false;
+    }
   };
 
   const searchGames = async (query: string, sort: string) => {
@@ -264,10 +250,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     operationLoading,
     error,
     wsToken,
-    dashboardLoaded,
-    bootstrapLoaded,
-    lastLoadedAt,
-    bootstrapDashboard: loadDashboard,
+    resetState,
     loadDashboard,
     searchGames,
     saveGame,

@@ -1,6 +1,14 @@
 <template>
   <BareLayout>
-    <div class="container d-flex align-items-center justify-content-center" style="min-height: 80vh;">
+    <div v-if="isLoading" class="container d-flex align-items-center justify-content-center" style="min-height: 80vh;">
+      <div class="text-center">
+        <div class="spinner-border text-white" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-white-50 mt-3 mb-0">Checking session...</p>
+      </div>
+    </div>
+    <div v-else class="container d-flex align-items-center justify-content-center" style="min-height: 80vh;">
       <div class="text-center w-100" style="max-width: 600px;">
         <div class="mb-4">
           <img src="/images/icon.png" alt="Worker Missing" width="80" height="80" />
@@ -72,7 +80,7 @@
 
 <script setup lang="ts">
 import BareLayout from '@/layouts/BareLayout.vue';
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useWorkerListSocket } from '@/composables/useWorkerListSocket';
 import { useAuthStore } from '@/stores/auth';
@@ -81,6 +89,7 @@ import { apiPost } from '@/utils/apiClient';
 const router = useRouter();
 const { workers } = useWorkerListSocket({ reloadOnClose: false });
 const authStore = useAuthStore();
+const isLoading = ref(true);
 
 const claimingId = ref<string | null>(null);
 const hasShownSingleAvailableToast = ref(false);
@@ -144,6 +153,21 @@ watch(availableWorkers, (available) => {
     hasShownSingleAvailableToast.value = true;
   } else if (available.length !== 1) {
     hasShownSingleAvailableToast.value = false;
+  }
+});
+
+onMounted(async () => {
+  try {
+    await authStore.refreshUser();
+    if (!authStore.user) {
+      window.location.assign('/login');
+      return;
+    }
+  } catch {
+    window.location.assign('/login');
+    return;
+  } finally {
+    isLoading.value = false;
   }
 });
 

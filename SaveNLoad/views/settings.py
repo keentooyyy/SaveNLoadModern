@@ -6,7 +6,8 @@ from urllib.parse import urlparse
 
 from django.core.files import File
 from django.db import models
-from rest_framework.decorators import api_view, authentication_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.permissions import AllowAny
 from django.views.decorators.csrf import csrf_protect
 from rest_framework.response import Response
 
@@ -890,3 +891,18 @@ def admin_settings_reveal(request):
     from SaveNLoad.utils.system_settings import get_settings_values
     revealed = get_settings_values(keys=keys, reveal_sensitive=True)
     return json_response_success(data={'settings': revealed})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def public_settings(request):
+    email_enabled = bool(get_setting_value('feature.email.enabled', False))
+    email_registration_required = bool(get_setting_value('feature.email.registration_required', True))
+    return json_response_success(
+        data={
+            'settings': {
+                'email_enabled': email_enabled,
+                'email_registration_required': email_registration_required
+            }
+        }
+    )

@@ -49,7 +49,7 @@ export const useWorkerStatusSocket = (options: WorkerStatusOptions = {}) => {
       if (message.type === 'worker_status') {
         const connected = message.payload?.connected;
         workerAvailable.value = typeof connected === 'boolean' ? connected : null;
-        if (connected === false && options.onWorkerUnavailable) {
+        if (connected === false && options.onWorkerUnavailable && !authStore.suppressWorkerRedirect) {
           await options.onWorkerUnavailable();
         }
       }

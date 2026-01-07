@@ -14,7 +14,12 @@
       <div class="mb-2">
         <div class="d-flex justify-content-between align-items-center">
           <InputLabel text="PASSWORD" label-class="mb-0" />
-          <RouterLink to="/forgot-password" class="text-secondary text-decoration-none fs-6" tabindex="-1">
+          <RouterLink
+            v-if="showForgotPassword"
+            to="/forgot-password"
+            class="text-secondary text-decoration-none fs-6"
+            tabindex="-1"
+          >
             Forgot Password?
           </RouterLink>
         </div>
@@ -71,19 +76,25 @@
     </form>
     <Teleport to="body">
       <div
-        v-if="guestModal.open"
-        class="modal fade show confirm-modal"
+        v-if="showGuestModal"
+        ref="guestModalEl"
+        class="modal fade confirm-modal"
+        :class="{ show: guestModal.open }"
         tabindex="-1"
         role="dialog"
         aria-modal="true"
         :aria-labelledby="guestModal.titleId"
-        @click.self="closeGuestModal"
       >
         <div class="modal-dialog modal-dialog-centered" style="max-width: 460px;">
           <div class="modal-content modal-shell">
             <div class="modal-header modal-shell__header">
               <h5 :id="guestModal.titleId" class="modal-title text-white mb-0">Guest Account</h5>
-              <button class="btn-close btn-close-white" type="button" aria-label="Close" @click="closeGuestModal"></button>
+              <button
+                class="btn-close btn-close-white"
+                type="button"
+                aria-label="Close"
+                @click="requestGuestClose"
+              ></button>
             </div>
             <div class="modal-body modal-shell__body">
               <p class="text-white-50 mb-3">{{ guestModal.message }}</p>
@@ -106,20 +117,24 @@
               </div>
             </div>
             <div class="modal-footer modal-shell__footer d-flex justify-content-end">
-              <button class="btn btn-outline-secondary text-white" type="button" @click="closeGuestModal">
+              <button class="btn btn-outline-secondary text-white" type="button" @click="requestGuestClose">
                 Close
               </button>
             </div>
           </div>
         </div>
       </div>
-      <div v-if="guestModal.open" class="modal-backdrop fade show confirm-modal-backdrop"></div>
+      <div
+        v-if="showGuestModal"
+        class="modal-backdrop fade confirm-modal-backdrop"
+        :class="{ show: guestModal.open }"
+      ></div>
     </Teleport>
   </AuthLayout>
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch, ref } from 'vue';
+import { reactive, computed, watch, ref, nextTick, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
@@ -133,6 +148,7 @@ import AuthFooterLink from '@/components/molecules/AuthFooterLink.vue';
 const store = useAuthStore();
 const dashboardStore = useDashboardStore();
 const router = useRouter();
+const guestModalEl = ref<HTMLElement | null>(null);
 
 const form = reactive({
   username: '',
@@ -142,18 +158,25 @@ const form = reactive({
 
 const loading = computed(() => store.loading);
 const fieldErrors = computed(() => store.fieldErrors);
+const showForgotPassword = computed(() => (
+  store.authConfig.emailEnabled && store.authConfig.emailRegistrationRequired
+));
 const activeAction = ref<'login' | 'guest' | null>(null);
 const isSubmitting = computed(() => loading.value || activeAction.value !== null);
 const isLoginLoading = computed(() => activeAction.value === 'login' && isSubmitting.value);
 const isGuestLoading = computed(() => activeAction.value === 'guest' && isSubmitting.value);
-  const guestModal = reactive({
-    open: false,
-    loading: false,
-    username: '',
-    password: '',
-    message: 'Save these credentials before closing.',
-    titleId: `guestModalTitle_${Math.random().toString(36).slice(2, 8)}`
-  });
+const guestModal = reactive({
+  open: false,
+  closing: false,
+  manualClose: false,
+  loading: false,
+  username: '',
+  password: '',
+  message: 'Save these credentials before closing.',
+  titleId: `guestModalTitle_${Math.random().toString(36).slice(2, 8)}`
+});
+
+const showGuestModal = computed(() => guestModal.open || guestModal.closing);
 
 const clearFieldError = (key: string) => {
   if (store.fieldErrors && store.fieldErrors[key]) {
@@ -165,6 +188,10 @@ const clearFieldError = (key: string) => {
     store.error = '';
   }
 };
+
+onMounted(async () => {
+  await store.loadAuthConfig();
+});
 
 watch(() => form.username, () => clearFieldError('username'));
 watch(() => form.password, () => clearFieldError('password'));
@@ -205,7 +232,10 @@ const onGuest = async () => {
     return;
   }
   activeAction.value = 'guest';
+  store.suppressWorkerRedirect = true;
   guestModal.open = true;
+  guestModal.closing = false;
+  guestModal.manualClose = false;
   guestModal.loading = true;
   guestModal.username = '';
   guestModal.password = '';
@@ -217,30 +247,59 @@ const onGuest = async () => {
   } catch {
     // handled by store
     guestModal.open = false;
+    store.suppressWorkerRedirect = false;
   } finally {
     activeAction.value = null;
     guestModal.loading = false;
   }
 };
 
+const requestGuestClose = () => {
+  guestModal.manualClose = true;
+  store.suppressWorkerRedirect = false;
+  closeGuestModal();
+};
+
 const closeGuestModal = async () => {
-  guestModal.open = false;
-  if (!store.user) {
+  if (!guestModal.manualClose) {
     return;
   }
-  try {
-    await dashboardStore.loadDashboard();
-    await router.push('/dashboard');
-  } catch (err: any) {
-    if (err?.status === 503) {
-      await router.push('/worker-required');
-      return;
-    }
-    if (err?.status === 401) {
-      return;
-    }
-    await router.push('/dashboard');
+  if (guestModal.closing) {
+    return;
   }
+  guestModal.open = false;
+  guestModal.closing = true;
+  if (!store.user) {
+    guestModal.closing = false;
+    return;
+  }
+  await nextTick();
+  const modalEl = guestModalEl.value;
+  const doRedirect = async () => {
+    guestModal.closing = false;
+    try {
+      await dashboardStore.loadDashboard();
+      window.location.assign('/dashboard');
+    } catch (err: any) {
+      if (err?.status === 503) {
+        window.location.assign('/worker-required');
+        return;
+      }
+      if (err?.status === 401) {
+        return;
+      }
+      window.location.assign('/dashboard');
+    }
+  };
+  if (!modalEl) {
+    await doRedirect();
+    return;
+  }
+  const onTransitionEnd = () => {
+    modalEl.removeEventListener('transitionend', onTransitionEnd);
+    void doRedirect();
+  };
+  modalEl.addEventListener('transitionend', onTransitionEnd);
 };
 </script>
 
@@ -248,11 +307,23 @@ const closeGuestModal = async () => {
 .confirm-modal {
   display: block;
   z-index: 1250;
+  opacity: 0;
+  transition: opacity 0.25s ease;
 }
 
 .confirm-modal-backdrop {
   background: var(--overlay-bg);
   z-index: 1240;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.confirm-modal.show {
+  opacity: 1;
+}
+
+.confirm-modal-backdrop.show {
+  opacity: 1;
 }
 
 .guest-credential-card {

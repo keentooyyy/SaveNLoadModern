@@ -81,9 +81,7 @@ const loadGame = async () => {
   loading.value = true;
   error.value = '';
   try {
-    if (!dashboardStore.dashboardLoaded) {
-      await dashboardStore.loadDashboard();
-    }
+    await dashboardStore.loadDashboard();
     const game = dashboardStore.games.find((item) => item.id === gameId.value);
     if (!game) {
       await router.replace('/dashboard');
@@ -127,15 +125,15 @@ onMounted(() => {
   void loadGame();
 });
 
-const goToSettings = () => router.push('/settings');
-const goToProfile = () => router.push('/settings');
+const goToSettings = () => window.location.assign('/settings');
+const goToProfile = () => window.location.assign('/settings');
 const onLogout = async () => {
   try {
     await authStore.logout();
   } catch {
     // ignore
   } finally {
-    await router.push('/login');
+    window.location.assign('/login');
   }
 };
 </script>
