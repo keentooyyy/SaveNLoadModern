@@ -65,6 +65,16 @@ const props = defineProps({
 const AVATAR_SEED_PREFIX = 'savenload_avatar_seed_';
 const avatarSeed = ref('');
 const lastLabel = ref('');
+const cachedLabel = ref('');
+const cachedSeed = ref('');
+
+if (typeof window !== 'undefined') {
+  cachedLabel.value = window.sessionStorage.getItem('savenload_avatar_seed_label') || '';
+  cachedSeed.value = window.sessionStorage.getItem('savenload_avatar_seed') || '';
+  if (cachedSeed.value) {
+    avatarSeed.value = cachedSeed.value;
+  }
+}
 
 const randomId = () => {
   const uuid = (crypto as any)?.randomUUID?.() || Math.random().toString(16).slice(2, 10);
@@ -92,8 +102,22 @@ watch(
     if (label === lastLabel.value && avatarSeed.value) {
       return;
     }
+    if (!label && cachedSeed.value) {
+      avatarSeed.value = cachedSeed.value;
+      return;
+    }
     lastLabel.value = label;
     avatarSeed.value = resolveSeed(label || 'user');
+    if (label && typeof window !== 'undefined') {
+      try {
+        window.sessionStorage.setItem('savenload_avatar_seed_label', label);
+        window.sessionStorage.setItem('savenload_avatar_seed', avatarSeed.value);
+        cachedLabel.value = label;
+        cachedSeed.value = avatarSeed.value;
+      } catch {
+        // ignore
+      }
+    }
   },
   { immediate: true }
 );
@@ -104,7 +128,7 @@ const avatarUrl = computed(() => {
 });
 
 const avatarAlt = computed(() => 'User avatar');
-const displayName = computed(() => props.userLabel || 'User');
+const displayName = computed(() => props.userLabel || cachedLabel.value || 'User');
 </script>
 
 <style scoped>

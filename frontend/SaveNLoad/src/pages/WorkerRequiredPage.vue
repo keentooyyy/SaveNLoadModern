@@ -85,6 +85,7 @@ import { useRouter } from 'vue-router';
 import { useWorkerListSocket } from '@/composables/useWorkerListSocket';
 import { useAuthStore } from '@/stores/auth';
 import { apiPost } from '@/utils/apiClient';
+import { notify } from '@/utils/notify';
 
 const router = useRouter();
 const { workers } = useWorkerListSocket({ reloadOnClose: false });
@@ -93,28 +94,33 @@ const isLoading = ref(true);
 
 const claimingId = ref<string | null>(null);
 const hasShownSingleAvailableToast = ref(false);
+const redirecting = ref(false);
+const localClientId = ref<string | null>(null);
 
 const hasWorkers = computed(() => workers.value.length > 0);
 const availableWorkers = computed(() => workers.value.filter(worker => !worker.claimed));
+const claimedWorkerForUser = computed(() => {
+  const username = authStore.user?.username;
+  if (!username) {
+    return null;
+  }
+  return workers.value.find((worker) => worker.claimed && worker.linked_user === username) || null;
+});
+const claimedWorkerForClient = computed(() => {
+  const clientId = localClientId.value;
+  if (!clientId) {
+    return null;
+  }
+  return workers.value.find((worker) => worker.client_id === clientId && worker.claimed) || null;
+});
 
-const notify = {
-  success: (msg: string) => {
-    const t = (window as any).toastr;
-    if (t?.success) {
-      t.success(msg);
-    }
-  },
-  error: (msg: string) => {
-    const t = (window as any).toastr;
-    if (t?.error) {
-      t.error(msg);
-    }
-  },
-  info: (msg: string) => {
-    const t = (window as any).toastr;
-    if (t?.info) {
-      t.info(msg);
-    }
+const redirectIfClaimed = () => {
+  if (redirecting.value) {
+    return;
+  }
+  if (claimedWorkerForUser.value || claimedWorkerForClient.value) {
+    redirecting.value = true;
+    window.location.assign('/dashboard');
   }
 };
 
@@ -127,7 +133,7 @@ const claimWorker = async (clientId: string) => {
     claimingId.value = clientId;
     const data = await apiPost('/api/client/claim/', { client_id: clientId });
     if (data?.message) {
-      notify.success(data.message);
+      notify.flashSuccess(data.message);
     }
     try {
       window.localStorage.setItem('savenload_client_id', clientId);
@@ -145,6 +151,7 @@ const claimWorker = async (clientId: string) => {
 };
 
 const refreshList = () => {
+  notify.flashInfo('Refreshing worker list...');
   window.location.reload();
 };
 
@@ -163,12 +170,22 @@ onMounted(async () => {
       window.location.assign('/login');
       return;
     }
+    try {
+      localClientId.value = window.localStorage.getItem('savenload_client_id');
+    } catch {
+      localClientId.value = null;
+    }
+    redirectIfClaimed();
   } catch {
     window.location.assign('/login');
     return;
   } finally {
     isLoading.value = false;
   }
+});
+
+watch([claimedWorkerForUser, claimedWorkerForClient], () => {
+  redirectIfClaimed();
 });
 
 </script>

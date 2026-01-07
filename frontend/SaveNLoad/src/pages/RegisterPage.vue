@@ -49,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch, ref, onMounted } from 'vue';
+import { reactive, computed, watch, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
@@ -58,6 +58,7 @@ import IconButton from '@/components/atoms/IconButton.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
 import TextInput from '@/components/atoms/TextInput.vue';
 import AuthFooterLink from '@/components/molecules/AuthFooterLink.vue';
+import { useAuthConfig } from '@/composables/useAuthConfig';
 
 const store = useAuthStore();
 const router = useRouter();
@@ -73,7 +74,11 @@ const loading = computed(() => store.loading);
 const fieldErrors = computed(() => store.fieldErrors);
 const submitting = ref(false);
 const isSubmitting = computed(() => loading.value || submitting.value);
-const showEmailField = computed(() => store.authConfig.emailRegistrationRequired);
+const showEmailField = computed(() => (
+  store.authConfigLoaded && store.authConfig.emailRegistrationRequired
+));
+
+useAuthConfig();
 
 const clearFieldError = (key: string) => {
   if (store.fieldErrors && store.fieldErrors[key]) {
@@ -114,7 +119,4 @@ const onSubmit = async () => {
   }
 };
 
-onMounted(async () => {
-  await store.loadAuthConfig();
-});
 </script>

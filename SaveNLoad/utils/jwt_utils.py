@@ -37,6 +37,13 @@ def issue_access_token(user) -> str:
 def issue_refresh_token(user, days: int, user_agent: str | None = None, ip_address: str | None = None) -> str:
     now = _utcnow()
     exp = now + timedelta(days=days)
+    return issue_refresh_token_with_exp(user, exp, user_agent=user_agent, ip_address=ip_address)
+
+
+def issue_refresh_token_with_exp(user, exp: datetime, user_agent: str | None = None, ip_address: str | None = None) -> str:
+    now = _utcnow()
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
     jti = uuid.uuid4()
     payload = {
         'sub': str(user.id),

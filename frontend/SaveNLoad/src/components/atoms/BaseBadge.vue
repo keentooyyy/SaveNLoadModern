@@ -1,15 +1,11 @@
 <template>
-  <span :class="classes">
+  <span class="badge" :class="badgeClass">
     <slot />
   </span>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-
-const props = defineProps({
-  variant: { type: String, default: 'secondary' }
+defineProps({
+  badgeClass: { type: String, default: '' }
 });
-
-const classes = computed(() => ['badge', `bg-${props.variant}`]);
 </script>

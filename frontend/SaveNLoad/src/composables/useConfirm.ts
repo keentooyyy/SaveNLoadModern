@@ -1,4 +1,5 @@
 import { reactive } from 'vue';
+import { pauseBootstrapModals, restoreBootstrapModals } from '@/utils/modalStack';
 
 type ConfirmOptions = {
   title?: string;
@@ -16,6 +17,7 @@ type ConfirmState = {
   cancelText: string;
   variant: 'primary' | 'danger';
   resolve: ((value: boolean) => void) | null;
+  pauseToken: string | null;
 };
 
 const state = reactive<ConfirmState>({
@@ -25,12 +27,15 @@ const state = reactive<ConfirmState>({
   confirmText: 'Confirm',
   cancelText: 'Cancel',
   variant: 'primary',
-  resolve: null
+  resolve: null,
+  pauseToken: null
 });
 
 const close = () => {
   state.open = false;
   state.resolve = null;
+  restoreBootstrapModals(state.pauseToken);
+  state.pauseToken = null;
 };
 
 const requestConfirm = (options: ConfirmOptions = {}) => {
@@ -39,6 +44,7 @@ const requestConfirm = (options: ConfirmOptions = {}) => {
   state.confirmText = options.confirmText || 'Confirm';
   state.cancelText = options.cancelText || 'Cancel';
   state.variant = options.variant || 'primary';
+  state.pauseToken = pauseBootstrapModals();
   state.open = true;
   return new Promise<boolean>((resolve) => {
     state.resolve = resolve;

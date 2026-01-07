@@ -5,6 +5,7 @@ import router from './router';
 import './styles/custom.css';
 import './styles/app.css';
 import { useAuthStore } from './stores/auth';
+import { notify } from './utils/notify';
 
 const app = createApp(App);
 
@@ -23,6 +24,7 @@ app.use(createPinia());
 app.use(router);
 
 initToastr();
+notify.showFlash();
 
 router.isReady().then(async () => {
   const auth = useAuthStore();

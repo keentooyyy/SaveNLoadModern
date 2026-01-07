@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { apiDelete, apiGet, apiPost } from '@/utils/apiClient';
+import { notify } from '@/utils/notify';
 
 type DashboardUser = {
   id: number;
@@ -19,21 +20,6 @@ type GameSummary = {
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE;
-
-const notify = {
-  success: (msg: string) => {
-    const t = (window as any).toastr;
-    if (t?.success) {
-      t.success(msg);
-    }
-  },
-  error: (msg: string) => {
-    const t = (window as any).toastr;
-    if (t?.error) {
-      t.error(msg);
-    }
-  }
-};
 
 const resolveMediaUrl = (url: string) => {
   if (!url) {

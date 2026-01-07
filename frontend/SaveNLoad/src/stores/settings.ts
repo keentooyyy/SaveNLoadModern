@@ -1,21 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/utils/apiClient';
-
-const notify = {
-  success: (msg: string) => {
-    const t = (window as any).toastr;
-    if (t?.success) {
-      t.success(msg);
-    }
-  },
-  error: (msg: string) => {
-    const t = (window as any).toastr;
-    if (t?.error) {
-      t.error(msg);
-    }
-  }
-};
+import { notify } from '@/utils/notify';
 
 export const useSettingsStore = defineStore('settings', () => {
   const loading = ref(false);
@@ -44,6 +30,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const adminSettingsHealthLoading = ref(false);
   const adminSettingsRevealLoading = ref(false);
   const adminSettingsHealth = ref<Record<string, any> | null>(null);
+  const workers = ref<any[]>([]);
   const resetState = () => {
     loading.value = false;
     error.value = '';
@@ -71,6 +58,7 @@ export const useSettingsStore = defineStore('settings', () => {
     adminSettingsHealthLoading.value = false;
     adminSettingsRevealLoading.value = false;
     adminSettingsHealth.value = null;
+    workers.value = [];
   };
 
   const createGame = async (payload: { name: string; save_file_locations: string[]; banner?: string }) => {
@@ -238,6 +226,21 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   };
 
+  const listWorkers = async () => {
+    const data = await apiGet('/api/client/workers/');
+    workers.value = data?.workers || [];
+    return data;
+  };
+
+  const unclaimAllWorkers = async () => {
+    const data = await apiPost('/api/client/unclaim-all/', {});
+    if (data?.message) {
+      notify.success(data.message);
+    }
+    workers.value = data?.workers || workers.value;
+    return data;
+  };
+
   return {
     loading,
     error,
@@ -250,6 +253,7 @@ export const useSettingsStore = defineStore('settings', () => {
     adminSettingsHealthLoading,
     adminSettingsRevealLoading,
     adminSettingsHealth,
+    workers,
     resetState,
     createGame,
     updateGame,
@@ -263,6 +267,8 @@ export const useSettingsStore = defineStore('settings', () => {
     loadAdminSettings,
     updateAdminSettings,
     checkAdminSettingsHealth,
-    revealAdminSettings
+    revealAdminSettings,
+    listWorkers,
+    unclaimAllWorkers
   };
 });

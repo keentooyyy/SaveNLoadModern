@@ -53,7 +53,6 @@ body {
     background-color: var(--bs-primary);
     color: var(--color-white);
     border: 1px solid var(--bs-secondary);
-    border-radius: 0.75rem;
     box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175);
 }
 
@@ -67,6 +66,10 @@ body {
 
 .modal-shell__footer {
     border-top: 0;
+}
+
+.modal-shell-paused {
+    display: none !important;
 }
 
 /* Shared auth footer styling */

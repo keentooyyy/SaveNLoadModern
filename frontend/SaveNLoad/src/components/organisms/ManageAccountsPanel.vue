@@ -14,7 +14,7 @@
       <TextInput
         v-model="searchQuery"
         placeholder="Type username or email to search..."
-        :disabled="loading"
+        :disabled="isRefreshing"
       />
     </div>
 
@@ -88,6 +88,7 @@ import { useSettingsStore } from '@/stores/settings';
 import { useConfirm } from '@/composables/useConfirm';
 import LoadingState from '@/components/molecules/LoadingState.vue';
 import EmptyState from '@/components/molecules/EmptyState.vue';
+import { notify } from '@/utils/notify';
 
 type UserItem = {
   id: number;
@@ -108,21 +109,6 @@ const pagination = ref({
   has_next: false,
   has_previous: false
 });
-
-const notify = {
-  success: (msg: string) => {
-    const t = (window as any).toastr;
-    if (t?.success) {
-      t.success(msg);
-    }
-  },
-  error: (msg: string) => {
-    const t = (window as any).toastr;
-    if (t?.error) {
-      t.error(msg);
-    }
-  }
-};
 
 const loadUsers = async (page = 1) => {
   loading.value = true;
@@ -228,9 +214,9 @@ const onDelete = async (user: UserItem) => {
       completionMessage = result.message;
     }
     if (completionMessage) {
-      notify.success(completionMessage);
+      notify.flashSuccess(completionMessage);
     }
-    refreshAndOpen(completionMessage ? 1800 : 0);
+    refreshAndOpen(0);
   } catch (err: any) {
     error.value = err?.message || '';
     if (error.value) {

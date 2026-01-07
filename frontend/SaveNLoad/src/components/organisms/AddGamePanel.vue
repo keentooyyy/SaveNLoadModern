@@ -48,11 +48,13 @@
 
     <GameSearchModal
       v-model:query="modalQuery"
+      :open="searchModalOpen"
       :results="searchResults"
       :loading="searchLoading"
       :error="searchError"
       @search="onModalSearch"
       @select="onSelectGame"
+      @close="searchModalOpen = false"
     />
     <Teleport to="body">
       <div
@@ -90,6 +92,7 @@ const modalQuery = ref('');
 const searchResults = ref<any[]>([]);
 const searchLoading = ref(false);
 const searchError = ref('');
+const searchModalOpen = ref(false);
 
 const bannerUrl = ref('');
 const gameName = ref('');
@@ -101,11 +104,7 @@ const toggleSearch = () => {
 };
 
 const showSearchModal = () => {
-  const modalEl = document.getElementById('gameSearchModal');
-  const bootstrapModal = (window as any)?.bootstrap?.Modal?.getOrCreateInstance(modalEl);
-  if (bootstrapModal) {
-    bootstrapModal.show();
-  }
+  searchModalOpen.value = true;
 };
 
 const performSearch = async (query: string) => {
@@ -153,11 +152,7 @@ const onSelectGame = (game: any) => {
   bannerUrl.value = game?.banner || '';
   const locations = Array.isArray(game?.save_file_locations) ? game.save_file_locations : [];
   saveLocations.value = locations.length ? [...locations] : [''];
-  const modalEl = document.getElementById('gameSearchModal');
-  const bootstrapModal = (window as any)?.bootstrap?.Modal?.getInstance(modalEl);
-  if (bootstrapModal) {
-    bootstrapModal.hide();
-  }
+  searchModalOpen.value = false;
 };
 
 const onReset = () => {

@@ -1,12 +1,17 @@
 <template>
   <input
+    v-model="model"
     :id="id"
     :name="name"
     :type="type"
     :placeholder="placeholder"
-    :value="modelValue"
+    :required="required"
+    :disabled="disabled"
+    :readonly="readonly"
+    :maxlength="maxlength"
+    :tabindex="tabindex"
     class="form-control"
-    @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
+    :class="inputClass"
   />
 </template>
 
@@ -16,8 +21,13 @@ defineProps({
   name: String,
   type: { type: String, default: 'text' },
   placeholder: String,
-  modelValue: String
+  required: { type: Boolean, default: false },
+  disabled: { type: Boolean, default: false },
+  readonly: { type: Boolean, default: false },
+  maxlength: { type: [Number, String], default: undefined },
+  tabindex: { type: [Number, String], default: undefined },
+  inputClass: { type: [String, Array, Object], default: '' }
 });
 
-defineEmits(['update:modelValue']);
+const model = defineModel<string>({ default: '' });
 </script>

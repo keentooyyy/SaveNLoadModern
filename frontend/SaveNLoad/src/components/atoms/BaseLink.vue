@@ -1,11 +1,25 @@
 <template>
-  <RouterLink :to="to" class="link-underline link-underline-opacity-0 link-underline-opacity-100-hover">
+  <component
+    :is="componentType"
+    :to="to"
+    :href="href"
+    :class="linkClass"
+    :tabindex="tabindex"
+  >
     <slot />
-  </RouterLink>
+  </component>
 </template>
 
 <script setup lang="ts">
-defineProps({
-  to: { type: [String, Object], required: true }
+import { computed } from 'vue';
+import { RouterLink } from 'vue-router';
+
+const props = defineProps({
+  to: { type: [String, Object], default: '' },
+  href: { type: String, default: '' },
+  linkClass: { type: String, default: '' },
+  tabindex: { type: [Number, String], default: undefined }
 });
+
+const componentType = computed(() => (props.to ? RouterLink : 'a'));
 </script>

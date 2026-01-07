@@ -1,23 +1,29 @@
 <template>
-  <div class="form-check">
+  <div class="form-check" :class="{ 'form-switch': switchStyle }">
     <input
+      v-model="model"
       class="form-check-input"
+      :class="inputClass"
       type="checkbox"
       :id="id"
-      :checked="modelValue"
-      @change="$emit('update:modelValue', ($event.target as HTMLInputElement).checked)"
+      :disabled="disabled"
     />
-    <label v-if="label" class="form-check-label" :for="id">{{ label }}</label>
-    <slot v-else />
+    <label v-if="label" class="form-check-label" :class="labelClass" :for="id">
+      {{ label }}
+    </label>
+    <slot />
   </div>
 </template>
 
 <script setup lang="ts">
 defineProps({
-  id: String,
-  label: String,
-  modelValue: Boolean
+  id: { type: String, default: '' },
+  label: { type: String, default: '' },
+  disabled: { type: Boolean, default: false },
+  switchStyle: { type: Boolean, default: false },
+  inputClass: { type: String, default: '' },
+  labelClass: { type: String, default: '' }
 });
 
-defineEmits(['update:modelValue']);
+const model = defineModel<boolean>({ default: false });
 </script>

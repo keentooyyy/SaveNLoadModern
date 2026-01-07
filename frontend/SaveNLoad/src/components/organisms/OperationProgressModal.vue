@@ -1,48 +1,45 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open">
-      <div
-        class="modal fade show d-block"
-        role="dialog"
-        aria-modal="true"
-        :aria-labelledby="titleId"
-        @click.self="onClose"
-      >
-        <div class="modal-dialog modal-dialog-centered operation-modal-dialog">
-          <div class="modal-content modal-shell">
-            <header class="modal-header modal-shell__header">
-              <h5 :id="titleId" class="mb-0">{{ title }}</h5>
-              <button
-                v-if="closable"
-                class="btn-close btn-close-white ms-auto"
-                type="button"
-                aria-label="Close"
-                @click="onClose"
-              ></button>
-            </header>
-
-            <div class="modal-body modal-shell__body">
-              <div class="operation-progress">
-                <div class="operation-progress-track">
-                  <div class="operation-progress-bar" :class="variantClass" :style="{ width: `${progress}%` }"></div>
-                </div>
-                <div class="d-flex justify-content-between align-items-center mt-2">
-                  <span class="text-white fw-medium">{{ statusText }}</span>
-                  <span class="text-white-50 small">{{ Math.round(progress) }}%</span>
-                </div>
-                <p v-if="detail" class="text-white-50 small mt-2 mb-0">{{ detail }}</p>
-              </div>
-            </div>
+  <ModalShell
+    :open="open"
+    :show="open"
+    :labelled-by="titleId"
+    modal-class="operation-progress-modal"
+    backdrop-class="operation-progress-backdrop"
+    dialog-class="operation-modal-dialog"
+    @backdrop="onClose"
+  >
+    <template #header>
+      <header class="modal-header modal-shell__header">
+        <h5 :id="titleId" class="mb-0">{{ title }}</h5>
+        <button
+          v-if="closable"
+          class="btn-close btn-close-white ms-auto"
+          type="button"
+          aria-label="Close"
+          @click="onClose"
+        ></button>
+      </header>
+    </template>
+    <template #body>
+      <div class="modal-body modal-shell__body">
+        <div class="operation-progress">
+          <div class="operation-progress-track">
+            <div class="operation-progress-bar" :class="variantClass" :style="{ width: `${progress}%` }"></div>
           </div>
+          <div class="d-flex justify-content-between align-items-center mt-2">
+            <span class="text-white fw-medium">{{ statusText }}</span>
+            <span class="text-white-50 small">{{ Math.round(progress) }}%</span>
+          </div>
+          <p v-if="detail" class="text-white-50 small mt-2 mb-0">{{ detail }}</p>
         </div>
       </div>
-      <div class="modal-backdrop fade show"></div>
-    </div>
-  </Teleport>
+    </template>
+  </ModalShell>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import ModalShell from '@/components/molecules/ModalShell.vue';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -72,19 +69,6 @@ const variantClass = computed(() => {
   return 'is-info';
 });
 
-const iconClass = computed(() => {
-  if (props.variant === 'success') {
-    return 'fas fa-check';
-  }
-  if (props.variant === 'danger') {
-    return 'fas fa-times';
-  }
-  if (props.variant === 'warning') {
-    return 'fas fa-exclamation';
-  }
-  return 'fas fa-bolt';
-});
-
 const onClose = () => {
   if (!props.closable) {
     return;
@@ -96,6 +80,16 @@ const onClose = () => {
 <style scoped>
 .operation-modal-dialog {
   max-width: 520px;
+}
+
+.operation-progress-modal {
+  display: block;
+  z-index: 1250;
+}
+
+.operation-progress-backdrop {
+  background: var(--overlay-bg);
+  z-index: 1240;
 }
 
 .modal-content {

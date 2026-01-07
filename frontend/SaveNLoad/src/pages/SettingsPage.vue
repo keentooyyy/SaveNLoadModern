@@ -20,6 +20,7 @@
         <AdminSettingsPanel v-if="isAdmin" />
         <ManageAccountsPanel v-if="isAdmin" />
         <OperationQueuePanel v-if="isAdmin" />
+        <WorkerManagementPanel v-if="isAdmin" />
         <GuestUpgradePanel v-if="isGuest" />
         <AccountSettingsPanel v-if="!isGuest" />
       </div>
@@ -39,6 +40,7 @@ import OperationQueuePanel from '@/components/organisms/OperationQueuePanel.vue'
 import AccountSettingsPanel from '@/components/organisms/AccountSettingsPanel.vue';
 import ManageGameModal from '@/components/organisms/ManageGameModal.vue';
 import GuestUpgradePanel from '@/components/organisms/GuestUpgradePanel.vue';
+import WorkerManagementPanel from '@/components/organisms/WorkerManagementPanel.vue';
 import { useAuthStore } from '@/stores/auth';
 
 const authStore = useAuthStore();

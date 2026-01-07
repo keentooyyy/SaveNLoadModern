@@ -12,6 +12,7 @@ from SaveNLoad.services.redis_worker_service import (
     get_worker_claim_data,
     claim_worker as redis_claim_worker,
     unclaim_worker as redis_unclaim_worker,
+    unclaim_all_workers as redis_unclaim_all_workers,
     is_worker_online,
     get_workers_snapshot,
     issue_ws_token,
@@ -19,7 +20,8 @@ from SaveNLoad.services.redis_worker_service import (
 from SaveNLoad.views.api_helpers import (
     parse_json_body,
     json_response_error,
-    json_response_success
+    json_response_success,
+    check_admin_or_error
 )
 from SaveNLoad.views.custom_decorators import get_current_user
 
@@ -189,3 +191,55 @@ def unclaim_worker(request):
     except Exception as e:
         print(f"ERROR: Failed to unclaim worker: {e}")
         return json_response_error('Failed to unclaim worker', status=500)
+
+
+@api_view(["GET"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def list_workers(request):
+    """
+    List all online workers with claim status (Admin only).
+    """
+    user = get_current_user(request)
+    if not user:
+        return Response(
+            {'error': 'Not authenticated. Please log in.', 'requires_login': True},
+            status=401
+        )
+
+    error_response = check_admin_or_error(user)
+    if error_response:
+        return error_response
+
+    return json_response_success(
+        data={'workers': get_workers_snapshot()}
+    )
+
+
+@api_view(["POST"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def unclaim_all_workers(request):
+    """
+    Unclaim all online workers (Admin only).
+    """
+    user = get_current_user(request)
+    if not user:
+        return Response(
+            {'error': 'Not authenticated. Please log in.', 'requires_login': True},
+            status=401
+        )
+
+    error_response = check_admin_or_error(user)
+    if error_response:
+        return error_response
+
+    unpaired = redis_unclaim_all_workers()
+
+    return json_response_success(
+        message=f'Unpaired {len(unpaired)} worker(s).',
+        data={
+            'unpaired': unpaired,
+            'workers': get_workers_snapshot()
+        }
+    )

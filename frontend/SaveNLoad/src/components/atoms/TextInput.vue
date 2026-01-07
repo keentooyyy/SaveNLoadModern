@@ -1,5 +1,5 @@
 <template>
-  <input
+  <BaseInput
     v-model="model"
     :id="id"
     :name="name"
@@ -10,13 +10,15 @@
     :readonly="readonly"
     :maxlength="maxlength"
     :tabindex="tabindex"
-    class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white"
-    :class="[{ 'is-invalid': invalid }, inputClass]"
+    :input-class="inputClasses"
   />
 </template>
 
 <script setup lang="ts">
-defineProps({
+import { computed } from 'vue';
+import BaseInput from '@/components/atoms/BaseInput.vue';
+
+const props = defineProps({
   id: String,
   name: String,
   type: { type: String, default: 'text' },
@@ -31,4 +33,10 @@ defineProps({
 });
 
 const model = defineModel<string>({ default: '' });
+
+const inputClasses = computed(() => ([
+  'color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white',
+  { 'is-invalid': !!props.invalid },
+  props.inputClass
+]));
 </script>

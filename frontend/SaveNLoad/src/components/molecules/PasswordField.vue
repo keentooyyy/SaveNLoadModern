@@ -1,14 +1,13 @@
 <template>
   <div class="position-relative">
-    <input
+    <BaseInput
       v-model="model"
       :id="id"
       :name="name"
       :type="visible ? 'text' : 'password'"
       :placeholder="placeholder"
-      class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white pe-5"
-      :class="{ 'is-invalid': invalid }"
       :tabindex="tabindex"
+      :input-class="inputClasses"
     />
     <i
       :id="toggleId"
@@ -23,7 +22,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import BaseInput from '@/components/atoms/BaseInput.vue';
 
 const props = defineProps({
   id: String,
@@ -37,6 +37,11 @@ const props = defineProps({
 const model = defineModel<string>({ default: '' });
 
 const visible = ref(false);
+
+const inputClasses = computed(() => ([
+  'color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white pe-5',
+  { 'is-invalid': props.invalid }
+]));
 
 const toggle = () => {
   visible.value = !visible.value;

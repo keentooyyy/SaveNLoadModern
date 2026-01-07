@@ -1,58 +1,67 @@
 <template>
-  <div class="modal fade" id="gameSearchModal" tabindex="-1" aria-labelledby="gameSearchModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered modal-lg" style="max-width: 900px;">
-      <div class="modal-content modal-shell">
-        <div class="modal-header modal-shell__header">
-          <h5 class="modal-title text-white" id="gameSearchModalLabel">Select Item</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body modal-shell__body overflow-auto" style="max-height: 500px;">
-          <LoadingState v-if="loading" message="Searching..." spinner-class="text-secondary" />
-          <EmptyState v-else-if="error" :message="error" />
-          <EmptyState v-else-if="!results.length" message="No games found." />
-          <div v-else class="search-results">
-            <div
-              v-for="game in results"
-              :key="game.id"
-              class="bg-primary text-white d-flex align-items-center gap-3 result-item"
-              role="button"
-              tabindex="0"
-              @click="emit('select', game)"
-              @keydown.enter.prevent="emit('select', game)"
-            >
-              <div v-if="game.banner" class="flex-shrink-0 rounded overflow-hidden bg-dark thumb">
-                <img :src="game.banner" :alt="game.name" class="w-100 h-100 object-fit-cover" referrerpolicy="no-referrer" />
+  <ModalShell
+    :open="open"
+    :show="open"
+    :labelled-by="labelId"
+    dialog-class="modal-dialog-scrollable modal-lg"
+    dialog-style="max-width: 900px;"
+    @backdrop="emit('close')"
+  >
+    <template #header>
+      <div class="modal-header modal-shell__header">
+        <h5 class="modal-title text-white" :id="labelId">Select Item</h5>
+        <button type="button" class="btn-close btn-close-white" aria-label="Close" @click="emit('close')"></button>
+      </div>
+    </template>
+    <template #body>
+      <div class="modal-body modal-shell__body overflow-auto" style="max-height: 500px;">
+        <LoadingState v-if="loading" message="Searching..." spinner-class="text-secondary" />
+        <EmptyState v-else-if="error" :message="error" />
+        <EmptyState v-else-if="!results.length" message="No games found." />
+        <div v-else class="search-results">
+          <div
+            v-for="game in results"
+            :key="game.id"
+            class="bg-primary text-white d-flex align-items-center gap-3 result-item"
+            role="button"
+            tabindex="0"
+            @click="emit('select', game)"
+            @keydown.enter.prevent="emit('select', game)"
+          >
+            <div v-if="game.banner" class="flex-shrink-0 rounded overflow-hidden bg-dark thumb">
+              <img :src="game.banner" :alt="game.name" class="w-100 h-100 object-fit-cover" referrerpolicy="no-referrer" />
+            </div>
+            <div v-else class="flex-shrink-0 rounded bg-dark d-flex align-items-center justify-content-center thumb">
+              <i class="fas fa-gamepad text-white-50 fs-4"></i>
+            </div>
+            <div class="flex-grow-1 min-w-0">
+              <div class="fw-semibold text-truncate">
+                {{ formatTitle(game) }}
               </div>
-              <div v-else class="flex-shrink-0 rounded bg-dark d-flex align-items-center justify-content-center thumb">
-                <i class="fas fa-gamepad text-white-50 fs-4"></i>
-              </div>
-              <div class="flex-grow-1 min-w-0">
-                <div class="fw-semibold text-truncate">
-                  {{ formatTitle(game) }}
-                </div>
-                <div class="text-white-50 small text-truncate">{{ formatSubtitle(game) }}</div>
-              </div>
+              <div class="text-white-50 small text-truncate">{{ formatSubtitle(game) }}</div>
             </div>
           </div>
         </div>
-        <div class="modal-footer modal-shell__footer d-flex gap-2">
-          <InputGroup
-            button-first
-            v-model="query"
-            placeholder="Type game name to search..."
-            button-label="Search"
-            button-icon="fa-search"
-            button-class="text-white"
-            @action="emit('search')"
-            class="flex-fill"
-          />
-          <IconButton type="button" variant="outline-secondary" class="text-white" data-bs-dismiss="modal">
-            Cancel
-          </IconButton>
-        </div>
       </div>
-    </div>
-  </div>
+    </template>
+    <template #footer>
+      <div class="modal-footer modal-shell__footer d-flex gap-2">
+        <InputGroup
+          button-first
+          v-model="query"
+          placeholder="Type game name to search..."
+          button-label="Search"
+          button-icon="fa-search"
+          button-class="text-white"
+          @action="emit('search')"
+          class="flex-fill"
+        />
+        <IconButton type="button" variant="outline-secondary" class="text-white" @click="emit('close')">
+          Cancel
+        </IconButton>
+      </div>
+    </template>
+  </ModalShell>
 </template>
 
 <script setup lang="ts">
@@ -60,16 +69,20 @@ import IconButton from '@/components/atoms/IconButton.vue';
 import InputGroup from '@/components/molecules/InputGroup.vue';
 import LoadingState from '@/components/molecules/LoadingState.vue';
 import EmptyState from '@/components/molecules/EmptyState.vue';
+import ModalShell from '@/components/molecules/ModalShell.vue';
 
-const emit = defineEmits(['search', 'select']);
+const emit = defineEmits(['search', 'select', 'close']);
 
 const query = defineModel<string>('query', { default: '' });
 
 defineProps({
+  open: { type: Boolean, default: false },
   results: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' }
 });
+
+const labelId = `gameSearchModalLabel_${Math.random().toString(36).slice(2, 8)}`;
 
 const formatTitle = (game: any) => {
   const title = game?.name || 'Unknown';

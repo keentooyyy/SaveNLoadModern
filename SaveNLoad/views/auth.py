@@ -20,6 +20,7 @@ from SaveNLoad.utils.email_service import send_otp_email
 from SaveNLoad.utils.jwt_utils import (
     issue_access_token,
     issue_refresh_token,
+    issue_refresh_token_with_exp,
     issue_reset_token,
     decode_token,
     find_active_refresh_token,
@@ -550,9 +551,13 @@ def refresh_token_view(request):
         return _json_error('Refresh token context mismatch.', http_status=status.HTTP_401_UNAUTHORIZED)
 
     access_token = issue_access_token(user)
-    new_refresh_token = issue_refresh_token(
+    remaining_seconds = int((token_record.expires_at - timezone.now()).total_seconds())
+    if remaining_seconds <= 0:
+        revoke_refresh_token(jti)
+        return _json_error('Refresh token expired.', http_status=status.HTTP_401_UNAUTHORIZED)
+    new_refresh_token = issue_refresh_token_with_exp(
         user,
-        settings.AUTH_REFRESH_TOKEN_DAYS,
+        token_record.expires_at,
         user_agent=request.headers.get('User-Agent'),
         ip_address=_get_client_ip(request)
     )
@@ -570,7 +575,7 @@ def refresh_token_view(request):
         response,
         settings.AUTH_REFRESH_COOKIE_NAME,
         new_refresh_token,
-        max_age=int(timedelta(days=settings.AUTH_REFRESH_TOKEN_DAYS).total_seconds())
+        max_age=remaining_seconds
     )
     return response
 

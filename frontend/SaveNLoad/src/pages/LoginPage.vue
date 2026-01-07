@@ -31,16 +31,13 @@
         />
       </div>
       <div class="mb-3">
-        <div class="form-check">
-          <input
-            class="form-check-input bg-primary border-secondary"
-            type="checkbox"
-            id="rememberMe"
-            v-model="form.rememberMe"
-            tabindex="-1"
-          />
-          <label class="form-check-label text-white fs-6" for="rememberMe">Remember Me</label>
-        </div>
+        <BaseCheckbox
+          id="rememberMe"
+          v-model="form.rememberMe"
+          label="Remember Me"
+          input-class="bg-primary border-secondary"
+          label-class="text-white fs-6"
+        />
       </div>
       <div class="d-grid">
         <IconButton
@@ -74,67 +71,61 @@
         tabindex="-1"
       />
     </form>
-    <Teleport to="body">
-      <div
-        v-if="showGuestModal"
-        ref="guestModalEl"
-        class="modal fade confirm-modal"
-        :class="{ show: guestModal.open }"
-        tabindex="-1"
-        role="dialog"
-        aria-modal="true"
-        :aria-labelledby="guestModal.titleId"
-      >
-        <div class="modal-dialog modal-dialog-centered" style="max-width: 460px;">
-          <div class="modal-content modal-shell">
-            <div class="modal-header modal-shell__header">
-              <h5 :id="guestModal.titleId" class="modal-title text-white mb-0">Guest Account</h5>
-              <button
-                class="btn-close btn-close-white"
-                type="button"
-                aria-label="Close"
-                @click="requestGuestClose"
-              ></button>
-            </div>
-            <div class="modal-body modal-shell__body">
-              <p class="text-white-50 mb-3">{{ guestModal.message }}</p>
-              <div v-if="guestModal.loading" class="text-white-50">Creating guest account...</div>
-              <div v-else class="text-white">
-                <div class="guest-credential-card">
-                  <div class="guest-credential-title">Your Guest Credentials</div>
-                  <div class="guest-credential-row">
-                    <span class="guest-credential-label">Username</span>
-                    <code class="guest-credential-value">{{ guestModal.username }}</code>
-                  </div>
-                  <div class="guest-credential-row">
-                    <span class="guest-credential-label">Password</span>
-                    <code class="guest-credential-value">{{ guestModal.password }}</code>
-                  </div>
-                  <div class="guest-credential-hint">
-                    Make a note of these credentials. You will need them to upgrade later.
-                  </div>
-                </div>
+    <ModalShell
+      ref="guestModalShell"
+      :open="showGuestModal"
+      :show="guestModal.open"
+      :labelled-by="guestModal.titleId"
+      modal-class="confirm-modal"
+      backdrop-class="confirm-modal-backdrop"
+      dialog-style="max-width: 460px;"
+    >
+      <template #header>
+        <div class="modal-header modal-shell__header">
+          <h5 :id="guestModal.titleId" class="modal-title text-white mb-0">Guest Account</h5>
+          <button
+            class="btn-close btn-close-white"
+            type="button"
+            aria-label="Close"
+            @click="requestGuestClose"
+          ></button>
+        </div>
+      </template>
+      <template #body>
+        <div class="modal-body modal-shell__body">
+          <p class="text-white-50 mb-3">{{ guestModal.message }}</p>
+          <div v-if="guestModal.loading" class="text-white-50">Creating guest account...</div>
+          <div v-else class="text-white">
+            <div class="guest-credential-card">
+              <div class="guest-credential-title">Your Guest Credentials</div>
+              <div class="guest-credential-row">
+                <span class="guest-credential-label">Username</span>
+                <code class="guest-credential-value">{{ guestModal.username }}</code>
               </div>
-            </div>
-            <div class="modal-footer modal-shell__footer d-flex justify-content-end">
-              <button class="btn btn-outline-secondary text-white" type="button" @click="requestGuestClose">
-                Close
-              </button>
+              <div class="guest-credential-row">
+                <span class="guest-credential-label">Password</span>
+                <code class="guest-credential-value">{{ guestModal.password }}</code>
+              </div>
+              <div class="guest-credential-hint">
+                Make a note of these credentials. You will need them to upgrade later.
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <div
-        v-if="showGuestModal"
-        class="modal-backdrop fade confirm-modal-backdrop"
-        :class="{ show: guestModal.open }"
-      ></div>
-    </Teleport>
+      </template>
+      <template #footer>
+        <div class="modal-footer modal-shell__footer d-flex justify-content-end">
+          <button class="btn btn-outline-secondary text-white" type="button" @click="requestGuestClose">
+            Close
+          </button>
+        </div>
+      </template>
+    </ModalShell>
   </AuthLayout>
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch, ref, nextTick, onMounted } from 'vue';
+import { reactive, computed, watch, ref, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
@@ -144,11 +135,16 @@ import IconButton from '@/components/atoms/IconButton.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
 import TextInput from '@/components/atoms/TextInput.vue';
 import AuthFooterLink from '@/components/molecules/AuthFooterLink.vue';
+import ModalShell from '@/components/molecules/ModalShell.vue';
+import BaseCheckbox from '@/components/atoms/BaseCheckbox.vue';
+import { useAuthConfig } from '@/composables/useAuthConfig';
+import { notify } from '@/utils/notify';
 
 const store = useAuthStore();
 const dashboardStore = useDashboardStore();
 const router = useRouter();
-const guestModalEl = ref<HTMLElement | null>(null);
+const guestModalShell = ref<{ modalEl: HTMLElement | null } | null>(null);
+let guestCloseFallbackTimer: number | null = null;
 
 const form = reactive({
   username: '',
@@ -159,8 +155,12 @@ const form = reactive({
 const loading = computed(() => store.loading);
 const fieldErrors = computed(() => store.fieldErrors);
 const showForgotPassword = computed(() => (
-  store.authConfig.emailEnabled && store.authConfig.emailRegistrationRequired
+  store.authConfigLoaded
+  && store.authConfig.emailEnabled
+  && store.authConfig.emailRegistrationRequired
 ));
+
+useAuthConfig();
 const activeAction = ref<'login' | 'guest' | null>(null);
 const isSubmitting = computed(() => loading.value || activeAction.value !== null);
 const isLoginLoading = computed(() => activeAction.value === 'login' && isSubmitting.value);
@@ -189,9 +189,6 @@ const clearFieldError = (key: string) => {
   }
 };
 
-onMounted(async () => {
-  await store.loadAuthConfig();
-});
 
 watch(() => form.username, () => clearFieldError('username'));
 watch(() => form.password, () => clearFieldError('password'));
@@ -207,6 +204,7 @@ const onSubmit = async () => {
       password: form.password,
       rememberMe: form.rememberMe
     });
+    notify.flashSuccess(store.message || 'Login successful.');
     try {
       await dashboardStore.loadDashboard();
       await router.push('/dashboard');
@@ -267,6 +265,10 @@ const closeGuestModal = async () => {
   if (guestModal.closing) {
     return;
   }
+  if (guestCloseFallbackTimer !== null) {
+    window.clearTimeout(guestCloseFallbackTimer);
+    guestCloseFallbackTimer = null;
+  }
   guestModal.open = false;
   guestModal.closing = true;
   if (!store.user) {
@@ -274,7 +276,7 @@ const closeGuestModal = async () => {
     return;
   }
   await nextTick();
-  const modalEl = guestModalEl.value;
+  const modalEl = guestModalShell.value?.modalEl || null;
   const doRedirect = async () => {
     guestModal.closing = false;
     try {
@@ -291,15 +293,19 @@ const closeGuestModal = async () => {
       window.location.assign('/dashboard');
     }
   };
-  if (!modalEl) {
-    await doRedirect();
+  if (modalEl) {
+    const onTransitionEnd = () => {
+      modalEl.removeEventListener('transitionend', onTransitionEnd);
+      void doRedirect();
+    };
+    modalEl.addEventListener('transitionend', onTransitionEnd);
+    guestCloseFallbackTimer = window.setTimeout(() => {
+      modalEl.removeEventListener('transitionend', onTransitionEnd);
+      void doRedirect();
+    }, 350);
     return;
   }
-  const onTransitionEnd = () => {
-    modalEl.removeEventListener('transitionend', onTransitionEnd);
-    void doRedirect();
-  };
-  modalEl.addEventListener('transitionend', onTransitionEnd);
+  await doRedirect();
 };
 </script>
 

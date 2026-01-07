@@ -1,41 +1,41 @@
 <template>
-  <Teleport to="body">
-    <div
-      v-if="state.open"
-      class="modal fade show confirm-modal"
-      tabindex="-1"
-      role="dialog"
-      aria-modal="true"
-      :aria-labelledby="titleId"
-      @click.self="cancelAction"
-    >
-      <div class="modal-dialog modal-dialog-centered" style="max-width: 420px;">
-        <div class="modal-content modal-shell">
-          <div class="modal-header modal-shell__header">
-            <h5 :id="titleId" class="modal-title text-white mb-0">{{ state.title }}</h5>
-            <button class="btn-close btn-close-white" type="button" aria-label="Close" @click="cancelAction"></button>
-          </div>
-          <div class="modal-body modal-shell__body">
-            <p class="text-white-50 mb-0">{{ state.message }}</p>
-          </div>
-          <div class="modal-footer modal-shell__footer d-flex justify-content-end">
-            <button class="btn btn-outline-secondary text-white" type="button" @click="cancelAction">
-              {{ state.cancelText }}
-            </button>
-            <button :class="confirmButtonClass" type="button" @click="confirmAction">
-              {{ state.confirmText }}
-            </button>
-          </div>
-        </div>
+  <ModalShell
+    :open="state.open"
+    :show="state.open"
+    :labelled-by="titleId"
+    modal-class="confirm-modal"
+    backdrop-class="confirm-modal-backdrop"
+    dialog-style="max-width: 420px;"
+    @backdrop="cancelAction"
+  >
+    <template #header>
+      <div class="modal-header modal-shell__header">
+        <h5 :id="titleId" class="modal-title text-white mb-0">{{ state.title }}</h5>
+        <button class="btn-close btn-close-white" type="button" aria-label="Close" @click="cancelAction"></button>
       </div>
-    </div>
-    <div v-if="state.open" class="modal-backdrop fade show confirm-modal-backdrop"></div>
-  </Teleport>
+    </template>
+    <template #body>
+      <div class="modal-body modal-shell__body">
+        <p class="text-white-50 mb-0">{{ state.message }}</p>
+      </div>
+    </template>
+    <template #footer>
+      <div class="modal-footer modal-shell__footer d-flex justify-content-end">
+        <button class="btn btn-outline-secondary text-white" type="button" @click="cancelAction">
+          {{ state.cancelText }}
+        </button>
+        <button :class="confirmButtonClass" type="button" @click="confirmAction">
+          {{ state.confirmText }}
+        </button>
+      </div>
+    </template>
+  </ModalShell>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useConfirm } from '@/composables/useConfirm';
+import ModalShell from '@/components/molecules/ModalShell.vue';
 
 const { state, confirmAction, cancelAction } = useConfirm();
 const titleId = `confirmModalTitle_${Math.random().toString(36).slice(2, 8)}`;

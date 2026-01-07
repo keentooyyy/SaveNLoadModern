@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { useSettingsStore } from '@/stores/settings';
 import { useDashboardStore } from '@/stores/dashboard';
 import { apiGet, ensureCsrfToken, requestWithRetry, safeJsonParse } from '@/utils/apiClient';
+import { notify } from '@/utils/notify';
 
 type AuthUser = {
   id: number;
@@ -42,27 +43,6 @@ const clearGuestCredsStorage = () => {
     window.localStorage.removeItem(GUEST_CREDS_KEY);
   } catch {
     // ignore
-  }
-};
-
-const notify = {
-  success: (msg: string) => {
-    const t = (window as any).toastr;
-    if (t?.success) {
-      t.success(msg);
-    }
-  },
-  error: (msg: string) => {
-    const t = (window as any).toastr;
-    if (t?.error) {
-      t.error(msg);
-    }
-  },
-  info: (msg: string) => {
-    const t = (window as any).toastr;
-    if (t?.info) {
-      t.info(msg);
-    }
   }
 };
 
@@ -135,9 +115,10 @@ export const useAuthStore = defineStore('auth', () => {
   const isLoggingOut = ref(false);
   const suppressWorkerRedirect = ref(false);
   const authConfig = ref({
-    emailEnabled: true,
+    emailEnabled: false,
     emailRegistrationRequired: true
   });
+  const authConfigLoaded = ref(false);
 
   const resetStatus = () => {
     message.value = '';
@@ -150,13 +131,15 @@ export const useAuthStore = defineStore('auth', () => {
   };
 
   const fetchCurrentUser = async () => {
-    const response = await fetch(`${API_BASE}/auth/me`, {
-      method: 'GET',
-      credentials: 'include'
-    });
+    const response = await requestWithRetry(() => (
+      fetch(`${API_BASE}/auth/me`, {
+        method: 'GET',
+        credentials: 'include'
+      })
+    ));
+    const data = await safeJsonParse(response);
 
     if (response.ok) {
-      const data = await response.json();
       user.value = data?.user || null;
       if (user.value?.is_guest && !guestCredentials.value) {
         guestCredentials.value = loadGuestCreds();
@@ -189,9 +172,11 @@ export const useAuthStore = defineStore('auth', () => {
       };
     } catch {
       authConfig.value = {
-        emailEnabled: true,
+        emailEnabled: false,
         emailRegistrationRequired: true
       };
+    } finally {
+      authConfigLoaded.value = true;
     }
     return authConfig.value;
   };
@@ -291,7 +276,7 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await apiPost('/auth/register', payload);
       message.value = data?.message || '';
       if (message.value) {
-        notify.success(message.value);
+        notify.flashSuccess(message.value);
       }
       return data;
     } catch (err: any) {
@@ -314,7 +299,7 @@ export const useAuthStore = defineStore('auth', () => {
       otpEmail.value = payload.email;
       message.value = data?.message || '';
       if (message.value) {
-        notify.success(message.value);
+        notify.flashSuccess(message.value);
       }
       return data;
     } catch (err: any) {
@@ -336,7 +321,7 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await apiPost('/auth/verify-otp', payload);
       message.value = data?.message || '';
       if (message.value) {
-        notify.success(message.value);
+        notify.flashSuccess(message.value);
       }
       return data;
     } catch (err: any) {
@@ -380,7 +365,7 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await apiPost('/auth/reset-password', payload);
       message.value = data?.message || '';
       if (message.value) {
-        notify.success(message.value);
+        notify.flashSuccess(message.value);
       }
       return data;
     } catch (err: any) {
@@ -436,7 +421,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
       message.value = data?.message || '';
       if (message.value) {
-        notify.success(message.value);
+        notify.flashSuccess(message.value);
       }
       return data;
     } catch (err: any) {
@@ -462,6 +447,7 @@ export const useAuthStore = defineStore('auth', () => {
     isLoggingOut,
     suppressWorkerRedirect,
     authConfig,
+    authConfigLoaded,
     initCsrf,
     resetStatus,
     login,

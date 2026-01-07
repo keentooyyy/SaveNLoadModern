@@ -30,11 +30,13 @@
     </div>
   </AppLayout>
   <GameSavesModal
+    :open="savesModalOpen"
     :title="selectedGameTitle"
     :save-folders="saveFolders"
     :loading="saveFoldersLoading"
     :error="saveFoldersError"
     :is-admin="isAdmin"
+    @close="closeSavesModal"
     @load="onLoadSaveFolder"
     @delete="onDeleteSaveFolder"
     @backup-all="onBackupAllSaves"
@@ -74,6 +76,8 @@ import BackupCompleteModal from '@/components/organisms/BackupCompleteModal.vue'
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useDashboardStore } from '@/stores/dashboard';
 import { useAuthStore } from '@/stores/auth';
+import { notify } from '@/utils/notify';
+import { pauseBootstrapModals, restoreBootstrapModals } from '@/utils/modalStack';
 import { useConfirm } from '@/composables/useConfirm';
 
 const router = useRouter();
@@ -104,6 +108,7 @@ const now = ref(Date.now());
 let bannerTimer: number | null = null;
 const selectedGameTitle = ref('');
 const selectedGameId = ref<number | null>(null);
+const savesModalOpen = ref(false);
 const saveFolders = ref<any[]>([]);
 const saveFoldersLoading = ref(false);
 const saveFoldersError = ref('');
@@ -120,14 +125,16 @@ const operationModal = reactive({
   detail: 'We are syncing your data.',
   progress: 0,
   variant: 'info',
-  closable: false
+  closable: false,
+  pauseToken: null as string | null
 });
 
 const backupModal = reactive({
   open: false,
   zipPath: '',
   gameId: null as number | null,
-  pending: false
+  pending: false,
+  pauseToken: null as string | null
 });
 const restoreGameSavesModal = ref(false);
 
@@ -182,27 +189,6 @@ const clearBackupCloseTimer = () => {
   }
 };
 
-const notify = {
-  success: (msg: string) => {
-    const t = (window as any).toastr;
-    if (t?.success) {
-      t.success(msg);
-    }
-  },
-  error: (msg: string) => {
-    const t = (window as any).toastr;
-    if (t?.error) {
-      t.error(msg);
-    }
-  },
-  info: (msg: string) => {
-    const t = (window as any).toastr;
-    if (t?.info) {
-      t.info(msg);
-    }
-  }
-};
-
 const handleAuthError = async (err: any) => {
   const status = err?.status;
   if (status === 401) {
@@ -214,11 +200,12 @@ const handleAuthError = async (err: any) => {
 
 const openOperationModal = (title: string, subtitle: string, detail: string) => {
   clearSuccessCloseTimer();
-  const modalEl = document.getElementById('gameSavesModal');
-  if (modalEl?.classList.contains('show')) {
+  if (savesModalOpen.value) {
     restoreGameSavesModal.value = true;
-    const bootstrapModal = (window as any)?.bootstrap?.Modal?.getOrCreateInstance(modalEl);
-    bootstrapModal?.hide();
+    savesModalOpen.value = false;
+  }
+  if (!operationModal.pauseToken) {
+    operationModal.pauseToken = pauseBootstrapModals();
   }
   operationModal.open = true;
   operationModal.title = title;
@@ -233,6 +220,8 @@ const openOperationModal = (title: string, subtitle: string, detail: string) => 
 const closeOperationModal = () => {
   clearSuccessCloseTimer();
   operationModal.open = false;
+  restoreBootstrapModals(operationModal.pauseToken);
+  operationModal.pauseToken = null;
   if (backupModal.pending) {
     backupModal.pending = false;
     backupModal.open = true;
@@ -245,9 +234,7 @@ const closeOperationModal = () => {
     return;
   }
   if (restoreGameSavesModal.value && !backupModal.open) {
-    const modalEl = document.getElementById('gameSavesModal');
-    const bootstrapModal = (window as any)?.bootstrap?.Modal?.getOrCreateInstance(modalEl);
-    bootstrapModal?.show();
+    savesModalOpen.value = true;
     restoreGameSavesModal.value = false;
   }
 };
@@ -255,12 +242,16 @@ const closeOperationModal = () => {
 const closeBackupModal = () => {
   clearBackupCloseTimer();
   backupModal.open = false;
+  restoreBootstrapModals(backupModal.pauseToken);
+  backupModal.pauseToken = null;
   if (restoreGameSavesModal.value && !operationModal.open) {
-    const modalEl = document.getElementById('gameSavesModal');
-    const bootstrapModal = (window as any)?.bootstrap?.Modal?.getOrCreateInstance(modalEl);
-    bootstrapModal?.show();
+    savesModalOpen.value = true;
     restoreGameSavesModal.value = false;
   }
+};
+
+const closeSavesModal = () => {
+  savesModalOpen.value = false;
 };
 
 const sanitizeZipPath = (value: string) => {
@@ -279,6 +270,9 @@ const showBackupModal = (zipPath: string, gameId: number | null) => {
   backupModal.pending = true;
   if (!operationModal.open) {
     backupModal.pending = false;
+    if (!backupModal.pauseToken) {
+      backupModal.pauseToken = pauseBootstrapModals();
+    }
     backupModal.open = true;
     clearBackupCloseTimer();
     backupCloseTimer = window.setTimeout(() => {
@@ -531,11 +525,7 @@ const onOpenGame = (game: { id: number; title?: string }) => {
   selectedGameTitle.value = game?.title || '';
   selectedGameId.value = game?.id || null;
   loadSaveFolders();
-  const modalEl = document.getElementById('gameSavesModal');
-  const bootstrapModal = (window as any)?.bootstrap?.Modal?.getOrCreateInstance(modalEl);
-  if (bootstrapModal) {
-    bootstrapModal.show();
-  }
+  savesModalOpen.value = true;
 };
 
 const onSaveGame = async (game: { id: number; title?: string }) => {
@@ -738,9 +728,7 @@ const onDeleteGame = async () => {
   try {
     const data = await store.deleteGame(selectedGameId.value);
     const operationIds = normalizeOperationIds(data);
-    const modalEl = document.getElementById('gameSavesModal');
-    const bootstrapModal = (window as any)?.bootstrap?.Modal?.getOrCreateInstance(modalEl);
-    bootstrapModal?.hide();
+    savesModalOpen.value = false;
     const resetSelection = () => {
       selectedGameId.value = null;
       selectedGameTitle.value = '';
@@ -785,9 +773,7 @@ const onEditGame = () => {
   if (!selectedGameId.value) {
     return;
   }
-  const modalEl = document.getElementById('gameSavesModal');
-  const bootstrapModal = (window as any)?.bootstrap?.Modal?.getOrCreateInstance(modalEl);
-  bootstrapModal?.hide();
+  savesModalOpen.value = false;
   void router.push({ path: `/games/${selectedGameId.value}` });
 };
 

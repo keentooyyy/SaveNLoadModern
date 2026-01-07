@@ -1,5 +1,11 @@
 <template>
-  <button :type="type" :class="classes">
+  <button
+    :type="type"
+    class="btn"
+    :class="[variantClass, sizeClass, buttonClass]"
+    :disabled="disabled"
+    :tabindex="tabindex"
+  >
     <slot />
   </button>
 </template>
@@ -8,14 +14,14 @@
 import { computed } from 'vue';
 
 const props = defineProps({
-  variant: { type: String, default: 'primary' },
+  type: { type: String, default: 'button' },
+  variant: { type: String, default: 'secondary' },
   size: { type: String, default: '' },
-  type: { type: String, default: 'button' }
+  buttonClass: { type: String, default: '' },
+  disabled: { type: Boolean, default: false },
+  tabindex: { type: [Number, String], default: undefined }
 });
 
-const classes = computed(() => [
-  'btn',
-  `btn-${props.variant}`,
-  props.size ? `btn-${props.size}` : ''
-]);
+const variantClass = computed(() => `btn-${props.variant}`);
+const sizeClass = computed(() => (props.size ? `btn-${props.size}` : ''));
 </script>

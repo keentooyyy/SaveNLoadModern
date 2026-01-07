@@ -10,6 +10,9 @@
     chevron-id="adminSettingsChevron"
   >
     <form @submit.prevent="onSubmit">
+      <p class="text-white-50 small mb-3">
+        Features default to OFF until explicitly enabled and configured.
+      </p>
       <div class="mb-3">
         <div class="form-check form-switch">
           <input
@@ -163,41 +166,40 @@
 
     </form>
   </CollapsibleCard>
-  <Teleport to="body">
-    <div
-      v-if="revealModal.open"
-      class="modal fade show confirm-modal"
-      tabindex="-1"
-      role="dialog"
-      aria-modal="true"
-      :aria-labelledby="revealModal.titleId"
-      @click.self="closeReveal"
-    >
-      <div class="modal-dialog modal-dialog-centered" style="max-width: 420px;">
-        <div class="modal-content modal-shell">
-          <div class="modal-header modal-shell__header">
-            <h5 :id="revealModal.titleId" class="modal-title text-white mb-0">
-              Reveal {{ revealModal.label }}
-            </h5>
-            <button class="btn-close btn-close-white" type="button" aria-label="Close" @click="closeReveal"></button>
-          </div>
-          <div class="modal-body modal-shell__body">
-            <p class="text-white-50 mb-3">Confirm your admin password to reveal this value.</p>
-            <PasswordField v-model="revealModal.password" placeholder="Admin password" />
-          </div>
-          <div class="modal-footer modal-shell__footer d-flex justify-content-end">
-            <button class="btn btn-outline-secondary text-white" type="button" @click="closeReveal">
-              Cancel
-            </button>
-            <button class="btn btn-light text-primary" type="button" @click="confirmReveal" :disabled="isRevealLoading">
-              Reveal
-            </button>
-          </div>
-        </div>
+  <ModalShell
+    :open="revealModal.open"
+    :show="revealModal.open"
+    :labelled-by="revealModal.titleId"
+    modal-class="confirm-modal"
+    backdrop-class="confirm-modal-backdrop"
+    dialog-style="max-width: 420px;"
+    @backdrop="closeReveal"
+  >
+    <template #header>
+      <div class="modal-header modal-shell__header">
+        <h5 :id="revealModal.titleId" class="modal-title text-white mb-0">
+          Reveal {{ revealModal.label }}
+        </h5>
+        <button class="btn-close btn-close-white" type="button" aria-label="Close" @click="closeReveal"></button>
       </div>
-    </div>
-    <div v-if="revealModal.open" class="modal-backdrop fade show confirm-modal-backdrop"></div>
-  </Teleport>
+    </template>
+    <template #body>
+      <div class="modal-body modal-shell__body">
+        <p class="text-white-50 mb-3">Confirm your admin password to reveal this value.</p>
+        <PasswordField v-model="revealModal.password" placeholder="Admin password" />
+      </div>
+    </template>
+    <template #footer>
+      <div class="modal-footer modal-shell__footer d-flex justify-content-end">
+        <button class="btn btn-outline-secondary text-white" type="button" @click="closeReveal">
+          Cancel
+        </button>
+        <button class="btn btn-light text-primary" type="button" @click="confirmReveal" :disabled="isRevealLoading">
+          Reveal
+        </button>
+      </div>
+    </template>
+  </ModalShell>
 </template>
 
 <script setup lang="ts">
@@ -208,6 +210,7 @@ import TextInput from '@/components/atoms/TextInput.vue';
 import FormActions from '@/components/molecules/FormActions.vue';
 import IconButton from '@/components/atoms/IconButton.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
+import ModalShell from '@/components/molecules/ModalShell.vue';
 import { useSettingsStore } from '@/stores/settings';
 
 const store = useSettingsStore();

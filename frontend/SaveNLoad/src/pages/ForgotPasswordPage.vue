@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { useAuthStore } from '@/stores/auth';
@@ -30,6 +30,7 @@ import IconButton from '@/components/atoms/IconButton.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
 import TextInput from '@/components/atoms/TextInput.vue';
 import AuthFooterLink from '@/components/molecules/AuthFooterLink.vue';
+import { useAuthConfig } from '@/composables/useAuthConfig';
 
 const store = useAuthStore();
 const router = useRouter();
@@ -39,6 +40,8 @@ const loading = computed(() => store.loading);
 const fieldErrors = computed(() => store.fieldErrors);
 const submitting = ref(false);
 const isSubmitting = computed(() => loading.value || submitting.value);
+
+useAuthConfig({ requireEmailFlow: true });
 
 const onSubmit = async () => {
   if (isSubmitting.value) {
@@ -55,10 +58,4 @@ const onSubmit = async () => {
   }
 };
 
-onMounted(async () => {
-  const config = await store.loadAuthConfig();
-  if (!config.emailEnabled || !config.emailRegistrationRequired) {
-    window.location.assign('/login');
-  }
-});
 </script>

@@ -44,13 +44,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { useAuthStore } from '@/stores/auth';
 import IconButton from '@/components/atoms/IconButton.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
 import AuthFooterLink from '@/components/molecules/AuthFooterLink.vue';
+import { useAuthConfig } from '@/composables/useAuthConfig';
 
 const store = useAuthStore();
 const router = useRouter();
@@ -76,6 +77,8 @@ const verifying = ref(false);
 const resending = ref(false);
 const isVerifying = computed(() => loading.value || verifying.value);
 const isResending = computed(() => loading.value || resending.value);
+
+useAuthConfig({ requireEmailFlow: true });
 
 const clearFieldError = (key: string) => {
   if (store.fieldErrors && store.fieldErrors[key]) {
@@ -168,12 +171,6 @@ const onResend = async () => {
   }
 };
 
-onMounted(async () => {
-  const config = await store.loadAuthConfig();
-  if (!config.emailEnabled || !config.emailRegistrationRequired) {
-    window.location.assign('/login');
-  }
-});
 </script>
 
 <style scoped>

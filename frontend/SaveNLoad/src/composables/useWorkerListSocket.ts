@@ -5,6 +5,7 @@ import { useDashboardStore } from '@/stores/dashboard';
 import { useSettingsStore } from '@/stores/settings';
 import { useAuthStore } from '@/stores/auth';
 import { getSharedWsToken } from '@/utils/wsToken';
+import { notify } from '@/utils/notify';
 
 export type WorkerSnapshot = {
   client_id: string;
@@ -96,6 +97,7 @@ export const useWorkerListSocket = (options: WorkerListOptions = {}) => {
     socket.addEventListener('close', () => {
       socketOpen.value = false;
       if (options.reloadOnClose && hasOpened) {
+        notify.flashWarning('Worker connection lost. Reloading...');
         window.location.reload();
         return;
       }

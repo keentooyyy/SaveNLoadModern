@@ -1,13 +1,15 @@
 <template>
   <p class="text-white fs-6 text-center auth-footer" :class="textClass">
     <slot name="prefix">{{ prefix }}</slot>
-    <RouterLink :to="to" class="text-secondary text-decoration-none fs-6" :tabindex="tabindex">
+    <BaseLink :to="to" link-class="text-secondary text-decoration-none fs-6" :tabindex="tabindex">
       {{ linkText }}
-    </RouterLink>
+    </BaseLink>
   </p>
 </template>
 
 <script setup lang="ts">
+import BaseLink from '@/components/atoms/BaseLink.vue';
+
 defineProps({
   prefix: { type: String, default: '' },
   linkText: { type: String, required: true },

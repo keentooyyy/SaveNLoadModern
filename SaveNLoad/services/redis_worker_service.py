@@ -355,6 +355,28 @@ def unclaim_user_workers(user_id):
     return processed
 
 
+def unclaim_all_workers():
+    """
+    Unclaim all workers across all users.
+
+    Returns:
+        list of client_ids that were processed
+    """
+    redis_client = get_redis_client()
+    processed = []
+    user_worker_keys = redis_client.keys('user:*:workers') or []
+    for key in user_worker_keys:
+        worker_ids = redis_client.smembers(key) or []
+        for raw_id in worker_ids:
+            client_id = raw_id.decode('utf-8') if isinstance(raw_id, bytes) else raw_id
+            if not client_id:
+                continue
+            redis_client.srem(key, client_id)
+            unclaim_worker(client_id)
+            processed.append(client_id)
+    return processed
+
+
 def get_user_workers(user_id):
     """
     Get all workers for a user
