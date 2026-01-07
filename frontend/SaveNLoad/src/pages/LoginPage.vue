@@ -43,10 +43,23 @@
           variant="secondary"
           class="text-white fw-bold mt-3 py-2"
           :disabled="isSubmitting"
-          :loading="isSubmitting"
+          :loading="isLoginLoading"
           tabindex="3"
         >
           LOGIN
+        </IconButton>
+      </div>
+      <div class="d-grid mt-2">
+        <IconButton
+          type="button"
+          variant="outline-secondary"
+          class="text-white fw-bold py-2"
+          :disabled="isSubmitting"
+          :loading="isGuestLoading"
+          @click="onGuest"
+          tabindex="4"
+        >
+          CONTINUE AS GUEST
         </IconButton>
       </div>
       <AuthFooterLink
@@ -56,6 +69,52 @@
         tabindex="-1"
       />
     </form>
+    <Teleport to="body">
+      <div
+        v-if="guestModal.open"
+        class="modal fade show confirm-modal"
+        tabindex="-1"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="guestModal.titleId"
+        @click.self="closeGuestModal"
+      >
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 460px;">
+          <div class="modal-content modal-shell">
+            <div class="modal-header modal-shell__header">
+              <h5 :id="guestModal.titleId" class="modal-title text-white mb-0">Guest Account</h5>
+              <button class="btn-close btn-close-white" type="button" aria-label="Close" @click="closeGuestModal"></button>
+            </div>
+            <div class="modal-body modal-shell__body">
+              <p class="text-white-50 mb-3">{{ guestModal.message }}</p>
+              <div v-if="guestModal.loading" class="text-white-50">Creating guest account...</div>
+              <div v-else class="text-white">
+                <div class="guest-credential-card">
+                  <div class="guest-credential-title">Your Guest Credentials</div>
+                  <div class="guest-credential-row">
+                    <span class="guest-credential-label">Username</span>
+                    <code class="guest-credential-value">{{ guestModal.username }}</code>
+                  </div>
+                  <div class="guest-credential-row">
+                    <span class="guest-credential-label">Password</span>
+                    <code class="guest-credential-value">{{ guestModal.password }}</code>
+                  </div>
+                  <div class="guest-credential-hint">
+                    Make a note of these credentials. You will need them to upgrade later.
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer modal-shell__footer d-flex justify-content-end">
+              <button class="btn btn-outline-secondary text-white" type="button" @click="closeGuestModal">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-if="guestModal.open" class="modal-backdrop fade show confirm-modal-backdrop"></div>
+    </Teleport>
   </AuthLayout>
 </template>
 
@@ -83,8 +142,18 @@ const form = reactive({
 
 const loading = computed(() => store.loading);
 const fieldErrors = computed(() => store.fieldErrors);
-const submitting = ref(false);
-const isSubmitting = computed(() => loading.value || submitting.value);
+const activeAction = ref<'login' | 'guest' | null>(null);
+const isSubmitting = computed(() => loading.value || activeAction.value !== null);
+const isLoginLoading = computed(() => activeAction.value === 'login' && isSubmitting.value);
+const isGuestLoading = computed(() => activeAction.value === 'guest' && isSubmitting.value);
+  const guestModal = reactive({
+    open: false,
+    loading: false,
+    username: '',
+    password: '',
+    message: 'Save these credentials before closing.',
+    titleId: `guestModalTitle_${Math.random().toString(36).slice(2, 8)}`
+  });
 
 const clearFieldError = (key: string) => {
   if (store.fieldErrors && store.fieldErrors[key]) {
@@ -104,7 +173,7 @@ const onSubmit = async () => {
   if (isSubmitting.value) {
     return;
   }
-  submitting.value = true;
+  activeAction.value = 'login';
   try {
     await store.login({
       username: form.username,
@@ -127,7 +196,114 @@ const onSubmit = async () => {
   } catch {
     // handled by store
   } finally {
-    submitting.value = false;
+    activeAction.value = null;
+  }
+};
+
+const onGuest = async () => {
+  if (isSubmitting.value) {
+    return;
+  }
+  activeAction.value = 'guest';
+  guestModal.open = true;
+  guestModal.loading = true;
+  guestModal.username = '';
+  guestModal.password = '';
+  try {
+    const data = await store.loginGuest();
+    const creds = data?.guest_credentials;
+    guestModal.username = creds?.username || store.user?.username || '';
+    guestModal.password = creds?.password || '';
+  } catch {
+    // handled by store
+    guestModal.open = false;
+  } finally {
+    activeAction.value = null;
+    guestModal.loading = false;
+  }
+};
+
+const closeGuestModal = async () => {
+  guestModal.open = false;
+  if (!store.user) {
+    return;
+  }
+  try {
+    await dashboardStore.loadDashboard();
+    await router.push('/dashboard');
+  } catch (err: any) {
+    if (err?.status === 503) {
+      await router.push('/worker-required');
+      return;
+    }
+    if (err?.status === 401) {
+      return;
+    }
+    await router.push('/dashboard');
   }
 };
 </script>
+
+<style scoped>
+.confirm-modal {
+  display: block;
+  z-index: 1250;
+}
+
+.confirm-modal-backdrop {
+  background: var(--overlay-bg);
+  z-index: 1240;
+}
+
+.guest-credential-card {
+  border-radius: 16px;
+  padding: 18px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.guest-credential-title {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 12px;
+}
+
+.guest-credential-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(10, 12, 20, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.guest-credential-row + .guest-credential-row {
+  margin-top: 10px;
+}
+
+.guest-credential-label {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.guest-credential-value {
+  font-size: 1rem;
+  color: #f5f5f5;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.guest-credential-hint {
+  margin-top: 14px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+</style>

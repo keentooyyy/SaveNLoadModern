@@ -904,6 +904,38 @@ class ClientWorkerServiceRclone:
                     
         except Exception as e:
             return self._handle_operation_exception('Backup', e)
+
+    def copy_remote_storage(self, source_ftp_path: str, destination_ftp_path: str,
+                            operation_id: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Copy remote storage from one namespace to another.
+
+        Args:
+            source_ftp_path: Source remote path root
+            destination_ftp_path: Destination remote path root
+            operation_id: Optional operation ID for progress tracking
+
+        Returns:
+            dict: Success/error response
+        """
+        try:
+            if not source_ftp_path or not destination_ftp_path:
+                return self._create_error_response('Source and destination paths are required')
+
+            progress_callback = self._create_progress_callback(operation_id)
+            success, message = self.rclone_client.copy_remote_directory(
+                source_ftp_path,
+                destination_ftp_path,
+                progress_callback=progress_callback
+            )
+            if success:
+                return self._create_success_response(message or 'Remote copy completed')
+            normalized = (message or '').lower()
+            if 'not found' in normalized or 'directory not found' in normalized:
+                return self._create_success_response('No guest data to copy.')
+            return self._create_error_response(message or 'Remote copy failed')
+        except Exception as e:
+            return self._handle_operation_exception('Copy', e)
     
     def open_folder(self, local_path: str) -> Dict[str, Any]:
         """
@@ -1260,6 +1292,8 @@ class ClientWorkerServiceRclone:
         operation_id = operation.get('id')
         local_path = operation.get('local_save_path')
         remote_ftp_path = operation.get('remote_ftp_path')  # Pre-built complete FTP path from server
+        source_ftp_path = operation.get('source_ftp_path')
+        destination_ftp_path = operation.get('destination_ftp_path')
         
         op_type_display = op_type.capitalize()
         self._safe_console_print(f"\nProcessing: {op_type_display} operation")
@@ -1271,6 +1305,9 @@ class ClientWorkerServiceRclone:
 
         if op_type in ['save', 'load', 'list', 'delete', 'backup'] and not remote_ftp_path:
             self._safe_console_print("Error: Operation missing remote FTP path")
+            return
+        if op_type == 'copy_user_storage' and (not source_ftp_path or not destination_ftp_path):
+            self._safe_console_print("Error: Operation missing source/destination paths")
             return
 
         # Call simplified methods with pre-built remote_ftp_path
@@ -1284,6 +1321,8 @@ class ClientWorkerServiceRclone:
             result = self.delete_save_folder(remote_ftp_path)
         elif op_type == 'backup':
             result = self.backup_all_saves(remote_ftp_path, operation_id)
+        elif op_type == 'copy_user_storage':
+            result = self.copy_remote_storage(source_ftp_path, destination_ftp_path, operation_id)
         elif op_type == 'open_folder':
             result = self.open_folder(local_path)
         else:

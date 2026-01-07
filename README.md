@@ -120,14 +120,6 @@ POSTGRES_HOST=db
 POSTGRES_PORT=5432
 SECRET_KEY=your-secret-key-here
 
-# RAWG API
-RAWG=your-rawg-api-key-here
-
-# Email Configuration (Gmail SMTP)
-GMAIL_USER=your-email@gmail.com
-GMAIL_APP_PASSWORD=your-gmail-app-password-here
-EMAIL_ICON_URL=https://i.ibb.co/5Xpxrkh7/icon.png
-
 # Default admin account
 DEFAULT_ADMIN_USERNAME=admin
 DEFAULT_ADMIN_EMAIL=admin@example.com
@@ -477,15 +469,7 @@ FTP settings are configured during the build process. The rclone configuration i
 
 ### Email Configuration
 
-Gmail SMTP settings for password reset emails:
-
-```env
-GMAIL_USER=your-email@gmail.com
-GMAIL_APP_PASSWORD=your-app-password
-EMAIL_ICON_URL=https://your-domain.com/static/images/icon.png
-```
-
-> **Note:** Gmail requires an [App Password](https://support.google.com/accounts/answer/185833) for SMTP authentication. Regular passwords won't work.
+Configure Gmail credentials in **Admin Settings** (stored in the database). Gmail requires an [App Password](https://support.google.com/accounts/answer/185833) for SMTP authentication.
 
 ### RAWG API
 
@@ -495,9 +479,9 @@ To get a free API key:
 1. Visit [RAWG API](https://rawg.io/apidocs)
 2. Sign up for a free account
 3. Get your API key from the dashboard
-4. Add it to your `.env` file as `RAWG=your_api_key_here`
+4. Add it in **Admin Settings** under RAWG API Key.
 
-The API key must be set in your environment variables (or `.env` file) for the game search feature to work.
+The API key must be set in Admin Settings for the game search feature to work.
 
 ## Production Deployment
 

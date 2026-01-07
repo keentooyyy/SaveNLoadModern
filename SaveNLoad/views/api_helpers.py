@@ -86,8 +86,13 @@ def build_user_payload(user, include_email: bool = True) -> dict:
     payload = {
         'id': user.id,
         'username': user.username,
-        'role': 'admin' if user.is_admin() else 'user'
+        'role': 'admin' if user.is_admin() else 'user',
+        'is_guest': bool(getattr(user, 'is_guest', False)),
+        'guest_migration_status': getattr(user, 'guest_migration_status', None)
     }
+    guest_expires_at = getattr(user, 'guest_expires_at', None)
+    if guest_expires_at:
+        payload['guest_expires_at'] = guest_expires_at.isoformat()
     if include_email:
         payload['email'] = user.email
     return payload

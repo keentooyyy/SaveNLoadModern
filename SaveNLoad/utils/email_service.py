@@ -5,7 +5,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.conf import settings
 
-
+from SaveNLoad.utils.system_settings import get_setting_value
 def send_otp_email(email: str, otp_code: str, username: str = None) -> bool:
     """
     Send OTP code via email with beautiful HTML template
@@ -21,15 +21,17 @@ def send_otp_email(email: str, otp_code: str, username: str = None) -> bool:
     try:
         subject = 'Password Reset OTP - Save N Load'
         
-        from_email = settings.DEFAULT_FROM_EMAIL
+        smtp_user = get_setting_value('email.gmail_user')
+        smtp_password = get_setting_value('email.gmail_app_password')
+        from_email = smtp_user or ''
         
         # Check if email is configured
-        if not from_email or not settings.EMAIL_HOST_USER:
+        if not from_email or not smtp_user:
             print("ERROR: Email configuration is missing. Please set GMAIL_USER and GMAIL_APP_PASSWORD in environment variables.")
             return False
         
         # Check if password is configured
-        if not settings.EMAIL_HOST_PASSWORD:
+        if not smtp_password:
             print("ERROR: GMAIL_APP_PASSWORD is not set in environment variables. You need a Gmail App Password (not your regular password).")
             return False
         

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { apiDelete, apiGet, apiPost } from '@/utils/apiClient';
+import { apiDelete, apiGet, apiPatch, apiPost } from '@/utils/apiClient';
 
 const notify = {
   success: (msg: string) => {
@@ -49,6 +49,11 @@ export const useSettingsStore = defineStore('settings', () => {
   const USERS_TTL_MS = 30000;
   const STATS_TTL_MS = 15000;
   const wsToken = ref('');
+  const adminSettings = ref<Record<string, any>>({});
+  const adminSettingsSaving = ref(false);
+  const adminSettingsHealthLoading = ref(false);
+  const adminSettingsRevealLoading = ref(false);
+  const adminSettingsHealth = ref<Record<string, any> | null>(null);
   const bootstrapLoaded = ref(false);
   const bootstrapData = ref<{ user?: any | null; version?: string } | null>(null);
   let bootstrapPromise: Promise<any> | null = null;
@@ -80,6 +85,11 @@ export const useSettingsStore = defineStore('settings', () => {
     lastUsersQuery.value = '';
     lastUsersPage.value = 1;
     wsToken.value = '';
+    adminSettings.value = {};
+    adminSettingsSaving.value = false;
+    adminSettingsHealthLoading.value = false;
+    adminSettingsRevealLoading.value = false;
+    adminSettingsHealth.value = null;
     bootstrapLoaded.value = false;
     bootstrapData.value = null;
     bootstrapPromise = null;
@@ -216,6 +226,74 @@ export const useSettingsStore = defineStore('settings', () => {
     return data;
   };
 
+  const loadAdminSettings = async () => {
+    adminSettingsSaving.value = true;
+    try {
+      const data = await apiGet('/admin/settings');
+      adminSettings.value = data?.settings || {};
+      return adminSettings.value;
+    } catch (err: any) {
+      error.value = err?.message || '';
+      throw err;
+    } finally {
+      adminSettingsSaving.value = false;
+    }
+  };
+
+  const updateAdminSettings = async (payload: Record<string, any>) => {
+    adminSettingsSaving.value = true;
+    try {
+      const data = await apiPatch('/admin/settings', { settings: payload });
+      adminSettings.value = { ...adminSettings.value, ...(data?.settings || {}) };
+      if (data?.message) {
+        notify.success(data.message);
+      }
+      return data;
+    } catch (err: any) {
+      error.value = err?.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
+      throw err;
+    } finally {
+      adminSettingsSaving.value = false;
+    }
+  };
+
+  const checkAdminSettingsHealth = async () => {
+    adminSettingsHealthLoading.value = true;
+    try {
+      const data = await apiPost('/admin/settings/health', {});
+      adminSettingsHealth.value = data?.health || null;
+      return adminSettingsHealth.value;
+    } catch (err: any) {
+      error.value = err?.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
+      throw err;
+    } finally {
+      adminSettingsHealthLoading.value = false;
+    }
+  };
+
+  const revealAdminSettings = async (keys: string[], password: string) => {
+    adminSettingsRevealLoading.value = true;
+    try {
+      const data = await apiPost('/admin/settings/reveal', { keys, password });
+      adminSettings.value = { ...adminSettings.value, ...(data?.settings || {}) };
+      return data?.settings || {};
+    } catch (err: any) {
+      error.value = err?.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
+      throw err;
+    } finally {
+      adminSettingsRevealLoading.value = false;
+    }
+  };
+
   const bootstrapSettings = async () => {
     if (bootstrapPromise) {
       return bootstrapPromise;
@@ -255,6 +333,11 @@ export const useSettingsStore = defineStore('settings', () => {
     usersPagination,
     queueStatsData,
     wsToken,
+    adminSettings,
+    adminSettingsSaving,
+    adminSettingsHealthLoading,
+    adminSettingsRevealLoading,
+    adminSettingsHealth,
     resetState,
     usersLoaded,
     statsLoaded,
@@ -270,6 +353,10 @@ export const useSettingsStore = defineStore('settings', () => {
     queueStats,
     cleanupQueue,
     updateAccount,
+    loadAdminSettings,
+    updateAdminSettings,
+    checkAdminSettingsHealth,
+    revealAdminSettings,
     bootstrapSettings
   };
 });

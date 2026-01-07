@@ -30,6 +30,12 @@ from SaveNLoad.views.api_helpers import (
 from SaveNLoad.views.custom_decorators import get_current_user
 
 
+def _block_if_guest_migrating(user):
+    if getattr(user, 'guest_migration_status', None) == 'migrating':
+        return Response({'error': 'Migration in progress.', 'code': 'migration_in_progress'}, status=409)
+    return None
+
+
 def _build_full_remote_path(username: str, game_name: str, save_folder_number: int,
                             path_index: int = None) -> str:
     """
@@ -72,6 +78,9 @@ def save_game(request, game_id):
                 {'error': 'Not authenticated. Please log in.', 'requires_login': True},
                 status=401
             )
+        migration_block = _block_if_guest_migrating(user)
+        if migration_block:
+            return migration_block
 
         game, error_response = get_game_or_error(game_id)
         if error_response:
@@ -201,6 +210,9 @@ def load_game(request, game_id):
             {'error': 'Not authenticated. Please log in.', 'requires_login': True},
             status=401
         )
+    migration_block = _block_if_guest_migrating(user)
+    if migration_block:
+        return migration_block
 
     game, error_response = get_game_or_error(game_id)
     if error_response:
@@ -317,6 +329,9 @@ def check_operation_status(request, operation_id):
             {'error': 'Not authenticated. Please log in.', 'requires_login': True},
             status=401
         )
+    migration_block = _block_if_guest_migrating(user)
+    if migration_block:
+        return migration_block
 
     operation = get_operation(operation_id)
     if not operation:
@@ -393,6 +408,8 @@ def check_operation_status(request, operation_id):
             success_message = 'Backup successful.'
         elif operation_type == 'open_folder':
             success_message = 'Folder opened successfully.'
+        elif operation_type == 'copy_user_storage':
+            success_message = 'Guest data migrated successfully.'
         elif isinstance(result_data, dict):
             success_message = result_data.get('message') or None
 
@@ -426,6 +443,9 @@ def delete_save_folder(request, game_id, folder_number):
             {'error': 'Not authenticated. Please log in.', 'requires_login': True},
             status=401
         )
+    migration_block = _block_if_guest_migrating(user)
+    if migration_block:
+        return migration_block
 
     game, error_response = get_game_or_error(game_id)
     if error_response:
@@ -484,6 +504,9 @@ def list_save_folders(request, game_id):
             {'error': 'Not authenticated. Please log in.', 'requires_login': True},
             status=401
         )
+    migration_block = _block_if_guest_migrating(user)
+    if migration_block:
+        return migration_block
 
     game, error_response = get_game_or_error(game_id)
     if error_response:
@@ -523,6 +546,9 @@ def backup_all_saves(request, game_id):
             {'error': 'Not authenticated. Please log in.', 'requires_login': True},
             status=401
         )
+    migration_block = _block_if_guest_migrating(user)
+    if migration_block:
+        return migration_block
 
     game, error_response = get_game_or_error(game_id)
     if error_response:
@@ -566,6 +592,9 @@ def delete_all_saves(request, game_id):
             {'error': 'Not authenticated. Please log in.', 'requires_login': True},
             status=401
         )
+    migration_block = _block_if_guest_migrating(user)
+    if migration_block:
+        return migration_block
 
     game, error_response = get_game_or_error(game_id)
     if error_response:
@@ -668,6 +697,9 @@ def get_game_save_location(request, game_id):
             {'error': 'Not authenticated. Please log in.', 'requires_login': True},
             status=401
         )
+    migration_block = _block_if_guest_migrating(user)
+    if migration_block:
+        return migration_block
 
     game, error_response = get_game_or_error(game_id)
     if error_response:
@@ -700,6 +732,9 @@ def delete_game(request, game_id):
             {'error': 'Not authenticated. Please log in.', 'requires_login': True},
             status=401
         )
+    migration_block = _block_if_guest_migrating(user)
+    if migration_block:
+        return migration_block
 
     admin_error = check_admin_or_error(user)
     if admin_error:
@@ -776,6 +811,9 @@ def open_save_location(request, game_id):
             {'error': 'Not authenticated. Please log in.', 'requires_login': True},
             status=401
         )
+    migration_block = _block_if_guest_migrating(user)
+    if migration_block:
+        return migration_block
 
     game, error_response = get_game_or_error(game_id)
     if error_response:
@@ -836,6 +874,9 @@ def open_backup_location(request, game_id):
             {'error': 'Not authenticated. Please log in.', 'requires_login': True},
             status=401
         )
+    migration_block = _block_if_guest_migrating(user)
+    if migration_block:
+        return migration_block
 
     game, error_response = get_game_or_error(game_id)
     if error_response:

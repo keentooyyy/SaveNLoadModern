@@ -5,6 +5,8 @@ from SaveNLoad.views import auth
 urlpatterns = [
     path('auth/csrf', auth.csrf_view, name='csrf'),
     path('auth/login', auth.login_view, name='login'),
+    path('auth/guest', auth.guest_view, name='guest'),
+    path('auth/upgrade', auth.upgrade_view, name='upgrade'),
     path('auth/register', auth.register_view, name='register'),
     path('auth/forgot-password', auth.forgot_password_view, name='forgot_password'),
     path('auth/verify-otp', auth.verify_otp_view, name='verify_otp'),

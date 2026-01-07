@@ -108,3 +108,21 @@ export const apiDelete = async (path: string) => {
   assertResponseOk(response, data);
   return data;
 };
+
+export const apiPatch = async (path: string, body: Record<string, unknown>) => {
+  const csrfToken = await ensureCsrfToken();
+  const response = await requestWithRetry(() => (
+    fetch(`${API_BASE}${path}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
+      },
+      credentials: 'include',
+      body: JSON.stringify(body)
+    })
+  ));
+  const data = await safeJsonParse(response);
+  assertResponseOk(response, data);
+  return data;
+};

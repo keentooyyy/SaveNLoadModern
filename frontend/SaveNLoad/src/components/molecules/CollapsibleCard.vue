@@ -75,17 +75,24 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-:is(.add-game-header, .account-settings-header, .operation-queue-header, .manage-accounts-header) {
+:is(.add-game-header, .account-settings-header, .operation-queue-header, .manage-accounts-header, .admin-settings-header, .guest-upgrade-header) {
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
-:is(.add-game-header, .account-settings-header, .operation-queue-header, .manage-accounts-header)
-  :is(.add-game-chevron, .account-settings-chevron, .operation-queue-chevron, .manage-accounts-chevron) {
+:is(.add-game-header, .account-settings-header, .operation-queue-header, .manage-accounts-header, .admin-settings-header, .guest-upgrade-header)
+  :is(
+    .add-game-chevron,
+    .account-settings-chevron,
+    .operation-queue-chevron,
+    .manage-accounts-chevron,
+    .admin-settings-chevron,
+    .guest-upgrade-chevron
+  ) {
   transition: transform 0.3s ease;
 }
 
-:is(.add-game-header, .account-settings-header, .operation-queue-header, .manage-accounts-header).active
+:is(.add-game-header, .account-settings-header, .operation-queue-header, .manage-accounts-header, .admin-settings-header, .guest-upgrade-header).active
   :is(
     .add-game-icon,
     .add-game-title,
@@ -98,13 +105,26 @@ onBeforeUnmount(() => {
     .operation-queue-chevron,
     .manage-accounts-icon,
     .manage-accounts-title,
-    .manage-accounts-chevron
+    .manage-accounts-chevron,
+    .admin-settings-icon,
+    .admin-settings-title,
+    .admin-settings-chevron,
+    .guest-upgrade-icon,
+    .guest-upgrade-title,
+    .guest-upgrade-chevron
   ) {
   color: var(--color-primary) !important;
 }
 
-:is(.add-game-header, .account-settings-header, .operation-queue-header, .manage-accounts-header).active
-  :is(.add-game-chevron, .account-settings-chevron, .operation-queue-chevron, .manage-accounts-chevron) {
+:is(.add-game-header, .account-settings-header, .operation-queue-header, .manage-accounts-header, .admin-settings-header, .guest-upgrade-header).active
+  :is(
+    .add-game-chevron,
+    .account-settings-chevron,
+    .operation-queue-chevron,
+    .manage-accounts-chevron,
+    .admin-settings-chevron,
+    .guest-upgrade-chevron
+  ) {
   transform: rotate(90deg);
 }
 </style>

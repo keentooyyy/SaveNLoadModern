@@ -24,6 +24,13 @@ from SaveNLoad.views.api_helpers import (
 )
 from SaveNLoad.views.custom_decorators import get_current_user
 from SaveNLoad.views.rawg_api import search_games as rawg_search_games
+from SaveNLoad.utils.system_settings import (
+    get_settings_values,
+    set_settings_values,
+    get_setting_value,
+    is_feature_enabled,
+    SETTINGS_SCHEMA
+)
 
 
 def _require_user(request):
@@ -136,6 +143,7 @@ def _queue_stats_payload():
         OperationType.DELETE: 0,
         OperationType.BACKUP: 0,
         OperationType.OPEN_FOLDER: 0,
+        OperationType.COPY_USER_STORAGE: 0,
     }
     for op in all_operations:
         op_type = op.get('type', '')
@@ -208,6 +216,7 @@ def _queue_stats_payload():
             'load': type_counts.get(OperationType.LOAD, 0),
             'list': type_counts.get(OperationType.LIST, 0),
             'delete': type_counts.get(OperationType.DELETE, 0),
+            'copy_user_storage': type_counts.get(OperationType.COPY_USER_STORAGE, 0),
         },
         'oldest_operation': oldest.get('created_at') if oldest else None,
         'newest_operation': newest.get('created_at') if newest else None,
@@ -229,6 +238,8 @@ def search_game(request):
 
     if not user.is_admin():
         return json_response_error('Unauthorized', status=403)
+    if not is_feature_enabled('feature.rawg.enabled'):
+        return Response({'feature_disabled': True, 'message': 'RAWG feature is disabled.'}, status=403)
 
     from SaveNLoad.views.input_sanitizer import sanitize_search_query
 
@@ -687,7 +698,9 @@ def reset_user_password(request, user_id):
                 status=400
             )
 
-        default_password = os.getenv('RESET_PASSWORD_DEFAULT')
+        default_password = get_setting_value('reset.default_password') or ''
+        if not default_password:
+            return json_response_error('Default password is not configured.', status=400)
 
         is_valid, error_msg = validate_password_strength(default_password)
         if not is_valid:
@@ -712,3 +725,168 @@ def reset_user_password(request, user_id):
     except Exception as e:
         print(f"ERROR: Error resetting user password: {str(e)}")
         return json_response_error('Failed to reset password', status=500)
+
+
+@api_view(["GET", "PATCH"])
+@authentication_classes([])
+@csrf_protect
+def admin_settings(request):
+    user, error_response = _require_user(request)
+    if error_response:
+        return error_response
+
+    error_response = check_admin_or_error(user)
+    if error_response:
+        return error_response
+
+    if request.method == "GET":
+        settings_values = get_settings_values()
+        return json_response_success(data={'settings': settings_values})
+
+    data, error_response = parse_json_body(request)
+    if error_response:
+        return error_response
+
+    payload = data.get('settings', data)
+    if not isinstance(payload, dict):
+        return json_response_error('Invalid settings payload.', status=400)
+
+    allowed_keys = set(SETTINGS_SCHEMA.keys())
+    updates = {key: value for key, value in payload.items() if key in allowed_keys}
+
+    current = get_settings_values()
+    candidate = dict(current)
+    candidate.update(updates)
+
+    errors = {}
+
+    rawg_enabled = bool(candidate.get('feature.rawg.enabled'))
+    if rawg_enabled and not candidate.get('rawg.api_key'):
+        errors['rawg.api_key'] = 'RAWG API key is required when RAWG is enabled.'
+
+    email_enabled = bool(candidate.get('feature.email.enabled'))
+    if email_enabled:
+        gmail_user = candidate.get('email.gmail_user') or ''
+        gmail_password = candidate.get('email.gmail_app_password') or ''
+        if not gmail_user or not gmail_password:
+            errors['feature.email.enabled'] = 'Gmail credentials are required.'
+
+    try:
+        ttl_days = int(candidate.get('feature.guest.ttl_days') or 0)
+    except (TypeError, ValueError):
+        ttl_days = 0
+    if ttl_days <= 0 or ttl_days > 14:
+        errors['feature.guest.ttl_days'] = 'Guest TTL must be between 1 and 14 days.'
+
+    if errors:
+        return Response({'message': 'Please fix the errors below.', 'errors': errors}, status=400)
+
+    updated = set_settings_values(updates, updated_by=user)
+    return json_response_success(data={'settings': updated})
+
+
+@api_view(["POST"])
+@authentication_classes([])
+@csrf_protect
+def admin_settings_health(request):
+    user, error_response = _require_user(request)
+    if error_response:
+        return error_response
+
+    error_response = check_admin_or_error(user)
+    if error_response:
+        return error_response
+
+    settings_data = get_settings_values()
+
+    health = {}
+
+    # RAWG health check
+    rawg_enabled = bool(settings_data.get('feature.rawg.enabled'))
+    if not rawg_enabled:
+        health['rawg'] = {'enabled': False, 'healthy': False, 'message': 'RAWG is disabled.'}
+    else:
+        try:
+            results = rawg_search_games(query='zelda', limit=1)
+            healthy = bool(results)
+            message = 'RAWG connection successful.' if healthy else 'RAWG returned no results.'
+            health['rawg'] = {'enabled': True, 'healthy': healthy, 'message': message}
+        except Exception as exc:
+            health['rawg'] = {'enabled': True, 'healthy': False, 'message': f'RAWG error: {exc}'}
+
+    # Email health check
+    email_enabled = bool(settings_data.get('feature.email.enabled'))
+    if not email_enabled:
+        health['email'] = {'enabled': False, 'healthy': False, 'message': 'Email is disabled.'}
+    else:
+        import smtplib
+        import ssl
+        from django.conf import settings as django_settings
+        host = django_settings.EMAIL_HOST
+        port = int(django_settings.EMAIL_PORT or 0)
+        from SaveNLoad.utils.system_settings import get_setting_value
+        username = get_setting_value('email.gmail_user', reveal_sensitive=True)
+        password = get_setting_value('email.gmail_app_password', reveal_sensitive=True)
+        use_tls = bool(django_settings.EMAIL_USE_TLS)
+        use_ssl = bool(getattr(django_settings, 'EMAIL_USE_SSL', False))
+
+        if not username or not password:
+            health['email'] = {
+                'enabled': True,
+                'healthy': False,
+                'message': 'Gmail credentials are required.'
+            }
+        else:
+            try:
+                context = ssl.create_default_context()
+                if use_ssl:
+                    server = smtplib.SMTP_SSL(host, port, timeout=10, context=context)
+                else:
+                    server = smtplib.SMTP(host, port, timeout=10)
+                with server:
+                    if use_tls and not use_ssl:
+                        server.starttls(context=context)
+                    server.login(username, password)
+                health['email'] = {'enabled': True, 'healthy': True, 'message': 'SMTP connection successful.'}
+            except Exception as exc:
+                health['email'] = {
+                    'enabled': True,
+                    'healthy': False,
+                    'message': f'SMTP error: {exc}'
+                }
+
+    return json_response_success(data={'health': health})
+
+
+@api_view(["POST"])
+@authentication_classes([])
+@csrf_protect
+def admin_settings_reveal(request):
+    user, error_response = _require_user(request)
+    if error_response:
+        return error_response
+
+    error_response = check_admin_or_error(user)
+    if error_response:
+        return error_response
+
+    data, error_response = parse_json_body(request)
+    if error_response:
+        return error_response
+
+    password = data.get('password') or ''
+    keys = data.get('keys') or []
+    if not password:
+        return json_response_error('Password is required.', status=400)
+    if not isinstance(keys, list) or not keys:
+        return json_response_error('Keys are required.', status=400)
+
+    try:
+        if not user.check_password(password):
+            return json_response_error('Invalid password.', status=403)
+    except Exception:
+        return json_response_error('Password verification failed.', status=500)
+
+    from SaveNLoad.utils.system_settings import get_settings_values
+    revealed = get_settings_values(keys=keys, reveal_sensitive=True)
+    return json_response_success(data={'settings': revealed})

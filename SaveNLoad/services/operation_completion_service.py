@@ -53,6 +53,8 @@ def process_operation_completion(operation_id, payload):
         if user:
             # User deletions require all related ops to complete.
             _check_and_handle_user_deletion_completion(operation_dict, user)
+            if operation_dict.get('type') == 'copy_user_storage':
+                _handle_guest_upgrade_success(operation_dict, user)
 
         return True, None
 
@@ -69,6 +71,8 @@ def process_operation_completion(operation_id, payload):
     if user:
         # Still check for user deletion completion on failure.
         _check_and_handle_user_deletion_completion(operation_dict, user)
+        if operation_dict.get('type') == 'copy_user_storage':
+            _handle_guest_upgrade_failure(user)
 
     if (operation_dict.get('type') == 'save' and
             operation_dict.get('save_folder_number') and user and game):
@@ -76,6 +80,86 @@ def process_operation_completion(operation_id, payload):
         _cleanup_failed_save_folder(operation_id, operation_dict, user, game, error_message)
 
     return False, error_message
+
+
+def _handle_guest_upgrade_success(operation_dict, user):
+    """
+    Finalize guest upgrade after storage copy completes.
+    """
+    if not getattr(user, 'is_guest', False):
+        return
+
+    pending_username = getattr(user, 'guest_pending_username', None)
+    pending_email = getattr(user, 'guest_pending_email', None)
+    pending_password = getattr(user, 'guest_pending_password', None)
+    source_namespace = getattr(user, 'guest_namespace', None) or user.username
+
+    if not pending_username or not pending_email or not pending_password:
+        return
+
+    user.username = pending_username
+    user.email = pending_email
+    user.password = pending_password
+    user.is_guest = False
+    user.guest_expires_at = None
+    user.guest_namespace = None
+    user.guest_migration_status = None
+    user.guest_pending_username = None
+    user.guest_pending_email = None
+    user.guest_pending_password = None
+    user.save()
+
+    _refresh_save_folder_paths(user)
+
+    client_id = operation_dict.get('client_id')
+    if client_id and source_namespace:
+        try:
+            from SaveNLoad.models.operation_constants import OperationType
+            from SaveNLoad.services.redis_operation_service import create_operation
+
+            create_operation(
+                {
+                    'operation_type': OperationType.DELETE,
+                    'operation_group': 'guest_cleanup',
+                    'user_id': user.id,
+                    'game_id': None,
+                    'local_save_path': '',
+                    'save_folder_number': None,
+                    'remote_ftp_path': source_namespace,
+                    'smb_path': source_namespace,
+                    'path_index': None
+                },
+                client_id
+            )
+        except Exception as exc:
+            print(f"WARNING: Failed to enqueue guest storage cleanup: {exc}")
+
+
+def _handle_guest_upgrade_failure(user):
+    if not getattr(user, 'is_guest', False):
+        return
+    user.guest_migration_status = 'failed'
+    user.guest_pending_username = None
+    user.guest_pending_email = None
+    user.guest_pending_password = None
+    user.save(update_fields=[
+        'guest_migration_status',
+        'guest_pending_username',
+        'guest_pending_email',
+        'guest_pending_password'
+    ])
+
+
+def _refresh_save_folder_paths(user):
+    try:
+        from SaveNLoad.models.save_folder import SaveFolder
+        from SaveNLoad.utils.path_utils import generate_save_folder_path
+        save_folders = SaveFolder.objects.filter(user=user)
+        for folder in save_folders:
+            folder.smb_path = generate_save_folder_path(user.username, folder.game.name, folder.folder_number)
+        SaveFolder.objects.bulk_update(save_folders, ['smb_path'])
+    except Exception as exc:
+        print(f"WARNING: Failed to refresh save folder paths for user {user.id}: {exc}")
 
 
 def _get_user(user_id):

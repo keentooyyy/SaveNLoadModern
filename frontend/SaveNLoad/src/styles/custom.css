@@ -40,7 +40,7 @@
     --black-opacity-90: rgba(0, 0, 0, 0.9);
 
     /* Overlay */
-    --overlay-bg: rgba(28, 34, 47, 0.85);
+    --overlay-bg: rgba(0, 0, 0, 0.75);
 }
 
 body {

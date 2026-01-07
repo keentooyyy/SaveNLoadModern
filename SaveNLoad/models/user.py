@@ -23,6 +23,25 @@ class UserRole:
     ]
 
 
+class GuestMigrationStatus:
+    """
+    Guest account migration status constants.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
+    MIGRATING = 'migrating'
+    FAILED = 'failed'
+
+    CHOICES = [
+        (MIGRATING, 'Migrating'),
+        (FAILED, 'Failed'),
+    ]
+
+
 class SimpleUsers(models.Model):
     """
     Custom User model - completely independent of Django's auth system.
@@ -44,6 +63,18 @@ class SimpleUsers(models.Model):
     )
     pending_deletion = models.BooleanField(default=False, help_text="If True, user is marked for deletion and will be deleted after all FTP cleanup operations complete")
     last_authenticated_request = models.DateTimeField(null=True, blank=True, help_text="Last time user made an authenticated request - used to detect cookie clearing")
+    is_guest = models.BooleanField(default=False)
+    guest_expires_at = models.DateTimeField(null=True, blank=True)
+    guest_namespace = models.CharField(max_length=150, null=True, blank=True)
+    guest_migration_status = models.CharField(
+        max_length=20,
+        choices=GuestMigrationStatus.CHOICES,
+        null=True,
+        blank=True
+    )
+    guest_pending_username = models.CharField(max_length=150, null=True, blank=True)
+    guest_pending_email = models.EmailField(null=True, blank=True)
+    guest_pending_password = models.CharField(max_length=128, null=True, blank=True)
     
     class Meta:
         db_table = 'simple_users'
@@ -110,4 +141,3 @@ class SimpleUsers(models.Model):
             True if role is user, False otherwise.
         """
         return self.role == UserRole.USER
-

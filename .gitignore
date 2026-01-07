@@ -125,3 +125,4 @@ client_worker/rclone/*.html
 client_worker/rclone/*.1
 # Keep .spec and .manifest files in version control (they're configuration)
 FACEBOOK_POST.md
+admin_settings_plan.txt

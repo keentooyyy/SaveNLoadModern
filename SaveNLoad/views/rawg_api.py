@@ -3,7 +3,7 @@ from typing import List, Dict, Optional
 import requests
 
 from SaveNLoad.utils.api_utils import handle_http_error, handle_request_exception, filter_dlc_games
-from SaveNLoad.utils.env_utils import get_env_with_default
+from SaveNLoad.utils.system_settings import get_setting_value
 
 RAWG_BASE_URL = "https://api.rawg.io/api/games"
 
@@ -18,9 +18,9 @@ def _get_rawg_api_key():
     Returns:
         API key string or None.
     """
-    api_key = get_env_with_default('RAWG')
+    api_key = get_setting_value('rawg.api_key')
     if not api_key:
-        print("RAWG API key not found. Please set the RAWG environment variable.")
+        print("RAWG API key not found. Please set it in Admin Settings.")
         return None
     return api_key
 

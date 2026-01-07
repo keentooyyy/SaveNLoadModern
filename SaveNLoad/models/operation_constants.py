@@ -19,6 +19,7 @@ class OperationType:
     DELETE = 'delete'
     BACKUP = 'backup'
     OPEN_FOLDER = 'open_folder'
+    COPY_USER_STORAGE = 'copy_user_storage'
     
     # Keep choice tuples in sync with the constants above.
     CHOICES = [
@@ -28,5 +29,6 @@ class OperationType:
         (DELETE, 'Delete'),
         (BACKUP, 'Backup'),
         (OPEN_FOLDER, 'Open Folder'),
+        (COPY_USER_STORAGE, 'Copy User Storage'),
     ]
 

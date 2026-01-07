@@ -9,6 +9,10 @@
         @settings="goToSettings"
         @logout="onLogout"
       />
+      <div v-if="showGuestBanner" class="alert alert-warning mx-3 mt-3">
+        Guest account will be deleted on {{ guestExpiryDate }} ({{ guestDaysLeft }} left).
+        <button class="btn btn-sm btn-dark ms-2" @click="goToSettings">Upgrade Account</button>
+      </div>
       <RecentList :items="recentGames" :loading="recentLoading" @select="onRecentSelect" />
       <GameGrid
         v-model:search="searchQuery"
@@ -87,6 +91,14 @@ const gamesLoading = computed(() => store.loading && games.value.length === 0);
 const isAdmin = computed(() => store.isAdmin);
 const headerName = computed(() => store.user?.username || authStore.user?.username || '');
 const headerRole = computed(() => (store.user?.role || authStore.user?.role || '').toUpperCase());
+const guestExpiresAt = computed(() => {
+  const value = authStore.user?.guest_expires_at;
+  return value ? new Date(value) : null;
+});
+const showGuestBanner = computed(() => authStore.user?.is_guest && guestExpiresAt.value);
+const isMigrating = computed(() => authStore.user?.guest_migration_status === 'migrating');
+const now = ref(Date.now());
+let bannerTimer: number | null = null;
 const selectedGameTitle = ref('');
 const selectedGameId = ref<number | null>(null);
 const saveFolders = ref<any[]>([]);
@@ -118,6 +130,40 @@ const restoreGameSavesModal = ref(false);
 
 let successCloseTimer: number | null = null;
 let backupCloseTimer: number | null = null;
+
+const guestExpiryDate = computed(() => {
+  if (!guestExpiresAt.value) {
+    return '';
+  }
+  return guestExpiresAt.value.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+});
+
+const guestDaysLeft = computed(() => {
+  if (!guestExpiresAt.value) {
+    return '';
+  }
+  const diffMs = guestExpiresAt.value.getTime() - now.value;
+  if (diffMs <= 0) {
+    return 'expired';
+  }
+  const totalDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  return `${totalDays} day${totalDays === 1 ? '' : 's'}`;
+});
+
+const ensureNotMigrating = () => {
+  if (!isMigrating.value) {
+    return true;
+  }
+  const t = (window as any).toastr;
+  if (t?.info) {
+    t.info('Guest migration in progress. Save/load is temporarily disabled.');
+  }
+  return false;
+};
 
 const clearSuccessCloseTimer = () => {
   if (successCloseTimer !== null) {
@@ -500,6 +546,9 @@ const onOpenGame = (game: { id: number; title?: string }) => {
 };
 
 const onSaveGame = async (game: { id: number; title?: string }) => {
+  if (!ensureNotMigrating()) {
+    return;
+  }
   try {
     savingGameId.value = game.id;
     const data = await store.saveGame(game.id);
@@ -520,6 +569,9 @@ const onSaveGame = async (game: { id: number; title?: string }) => {
 };
 
 const onQuickLoadGame = async (game: { id: number; title?: string }) => {
+  if (!ensureNotMigrating()) {
+    return;
+  }
   try {
     loadingGameId.value = game.id;
     const data = await store.loadGame(game.id);
@@ -566,6 +618,9 @@ const loadSaveFolders = async () => {
 };
 
 const onLoadSaveFolder = async (folder: { folder_number: number }) => {
+  if (!ensureNotMigrating()) {
+    return;
+  }
   if (!selectedGameId.value) {
     return;
   }
@@ -579,6 +634,9 @@ const onLoadSaveFolder = async (folder: { folder_number: number }) => {
 };
 
 const onDeleteSaveFolder = async (folder: { folder_number: number }) => {
+  if (!ensureNotMigrating()) {
+    return;
+  }
   if (!selectedGameId.value) {
     return;
   }
@@ -606,6 +664,9 @@ const onDeleteSaveFolder = async (folder: { folder_number: number }) => {
 };
 
 const onBackupAllSaves = async () => {
+  if (!ensureNotMigrating()) {
+    return;
+  }
   if (!selectedGameId.value) {
     return;
   }
@@ -619,6 +680,9 @@ const onBackupAllSaves = async () => {
 };
 
 const onDeleteAllSaves = async () => {
+  if (!ensureNotMigrating()) {
+    return;
+  }
   if (!selectedGameId.value) {
     return;
   }
@@ -649,6 +713,9 @@ const onDeleteAllSaves = async () => {
 };
 
 const onOpenSaveLocation = async () => {
+  if (!ensureNotMigrating()) {
+    return;
+  }
   if (!selectedGameId.value) {
     return;
   }
@@ -741,6 +808,10 @@ const onEditGame = () => {
 
 onMounted(async () => {
   window.addEventListener('dashboard:reset', resetDashboardFilters);
+  now.value = Date.now();
+  bannerTimer = window.setInterval(() => {
+    now.value = Date.now();
+  }, 60000);
   try {
     if (!store.dashboardLoaded) {
       await store.loadDashboard();
@@ -753,5 +824,9 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('dashboard:reset', resetDashboardFilters);
   clearBackupCloseTimer();
+  if (bannerTimer) {
+    clearInterval(bannerTimer);
+    bannerTimer = null;
+  }
 });
 </script>

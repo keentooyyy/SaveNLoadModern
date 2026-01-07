@@ -55,6 +55,8 @@ def create_operation(operation_data, client_id):
         'local_save_path': operation_data.get('local_save_path', ''),
         'save_folder_number': str(operation_data.get('save_folder_number', '')) if operation_data.get('save_folder_number') else '',
         'remote_ftp_path': operation_data.get('remote_ftp_path', '') or '',  # NEW: Pre-built FTP path from server
+        'source_ftp_path': operation_data.get('source_ftp_path', '') or '',
+        'destination_ftp_path': operation_data.get('destination_ftp_path', '') or '',
         # Timestamps and progress bookkeeping.
         'created_at': timezone.now().isoformat(),
         'started_at': '',
@@ -126,6 +128,8 @@ def get_pending_operations(client_id):
                 'local_save_path': operation_hash.get('local_save_path', ''),
                 'save_folder_number': int(operation_hash['save_folder_number']) if operation_hash.get('save_folder_number') else None,
                 'remote_ftp_path': operation_hash.get('remote_ftp_path', ''),  # Pre-built FTP path from server
+                'source_ftp_path': operation_hash.get('source_ftp_path', ''),
+                'destination_ftp_path': operation_hash.get('destination_ftp_path', ''),
             }
             
             
@@ -258,6 +262,8 @@ def get_operation(operation_id):
         'game_id': int(operation_hash['game_id']) if operation_hash.get('game_id') else None,
         'local_save_path': operation_hash.get('local_save_path', ''),
         'save_folder_number': int(operation_hash['save_folder_number']) if operation_hash.get('save_folder_number') else None,
+        'source_ftp_path': operation_hash.get('source_ftp_path', ''),
+        'destination_ftp_path': operation_hash.get('destination_ftp_path', ''),
         'smb_path': operation_hash.get('smb_path', ''),
         'path_index': int(operation_hash['path_index']) if operation_hash.get('path_index') else None,
         'created_at': operation_hash.get('created_at'),
@@ -336,6 +342,8 @@ def _build_operation_payload(operation_hash):
         'local_save_path': operation_hash.get('local_save_path', ''),
         'save_folder_number': int(operation_hash['save_folder_number']) if operation_hash.get('save_folder_number') else None,
         'remote_ftp_path': operation_hash.get('remote_ftp_path', ''),
+        'source_ftp_path': operation_hash.get('source_ftp_path', ''),
+        'destination_ftp_path': operation_hash.get('destination_ftp_path', ''),
         'game_id': int(operation_hash.get('game_id')) if operation_hash.get('game_id') else None,
     }
 

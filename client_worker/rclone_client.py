@@ -546,6 +546,49 @@ class RcloneClient:
             else:
                 error_msg = rc_error or "Download failed"
                 return False, error_msg, [], []
+
+    def copy_remote_directory(self, source_ftp_path: str, destination_ftp_path: str,
+                              transfers: int = RCLONE_TRANSFERS,
+                              progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Tuple[bool, str]:
+        """
+        Copy a directory within the remote storage.
+
+        Args:
+            source_ftp_path: Source remote path (e.g., "guest_x/game/save_1")
+            destination_ftp_path: Destination remote path (e.g., "user_x/game/save_1")
+            transfers: Parallel transfers count
+            progress_callback: Optional progress callback
+
+        Returns:
+            Tuple of (success, message)
+        """
+        normalized_src = self._normalize_path(source_ftp_path)
+        normalized_dst = self._normalize_path(destination_ftp_path)
+        if not normalized_src or not normalized_dst:
+            return False, "Source and destination paths are required"
+
+        src_fs = self._build_remote_path(normalized_src)
+        dst_fs = self._build_remote_path(normalized_dst)
+
+        rc_success, rc_error, _ = self._run_rc_job(
+            "sync/copy",
+            {
+                "srcFs": src_fs,
+                "dstFs": dst_fs,
+                "createEmptySrcDirs": True,
+                "_config": {
+                    "Transfers": transfers,
+                    "Checkers": transfers * 2,
+                }
+            },
+            timeout=3600,
+            progress_callback=progress_callback
+        )
+
+        if rc_success:
+            return True, "Remote copy completed successfully"
+
+        return False, rc_error or "Remote copy failed"
     
     def list_saves(self, remote_ftp_path: str) -> Tuple[bool, List[dict], List[str], str]:
         """
@@ -691,4 +734,3 @@ class RcloneClient:
             return False, rc_error or f"Rclone connection failed ({self.remote_name})"
         except Exception as e:
             return False, f"Rclone status check failed: {str(e)}"
-

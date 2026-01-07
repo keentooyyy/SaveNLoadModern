@@ -1,6 +1,7 @@
 from functools import wraps
 
 from django.conf import settings
+from django.utils import timezone
 from rest_framework.response import Response
 
 import jwt
@@ -159,10 +160,17 @@ def get_current_user(request):
     # Get user from database - verify it still exists
     try:
         user = SimpleUsers.objects.get(id=user_id)
+        if getattr(user, 'is_guest', False) and user.guest_expires_at:
+            if user.guest_expires_at <= timezone.now():
+                try:
+                    from SaveNLoad.utils.jwt_utils import revoke_all_refresh_tokens
+                    revoke_all_refresh_tokens(user.id)
+                except Exception:
+                    pass
+                return None
         # Update user's last authenticated request timestamp
         # This tracks actual authenticated requests to detect when cookies are cleared
         # More reliable than session data which can persist for days
-        from django.utils import timezone
         user.last_authenticated_request = timezone.now()
         user.save(update_fields=['last_authenticated_request'])
         # Cache for subsequent calls in same request

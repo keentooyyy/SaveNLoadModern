@@ -7,6 +7,10 @@ type AuthUser = {
   id: number;
   username: string;
   role: string;
+  email?: string;
+  is_guest?: boolean;
+  guest_expires_at?: string | null;
+  guest_migration_status?: string | null;
 };
 
 type FieldErrors = Record<string, string | string[]>;
@@ -99,6 +103,7 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref('');
   const fieldErrors = ref<FieldErrors | null>(null);
   const otpEmail = ref('');
+  const guestCredentials = ref<{ username: string; email: string; password: string } | null>(null);
   const isLoggingOut = ref(false);
   const isBootstrapped = ref(false);
   let bootstrapPromise: Promise<void> | null = null;
@@ -173,9 +178,61 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const data = await apiPost('/auth/login', payload);
       user.value = data?.user || null;
+      guestCredentials.value = null;
       message.value = data?.message || '';
       if (message.value) {
         notify.success(message.value);
+      }
+      return data;
+    } catch (err: any) {
+      error.value = err.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
+      fieldErrors.value = err.errors || null;
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  const loginGuest = async () => {
+    loading.value = true;
+    resetStatus();
+    try {
+      const data = await apiPost('/auth/guest', {});
+      user.value = data?.user || null;
+      guestCredentials.value = data?.guest_credentials || null;
+      message.value = data?.message || '';
+      if (message.value) {
+        notify.success(message.value);
+      }
+      return data;
+    } catch (err: any) {
+      error.value = err.message || '';
+      if (error.value) {
+        notify.error(error.value);
+      }
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  const upgradeGuest = async (payload: { username: string; email: string; password: string }) => {
+    loading.value = true;
+    resetStatus();
+    try {
+      const data = await apiPost('/auth/upgrade', payload);
+      if (user.value) {
+        user.value = {
+          ...user.value,
+          guest_migration_status: 'migrating'
+        };
+      }
+      message.value = data?.message || '';
+      if (message.value) {
+        notify.info(message.value);
       }
       return data;
     } catch (err: any) {
@@ -326,6 +383,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
       const data = await apiPost('/auth/logout', {});
       user.value = null;
+      guestCredentials.value = null;
       const settingsStore = useSettingsStore();
       settingsStore.resetState();
       if (typeof window !== 'undefined') {
@@ -356,13 +414,16 @@ export const useAuthStore = defineStore('auth', () => {
     error,
     fieldErrors,
     otpEmail,
+    guestCredentials,
     isLoggingOut,
     isBootstrapped,
     initCsrf,
     bootstrap,
     resetStatus,
     login,
+    loginGuest,
     register,
+    upgradeGuest,
     forgotPassword,
     verifyOtp,
     resendOtp,
