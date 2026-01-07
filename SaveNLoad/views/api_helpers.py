@@ -79,6 +79,20 @@ def json_response_success(message: str = None, data: dict = None) -> Response:
     return Response(response)
 
 
+def build_user_payload(user, include_email: bool = True) -> dict:
+    """
+    Standardized user payload for API responses.
+    """
+    payload = {
+        'id': user.id,
+        'username': user.username,
+        'role': 'admin' if user.is_admin() else 'user'
+    }
+    if include_email:
+        payload['email'] = user.email
+    return payload
+
+
 def parse_json_body(request):
     """
     Parse JSON body from request

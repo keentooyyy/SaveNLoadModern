@@ -36,15 +36,6 @@ def _require_user(request):
     return user, None
 
 
-def _user_payload(user):
-    return {
-        'id': user.id,
-        'username': user.username,
-        'role': 'admin' if user.is_admin() else 'user',
-        'email': user.email
-    }
-
-
 def _list_users_payload(request, user):
     try:
         from SaveNLoad.models import SimpleUsers

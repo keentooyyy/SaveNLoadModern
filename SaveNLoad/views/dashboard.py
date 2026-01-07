@@ -16,7 +16,7 @@ from SaveNLoad.services.redis_worker_service import get_user_workers
 from SaveNLoad.utils.image_utils import get_image_url_or_fallback
 from SaveNLoad.views.custom_decorators import get_current_user
 from SaveNLoad.views.input_sanitizer import sanitize_search_query
-from SaveNLoad.views.api_helpers import get_game_save_locations
+from SaveNLoad.views.api_helpers import build_user_payload, get_game_save_locations
 
 
 def format_last_played(last_played):
@@ -65,15 +65,6 @@ def _get_annotated_games(user):
     )
 
 
-def _user_payload(user):
-    return {
-        'id': user.id,
-        'username': user.username,
-        'role': 'admin' if user.is_admin() else 'user',
-        'email': user.email
-    }
-
-
 def _available_games_payload(user, queryset):
     games = []
     for game in queryset:
@@ -110,7 +101,7 @@ def _dashboard_payload(user):
     available_games = _available_games_payload(user, available_db_games)
 
     return {
-        'user': _user_payload(user),
+        'user': build_user_payload(user),
         'is_admin': user.is_admin(),
         'recent_games': recent_games,
         'available_games': available_games

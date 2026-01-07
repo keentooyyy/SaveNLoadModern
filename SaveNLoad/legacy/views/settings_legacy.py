@@ -396,7 +396,7 @@ def game_detail(request, game_id):
                                    if op.get('type') == OperationType.DELETE and not op.get('save_folder_number')]
 
             # Get pending/in-progress operations
-            from SaveNLoad.utils.operation_utils import get_pending_or_in_progress_operations
+            from SaveNLoad.legacy.utils.operation_utils import get_pending_or_in_progress_operations
             pending_ops = get_pending_or_in_progress_operations(deletion_operations)
             total_deletion_ops = len(deletion_operations)
             pending_count = len(pending_ops)

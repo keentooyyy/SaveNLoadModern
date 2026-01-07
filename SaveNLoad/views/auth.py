@@ -31,6 +31,7 @@ from SaveNLoad.views.input_sanitizer import (
     validate_password_strength
 )
 from SaveNLoad.views.custom_decorators import get_current_user
+from SaveNLoad.views.api_helpers import build_user_payload
 
 
 class JwtCookieAuthentication(BaseAuthentication):
@@ -448,12 +449,7 @@ def me_view(request):
 
     return Response(
         {
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'role': user.role,
-                'email': user.email
-            }
+            'user': build_user_payload(user)
         },
         status=status.HTTP_200_OK
     )
