@@ -8,6 +8,7 @@
           placeholder="Enter your username or email"
           :invalid="!!fieldErrors?.username"
           required
+          tabindex="1"
         />
       </div>
       <div class="mb-2">
@@ -17,7 +18,12 @@
             Forgot Password?
           </RouterLink>
         </div>
-        <PasswordField v-model="form.password" placeholder="Enter your password" :invalid="!!fieldErrors?.password" />
+        <PasswordField
+          v-model="form.password"
+          placeholder="Enter your password"
+          :invalid="!!fieldErrors?.password"
+          tabindex="2"
+        />
       </div>
       <div class="mb-3">
         <div class="form-check">
@@ -26,6 +32,7 @@
             type="checkbox"
             id="rememberMe"
             v-model="form.rememberMe"
+            tabindex="-1"
           />
           <label class="form-check-label text-white fs-6" for="rememberMe">Remember Me</label>
         </div>
@@ -37,13 +44,16 @@
           class="text-white fw-bold mt-3 py-2"
           :disabled="isSubmitting"
           :loading="isSubmitting"
+          tabindex="3"
         >
           LOGIN
         </IconButton>
       </div>
       <p class="text-white fs-6 text-center mt-3">
         Don't have an account?
-        <RouterLink to="/register" class="text-secondary text-decoration-none fs-6">Create an account</RouterLink>
+        <RouterLink to="/register" class="text-secondary text-decoration-none fs-6" tabindex="-1">
+          Create an account
+        </RouterLink>
       </p>
     </form>
   </AuthLayout>

@@ -9,6 +9,7 @@
     :disabled="disabled"
     :readonly="readonly"
     :maxlength="maxlength"
+    :tabindex="tabindex"
     class="color-primary form-control bg-primary border border-1 border-secondary rounded-1 py-2 text-white"
     :class="[{ 'is-invalid': invalid }, inputClass]"
   />
@@ -25,6 +26,7 @@ defineProps({
   readonly: { type: Boolean, default: false },
   maxlength: { type: [Number, String], default: undefined },
   invalid: { type: Boolean, default: false },
+  tabindex: { type: [Number, String], default: undefined },
   inputClass: { type: String, default: '' }
 });
 
