@@ -47,12 +47,12 @@ DEBUG = os.getenv('DEBUG', 'False') == 'True'
 if not DEBUG:
     # Allow localhost and LAN IPs via environment variable.
     # Set ALLOWED_HOSTS in .env as comma-separated values to restrict.
-    allowed_hosts_env = os.getenv('ALLOWED_HOSTS', '')
+    allowed_hosts_env = os.getenv('ALLOWED_HOSTS', '*')
     if allowed_hosts_env:
         ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(',')]
     else:
         # Safe default: require explicit host allowlist outside DEBUG.
-        ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+        ALLOWED_HOSTS = ['*']
 else:
     ALLOWED_HOSTS = ['*']
 

@@ -66,6 +66,8 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
       - REDIS_HOST=redis
+      - VITE_API_BASE=http://localhost:8000/api
+      - VITE_API_ORIGIN=http://localhost:8000
     depends_on:
       db:
         condition: service_healthy
