@@ -61,6 +61,7 @@ import { useMetaStore } from '@/stores/meta';
 import { useWorkerStatusSocket } from '@/composables/useWorkerStatusSocket';
 import { getSharedWsToken } from '@/utils/wsToken';
 import { apiGet } from '@/utils/apiClient';
+import { notify } from '@/utils/notify';
 import { redirectToWorkerRequired } from '@/utils/workerRequiredRedirect';
 
 const settingsStore = useSettingsStore();
@@ -111,12 +112,15 @@ const onSave = async () => {
   }
   saving.value = true;
   try {
-    await settingsStore.updateGame(gameId.value, {
+    const data = await settingsStore.updateGame(gameId.value, {
       name: gameName.value.trim(),
       banner: bannerUrl.value.trim(),
       save_file_locations: saveLocations.value.map((loc) => loc.trim()).filter(Boolean)
     });
-    await loadGame();
+    const message = data?.message || 'Game updated successfully.';
+    notify.flashSuccess(message);
+    window.location.reload();
+    return;
   } catch {
     // errors are surfaced via store notifications
   } finally {

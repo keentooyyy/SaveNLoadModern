@@ -86,9 +86,6 @@ export const useSettingsStore = defineStore('settings', () => {
     error.value = '';
     try {
       const data = await apiPost(`/games/${gameId}/update/`, payload);
-      if (data?.message) {
-        notify.success(data.message);
-      }
       return data;
     } catch (err: any) {
       error.value = err?.message || '';

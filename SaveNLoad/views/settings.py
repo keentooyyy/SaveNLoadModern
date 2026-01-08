@@ -376,6 +376,101 @@ def create_game(request):
 @api_view(["POST"])
 @authentication_classes([])
 @csrf_protect
+def update_game(request, game_id: int):
+    """
+    Update an existing game (Admin only).
+    """
+    user, error_response = _require_user(request)
+    if error_response:
+        return error_response
+
+    error_response = check_admin_or_error(user)
+    if error_response:
+        return error_response
+
+    try:
+        data, error_response = parse_json_body(request)
+        if error_response:
+            return error_response
+
+        name = (data.get('name') or '').strip()
+        save_file_locations = normalize_save_file_locations(data)
+        banner = (data.get('banner') or '').strip()
+
+        if not name or not save_file_locations:
+            return json_response_error('Game name and at least one save file location are required.', status=400)
+
+        duplicate_error = validate_unique_save_file_locations(save_file_locations)
+        if duplicate_error:
+            return duplicate_error
+
+        try:
+            game = Game.objects.get(id=game_id)
+        except Game.DoesNotExist:
+            return json_response_error('Game not found.', status=404)
+
+        if Game.objects.filter(name=name).exclude(id=game_id).exists():
+            return json_response_error('A game with this name already exists.', status=400)
+
+        game.name = name
+        game.save_file_locations = save_file_locations
+
+        if banner == '':
+            if game.banner:
+                game.banner.delete(save=False)
+            game.banner_url = ''
+        else:
+            game.banner_url = banner
+            if banner:
+                if is_local_url(banner, request):
+                    print(f"Banner URL is local ({banner}) - skipping download")
+                else:
+                    try:
+                        success, message, file_obj = download_image_from_url(banner, timeout=10)
+                        if success and file_obj:
+                            try:
+                                parsed = urlparse(banner)
+                                ext = os.path.splitext(parsed.path)[1] or '.jpg'
+                                game.banner.save(f"banner_{game.id}{ext}", File(file_obj), save=True)
+                                game.refresh_from_db()
+                                if game.banner:
+                                    local_url = request.build_absolute_uri(game.banner.url) if request else game.banner.url
+                                    game.banner_url = local_url
+                                if hasattr(file_obj, 'name'):
+                                    os.unlink(file_obj.name)
+                                print(
+                                    f"Successfully downloaded and cached banner for game {game.id}: "
+                                    f"{game.banner.name if game.banner else 'NOT SET'}"
+                                )
+                            except Exception as e:
+                                print(f"ERROR: Failed to save cached banner for game {game.id}: {e}")
+                        else:
+                            print(f"WARNING: Failed to download banner for game {game.id}: {message}")
+                    except Exception as e:
+                        print(f"ERROR: Banner download failed for game {game.id}: {e}")
+
+        game.save(update_fields=['name', 'save_file_locations', 'banner_url'])
+        game.generate_path_mappings()
+
+        return json_response_success(
+            message=f'Game "{game.name}" updated successfully!',
+            data={
+                'game': {
+                    'id': game.id,
+                    'name': game.name,
+                    'banner': get_image_url_or_fallback(game, request),
+                    'save_file_locations': game.save_file_locations,
+                }
+            }
+        )
+    except Exception as e:
+        print(f"ERROR: Error updating game: {str(e)}")
+        return json_response_error('Failed to update game', status=500)
+
+
+@api_view(["POST"])
+@authentication_classes([])
+@csrf_protect
 def update_account_settings(request):
     """
     Update account settings (email and/or password).
