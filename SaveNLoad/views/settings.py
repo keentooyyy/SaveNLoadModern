@@ -321,41 +321,46 @@ def create_game(request):
             'save_file_locations': save_file_locations,
         }
 
+        downloaded_banner = None
         if banner:
-            game_data['banner_url'] = banner
+            if is_local_url(banner, request):
+                print(f"Banner URL is local ({banner}) - skipping download")
+                game_data['banner_url'] = banner
+            else:
+                try:
+                    success, message, file_obj = download_image_from_url(banner, timeout=10)
+                    if not success or not file_obj:
+                        return json_response_error(f'Failed to download banner: {message}', status=400)
+                    downloaded_banner = file_obj
+                except Exception as e:
+                    print(f"ERROR: Banner download failed: {e}")
+                    return json_response_error('Failed to download banner image.', status=400)
 
         game = Game.objects.create(**game_data)
 
         game.generate_path_mappings()
 
-        if banner:
-            if is_local_url(banner, request):
-                print(f"Banner URL is local ({banner}) - skipping download")
-            else:
-                try:
-                    success, message, file_obj = download_image_from_url(banner, timeout=10)
-                    if success and file_obj:
-                        try:
-                            parsed = urlparse(banner)
-                            ext = os.path.splitext(parsed.path)[1] or '.jpg'
-                            game.banner.save(f"banner_{game.id}{ext}", File(file_obj), save=True)
-                            game.refresh_from_db()
-                            if game.banner:
-                                local_url = request.build_absolute_uri(game.banner.url) if request else game.banner.url
-                                game.banner_url = local_url
-                                game.save(update_fields=['banner_url'])
-                            if hasattr(file_obj, 'name'):
-                                os.unlink(file_obj.name)
-                            print(
-                                f"Successfully downloaded and cached banner for game {game.id}: "
-                                f"{game.banner.name if game.banner else 'NOT SET'}"
-                            )
-                        except Exception as e:
-                            print(f"ERROR: Failed to save cached banner for game {game.id}: {e}")
-                    else:
-                        print(f"WARNING: Failed to download banner for game {game.id}: {message}")
-                except Exception as e:
-                    print(f"ERROR: Banner download failed for game {game.id}: {e}")
+        if downloaded_banner:
+            try:
+                ext = os.path.splitext(downloaded_banner.name)[1] or '.jpg'
+                game.banner.save(f"banner_{game.id}{ext}", File(downloaded_banner), save=True)
+                game.refresh_from_db()
+                if game.banner:
+                    local_url = request.build_absolute_uri(game.banner.url) if request else game.banner.url
+                    game.banner_url = local_url
+                    game.save(update_fields=['banner_url'])
+                if hasattr(downloaded_banner, 'name'):
+                    os.unlink(downloaded_banner.name)
+                print(
+                    f"Successfully downloaded and cached banner for game {game.id}: "
+                    f"{game.banner.name if game.banner else 'NOT SET'}"
+                )
+            except Exception as e:
+                if hasattr(downloaded_banner, 'name'):
+                    os.unlink(downloaded_banner.name)
+                game.delete()
+                print(f"ERROR: Failed to save cached banner for game {game.id}: {e}")
+                return json_response_error('Failed to cache banner image.', status=400)
 
         return json_response_success(
             message=f'Game "{game.name}" created successfully!',
@@ -412,6 +417,20 @@ def update_game(request, game_id: int):
         if Game.objects.filter(name=name).exclude(id=game_id).exists():
             return json_response_error('A game with this name already exists.', status=400)
 
+        downloaded_banner = None
+        if banner:
+            if is_local_url(banner, request):
+                print(f"Banner URL is local ({banner}) - skipping download")
+            else:
+                try:
+                    success, message, file_obj = download_image_from_url(banner, timeout=10)
+                    if not success or not file_obj:
+                        return json_response_error(f'Failed to download banner: {message}', status=400)
+                    downloaded_banner = file_obj
+                except Exception as e:
+                    print(f"ERROR: Banner download failed: {e}")
+                    return json_response_error('Failed to download banner image.', status=400)
+
         game.name = name
         game.save_file_locations = save_file_locations
 
@@ -421,33 +440,25 @@ def update_game(request, game_id: int):
             game.banner_url = ''
         else:
             game.banner_url = banner
-            if banner:
-                if is_local_url(banner, request):
-                    print(f"Banner URL is local ({banner}) - skipping download")
-                else:
-                    try:
-                        success, message, file_obj = download_image_from_url(banner, timeout=10)
-                        if success and file_obj:
-                            try:
-                                parsed = urlparse(banner)
-                                ext = os.path.splitext(parsed.path)[1] or '.jpg'
-                                game.banner.save(f"banner_{game.id}{ext}", File(file_obj), save=True)
-                                game.refresh_from_db()
-                                if game.banner:
-                                    local_url = request.build_absolute_uri(game.banner.url) if request else game.banner.url
-                                    game.banner_url = local_url
-                                if hasattr(file_obj, 'name'):
-                                    os.unlink(file_obj.name)
-                                print(
-                                    f"Successfully downloaded and cached banner for game {game.id}: "
-                                    f"{game.banner.name if game.banner else 'NOT SET'}"
-                                )
-                            except Exception as e:
-                                print(f"ERROR: Failed to save cached banner for game {game.id}: {e}")
-                        else:
-                            print(f"WARNING: Failed to download banner for game {game.id}: {message}")
-                    except Exception as e:
-                        print(f"ERROR: Banner download failed for game {game.id}: {e}")
+            if downloaded_banner:
+                try:
+                    ext = os.path.splitext(downloaded_banner.name)[1] or '.jpg'
+                    game.banner.save(f"banner_{game.id}{ext}", File(downloaded_banner), save=True)
+                    game.refresh_from_db()
+                    if game.banner:
+                        local_url = request.build_absolute_uri(game.banner.url) if request else game.banner.url
+                        game.banner_url = local_url
+                    if hasattr(downloaded_banner, 'name'):
+                        os.unlink(downloaded_banner.name)
+                    print(
+                        f"Successfully downloaded and cached banner for game {game.id}: "
+                        f"{game.banner.name if game.banner else 'NOT SET'}"
+                    )
+                except Exception as e:
+                    if hasattr(downloaded_banner, 'name'):
+                        os.unlink(downloaded_banner.name)
+                    print(f"ERROR: Failed to save cached banner for game {game.id}: {e}")
+                    return json_response_error('Failed to cache banner image.', status=400)
 
         game.save(update_fields=['name', 'save_file_locations', 'banner_url'])
         game.generate_path_mappings()

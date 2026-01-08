@@ -280,9 +280,8 @@ _csp_connect_src = ["'self'", "ws:", "wss:"]
 _csp_img_src = [
     "'self'",
     "data:",
-    "https://api.dicebear.com",
-    "https://media.rawg.io",
-    "https://images.igdb.com",
+    "http:",
+    "https:",
 ]
 _csp_font_src = ["'self'", "data:"]
 
