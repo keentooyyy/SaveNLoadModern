@@ -118,7 +118,7 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref('');
   const fieldErrors = ref<FieldErrors | null>(null);
   const otpEmail = ref('');
-  const guestCredentials = ref<{ username: string; email: string; password: string } | null>(
+  const guestCredentials = ref<{ username: string; email?: string; password: string } | null>(
     readGuestCredentials()
   );
   const isLoggingOut = ref(false);

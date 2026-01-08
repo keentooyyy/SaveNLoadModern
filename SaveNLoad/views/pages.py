@@ -1,9 +1,12 @@
 import json
 
 from django.shortcuts import redirect, render
+from SaveNLoad.views.custom_decorators import get_current_user
 
 
 def login_page(request):
+    if get_current_user(request):
+        return redirect('/dashboard')
     return render(request, 'SaveNLoad/pages/login.html', {
         'props': json.dumps({})
     })

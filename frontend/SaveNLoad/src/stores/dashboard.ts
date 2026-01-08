@@ -125,9 +125,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const data = await apiPost(`/games/${gameId}/load/`, {});
       return data;
     } catch (err: any) {
-      error.value = err?.message || '';
-      if (error.value) {
-        notify.error(error.value);
+      const status = err?.status;
+      const message = err?.message || '';
+      if (!(status === 404 && message === 'No save files found')) {
+        error.value = message;
+        if (error.value) {
+          notify.error(error.value);
+        }
       }
       throw err;
     } finally {

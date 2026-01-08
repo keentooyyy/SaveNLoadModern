@@ -142,6 +142,7 @@ import ModalShell from '@/components/molecules/ModalShell.vue';
 import BaseCheckbox from '@/components/atoms/BaseCheckbox.vue';
 import { useAuthConfig } from '@/composables/useAuthConfig';
 import { notify } from '@/utils/notify';
+import { redirectToWorkerRequired } from '@/utils/workerRequiredRedirect';
 
 const store = useAuthStore();
 const dashboardStore = useDashboardStore();
@@ -217,7 +218,7 @@ const onSubmit = async () => {
       window.location.assign('/dashboard');
     } catch (err: any) {
       if (err?.status === 503) {
-        window.location.assign('/worker-required');
+        redirectToWorkerRequired('/dashboard');
         return;
       }
       if (err?.status === 401) {
@@ -291,7 +292,7 @@ const closeGuestModal = async () => {
       window.location.assign('/dashboard');
     } catch (err: any) {
       if (err?.status === 503) {
-        window.location.assign('/worker-required');
+        redirectToWorkerRequired('/dashboard');
         return;
       }
       if (err?.status === 401) {

@@ -61,7 +61,13 @@ def _list_users_payload(request, user):
 
         search_query = request.GET.get('q', '').strip()
 
-        users_query = SimpleUsers.objects.all().exclude(id=user.id).order_by('username')
+        users_query = (
+            SimpleUsers.objects
+            .all()
+            .exclude(id=user.id)
+            .exclude(pending_deletion=True)
+            .order_by('username')
+        )
 
         if search_query:
             users_query = users_query.filter(

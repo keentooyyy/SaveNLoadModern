@@ -78,6 +78,7 @@ import { useMetaStore } from '@/stores/meta';
 import { useSettingsStore } from '@/stores/settings';
 import { useWorkerStatusSocket } from '@/composables/useWorkerStatusSocket';
 import { getSharedWsToken } from '@/utils/wsToken';
+import { redirectToWorkerRequired } from '@/utils/workerRequiredRedirect';
 
 const authStore = useAuthStore();
 const metaStore = useMetaStore();
@@ -124,7 +125,7 @@ useWorkerStatusSocket({
   suppressRedirectRef,
   getWsToken: () => getSharedWsToken(),
   onWorkerUnavailable: () => {
-    window.location.assign('/worker-required');
+    redirectToWorkerRequired();
   }
 });
 

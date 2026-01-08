@@ -1,104 +1,104 @@
 {
-  "_BaseInput.vue_vue_type_script_setup_true_lang-BPauNQUe.js": {
-    "file": "assets/BaseInput.vue_vue_type_script_setup_true_lang-BPauNQUe.js",
+  "_BaseInput.vue_vue_type_script_setup_true_lang-B8qTTpdJ.js": {
+    "file": "assets/BaseInput.vue_vue_type_script_setup_true_lang-B8qTTpdJ.js",
     "name": "BaseInput.vue_vue_type_script_setup_true_lang",
     "imports": [
-      "_islands-CvRdAtFP.js"
+      "_islands-xupt9cpY.js"
     ]
   },
-  "_BaseLink.vue_vue_type_script_setup_true_lang-Cq0V9m-h.js": {
-    "file": "assets/BaseLink.vue_vue_type_script_setup_true_lang-Cq0V9m-h.js",
+  "_BaseLink.vue_vue_type_script_setup_true_lang-D6yBJKTp.js": {
+    "file": "assets/BaseLink.vue_vue_type_script_setup_true_lang-D6yBJKTp.js",
     "name": "BaseLink.vue_vue_type_script_setup_true_lang",
     "imports": [
-      "_islands-CvRdAtFP.js"
+      "_islands-xupt9cpY.js"
     ]
   },
-  "_EmptyState.vue_vue_type_script_setup_true_lang-D-MaYuCm.js": {
-    "file": "assets/EmptyState.vue_vue_type_script_setup_true_lang-D-MaYuCm.js",
+  "_EmptyState.vue_vue_type_script_setup_true_lang-Ce8_rfUO.js": {
+    "file": "assets/EmptyState.vue_vue_type_script_setup_true_lang-Ce8_rfUO.js",
     "name": "EmptyState.vue_vue_type_script_setup_true_lang",
     "imports": [
-      "_islands-CvRdAtFP.js"
+      "_islands-xupt9cpY.js"
     ]
   },
-  "_GameFormFields.vue_vue_type_script_setup_true_lang-C7vjYrEU.js": {
-    "file": "assets/GameFormFields.vue_vue_type_script_setup_true_lang-C7vjYrEU.js",
+  "_GameFormFields.vue_vue_type_script_setup_true_lang-D5PWSsL8.js": {
+    "file": "assets/GameFormFields.vue_vue_type_script_setup_true_lang-D5PWSsL8.js",
     "name": "GameFormFields.vue_vue_type_script_setup_true_lang",
     "imports": [
-      "_InputLabel.vue_vue_type_script_setup_true_lang-DOmKMaAR.js",
-      "_TextInput.vue_vue_type_script_setup_true_lang-CV7Ydn7d.js",
-      "_islands-CvRdAtFP.js"
+      "_InputLabel.vue_vue_type_script_setup_true_lang-CZD4CPR-.js",
+      "_TextInput.vue_vue_type_script_setup_true_lang-DQQjgpi1.js",
+      "_islands-xupt9cpY.js"
     ]
   },
-  "_InputLabel.vue_vue_type_script_setup_true_lang-DOmKMaAR.js": {
-    "file": "assets/InputLabel.vue_vue_type_script_setup_true_lang-DOmKMaAR.js",
+  "_InputLabel.vue_vue_type_script_setup_true_lang-CZD4CPR-.js": {
+    "file": "assets/InputLabel.vue_vue_type_script_setup_true_lang-CZD4CPR-.js",
     "name": "InputLabel.vue_vue_type_script_setup_true_lang",
     "imports": [
-      "_islands-CvRdAtFP.js"
+      "_islands-xupt9cpY.js"
     ]
   },
   "_ModalShell-CbrtUXbh.css": {
     "file": "assets/ModalShell-CbrtUXbh.css",
     "src": "_ModalShell-CbrtUXbh.css"
   },
-  "_ModalShell-CppTqaMo.js": {
-    "file": "assets/ModalShell-CppTqaMo.js",
+  "_ModalShell-Lx8dG2aR.js": {
+    "file": "assets/ModalShell-Lx8dG2aR.js",
     "name": "ModalShell",
     "imports": [
-      "_islands-CvRdAtFP.js",
+      "_islands-xupt9cpY.js",
       "__plugin-vue_export-helper-DlAUqK2U.js"
     ],
     "css": [
       "assets/ModalShell-CbrtUXbh.css"
     ]
   },
-  "_PasswordField.vue_vue_type_script_setup_true_lang-BHxJrb8M.js": {
-    "file": "assets/PasswordField.vue_vue_type_script_setup_true_lang-BHxJrb8M.js",
+  "_PasswordField.vue_vue_type_script_setup_true_lang-FC0zGIAW.js": {
+    "file": "assets/PasswordField.vue_vue_type_script_setup_true_lang-FC0zGIAW.js",
     "name": "PasswordField.vue_vue_type_script_setup_true_lang",
     "imports": [
-      "_BaseInput.vue_vue_type_script_setup_true_lang-BPauNQUe.js",
-      "_islands-CvRdAtFP.js"
+      "_BaseInput.vue_vue_type_script_setup_true_lang-B8qTTpdJ.js",
+      "_islands-xupt9cpY.js"
     ]
   },
-  "_TextInput.vue_vue_type_script_setup_true_lang-CV7Ydn7d.js": {
-    "file": "assets/TextInput.vue_vue_type_script_setup_true_lang-CV7Ydn7d.js",
+  "_TextInput.vue_vue_type_script_setup_true_lang-DQQjgpi1.js": {
+    "file": "assets/TextInput.vue_vue_type_script_setup_true_lang-DQQjgpi1.js",
     "name": "TextInput.vue_vue_type_script_setup_true_lang",
     "imports": [
-      "_BaseInput.vue_vue_type_script_setup_true_lang-BPauNQUe.js",
-      "_islands-CvRdAtFP.js"
+      "_BaseInput.vue_vue_type_script_setup_true_lang-B8qTTpdJ.js",
+      "_islands-xupt9cpY.js"
     ]
   },
   "__plugin-vue_export-helper-DlAUqK2U.js": {
     "file": "assets/_plugin-vue_export-helper-DlAUqK2U.js",
     "name": "_plugin-vue_export-helper"
   },
-  "_islands-CvRdAtFP.js": {
-    "file": "assets/islands-CvRdAtFP.js",
+  "_islands-DLb3QvTz.css": {
+    "file": "assets/islands-DLb3QvTz.css",
+    "src": "_islands-DLb3QvTz.css"
+  },
+  "_islands-xupt9cpY.js": {
+    "file": "assets/islands-xupt9cpY.js",
     "name": "islands",
     "css": [
       "assets/islands-DLb3QvTz.css"
     ]
   },
-  "_islands-DLb3QvTz.css": {
-    "file": "assets/islands-DLb3QvTz.css",
-    "src": "_islands-DLb3QvTz.css"
-  },
-  "_useAuthConfig-BH77vTcF.js": {
-    "file": "assets/useAuthConfig-BH77vTcF.js",
+  "_useAuthConfig-B1eTrFEk.js": {
+    "file": "assets/useAuthConfig-B1eTrFEk.js",
     "name": "useAuthConfig",
     "imports": [
-      "_islands-CvRdAtFP.js",
-      "_BaseLink.vue_vue_type_script_setup_true_lang-Cq0V9m-h.js"
+      "_islands-xupt9cpY.js",
+      "_BaseLink.vue_vue_type_script_setup_true_lang-D6yBJKTp.js"
     ]
   },
-  "_useWorkerStatusSocket-BPxXwfhu.js": {
-    "file": "assets/useWorkerStatusSocket-BPxXwfhu.js",
+  "_useWorkerStatusSocket-DnicZmfL.js": {
+    "file": "assets/useWorkerStatusSocket-DnicZmfL.js",
     "name": "useWorkerStatusSocket",
     "imports": [
-      "_islands-CvRdAtFP.js",
+      "_islands-xupt9cpY.js",
       "__plugin-vue_export-helper-DlAUqK2U.js",
-      "_BaseLink.vue_vue_type_script_setup_true_lang-Cq0V9m-h.js",
-      "_ModalShell-CppTqaMo.js",
-      "_wsToken-mbUjdKxf.js"
+      "_BaseLink.vue_vue_type_script_setup_true_lang-D6yBJKTp.js",
+      "_ModalShell-Lx8dG2aR.js",
+      "_wsToken-DmsAJ-dL.js"
     ],
     "css": [
       "assets/useWorkerStatusSocket-HuXJrkSL.css"
@@ -108,162 +108,171 @@
     "file": "assets/useWorkerStatusSocket-HuXJrkSL.css",
     "src": "_useWorkerStatusSocket-HuXJrkSL.css"
   },
-  "_wsToken-mbUjdKxf.js": {
-    "file": "assets/wsToken-mbUjdKxf.js",
+  "_workerRequiredRedirect-DRbVFzRw.js": {
+    "file": "assets/workerRequiredRedirect-DRbVFzRw.js",
+    "name": "workerRequiredRedirect"
+  },
+  "_wsToken-DmsAJ-dL.js": {
+    "file": "assets/wsToken-DmsAJ-dL.js",
     "name": "wsToken",
     "imports": [
-      "_islands-CvRdAtFP.js"
+      "_islands-xupt9cpY.js"
     ]
   },
   "src/utils/dashboardIsland.ts": {
-    "file": "assets/dashboard-DSSFRDkW.js",
+    "file": "assets/dashboard-AxuA-A17.js",
     "name": "dashboard",
     "src": "src/utils/dashboardIsland.ts",
     "isEntry": true,
     "imports": [
-      "_islands-CvRdAtFP.js",
-      "_useWorkerStatusSocket-BPxXwfhu.js",
+      "_islands-xupt9cpY.js",
+      "_useWorkerStatusSocket-DnicZmfL.js",
       "__plugin-vue_export-helper-DlAUqK2U.js",
-      "_EmptyState.vue_vue_type_script_setup_true_lang-D-MaYuCm.js",
-      "_TextInput.vue_vue_type_script_setup_true_lang-CV7Ydn7d.js",
-      "_ModalShell-CppTqaMo.js",
-      "_wsToken-mbUjdKxf.js",
-      "_BaseLink.vue_vue_type_script_setup_true_lang-Cq0V9m-h.js",
-      "_BaseInput.vue_vue_type_script_setup_true_lang-BPauNQUe.js"
+      "_EmptyState.vue_vue_type_script_setup_true_lang-Ce8_rfUO.js",
+      "_TextInput.vue_vue_type_script_setup_true_lang-DQQjgpi1.js",
+      "_ModalShell-Lx8dG2aR.js",
+      "_wsToken-DmsAJ-dL.js",
+      "_workerRequiredRedirect-DRbVFzRw.js",
+      "_BaseLink.vue_vue_type_script_setup_true_lang-D6yBJKTp.js",
+      "_BaseInput.vue_vue_type_script_setup_true_lang-B8qTTpdJ.js"
     ],
     "css": [
-      "assets/dashboard-ieOieWW3.css"
+      "assets/dashboard-3mfj9M-M.css"
     ]
   },
   "src/utils/forgotPasswordIsland.ts": {
-    "file": "assets/forgotPassword-D4qSHAFl.js",
+    "file": "assets/forgotPassword-DBM8z5Ux.js",
     "name": "forgotPassword",
     "src": "src/utils/forgotPasswordIsland.ts",
     "isEntry": true,
     "imports": [
-      "_islands-CvRdAtFP.js",
-      "_useAuthConfig-BH77vTcF.js",
-      "_InputLabel.vue_vue_type_script_setup_true_lang-DOmKMaAR.js",
-      "_TextInput.vue_vue_type_script_setup_true_lang-CV7Ydn7d.js",
-      "_BaseLink.vue_vue_type_script_setup_true_lang-Cq0V9m-h.js",
-      "_BaseInput.vue_vue_type_script_setup_true_lang-BPauNQUe.js"
+      "_islands-xupt9cpY.js",
+      "_useAuthConfig-B1eTrFEk.js",
+      "_InputLabel.vue_vue_type_script_setup_true_lang-CZD4CPR-.js",
+      "_TextInput.vue_vue_type_script_setup_true_lang-DQQjgpi1.js",
+      "_BaseLink.vue_vue_type_script_setup_true_lang-D6yBJKTp.js",
+      "_BaseInput.vue_vue_type_script_setup_true_lang-B8qTTpdJ.js"
     ]
   },
   "src/utils/gameDetailIsland.ts": {
-    "file": "assets/gameDetail-OMczhNkS.js",
+    "file": "assets/gameDetail-BVSGC0r5.js",
     "name": "gameDetail",
     "src": "src/utils/gameDetailIsland.ts",
     "isEntry": true,
     "imports": [
-      "_islands-CvRdAtFP.js",
-      "_useWorkerStatusSocket-BPxXwfhu.js",
-      "_GameFormFields.vue_vue_type_script_setup_true_lang-C7vjYrEU.js",
-      "_InputLabel.vue_vue_type_script_setup_true_lang-DOmKMaAR.js",
-      "_wsToken-mbUjdKxf.js",
+      "_islands-xupt9cpY.js",
+      "_useWorkerStatusSocket-DnicZmfL.js",
+      "_GameFormFields.vue_vue_type_script_setup_true_lang-D5PWSsL8.js",
+      "_InputLabel.vue_vue_type_script_setup_true_lang-CZD4CPR-.js",
+      "_wsToken-DmsAJ-dL.js",
+      "_workerRequiredRedirect-DRbVFzRw.js",
       "__plugin-vue_export-helper-DlAUqK2U.js",
-      "_BaseLink.vue_vue_type_script_setup_true_lang-Cq0V9m-h.js",
-      "_ModalShell-CppTqaMo.js",
-      "_TextInput.vue_vue_type_script_setup_true_lang-CV7Ydn7d.js",
-      "_BaseInput.vue_vue_type_script_setup_true_lang-BPauNQUe.js"
+      "_BaseLink.vue_vue_type_script_setup_true_lang-D6yBJKTp.js",
+      "_ModalShell-Lx8dG2aR.js",
+      "_TextInput.vue_vue_type_script_setup_true_lang-DQQjgpi1.js",
+      "_BaseInput.vue_vue_type_script_setup_true_lang-B8qTTpdJ.js"
     ]
   },
   "src/utils/loginIsland.ts": {
-    "file": "assets/login-8KItxNf3.js",
+    "file": "assets/login-BzUaFjP2.js",
     "name": "login",
     "src": "src/utils/loginIsland.ts",
     "isEntry": true,
     "imports": [
-      "_islands-CvRdAtFP.js",
-      "_useAuthConfig-BH77vTcF.js",
-      "_PasswordField.vue_vue_type_script_setup_true_lang-BHxJrb8M.js",
-      "_InputLabel.vue_vue_type_script_setup_true_lang-DOmKMaAR.js",
-      "_TextInput.vue_vue_type_script_setup_true_lang-CV7Ydn7d.js",
-      "_ModalShell-CppTqaMo.js",
+      "_islands-xupt9cpY.js",
+      "_useAuthConfig-B1eTrFEk.js",
+      "_PasswordField.vue_vue_type_script_setup_true_lang-FC0zGIAW.js",
+      "_InputLabel.vue_vue_type_script_setup_true_lang-CZD4CPR-.js",
+      "_TextInput.vue_vue_type_script_setup_true_lang-DQQjgpi1.js",
+      "_ModalShell-Lx8dG2aR.js",
+      "_workerRequiredRedirect-DRbVFzRw.js",
       "__plugin-vue_export-helper-DlAUqK2U.js",
-      "_BaseLink.vue_vue_type_script_setup_true_lang-Cq0V9m-h.js",
-      "_BaseInput.vue_vue_type_script_setup_true_lang-BPauNQUe.js"
+      "_BaseLink.vue_vue_type_script_setup_true_lang-D6yBJKTp.js",
+      "_BaseInput.vue_vue_type_script_setup_true_lang-B8qTTpdJ.js"
     ],
     "css": [
-      "assets/login-Cos6HQpe.css"
+      "assets/login-CYiUV8Np.css"
     ]
   },
   "src/utils/registerIsland.ts": {
-    "file": "assets/register-DMcGpXNZ.js",
+    "file": "assets/register-CudnrCDw.js",
     "name": "register",
     "src": "src/utils/registerIsland.ts",
     "isEntry": true,
     "imports": [
-      "_islands-CvRdAtFP.js",
-      "_useAuthConfig-BH77vTcF.js",
-      "_PasswordField.vue_vue_type_script_setup_true_lang-BHxJrb8M.js",
-      "_InputLabel.vue_vue_type_script_setup_true_lang-DOmKMaAR.js",
-      "_TextInput.vue_vue_type_script_setup_true_lang-CV7Ydn7d.js",
-      "_BaseLink.vue_vue_type_script_setup_true_lang-Cq0V9m-h.js",
-      "_BaseInput.vue_vue_type_script_setup_true_lang-BPauNQUe.js"
+      "_islands-xupt9cpY.js",
+      "_useAuthConfig-B1eTrFEk.js",
+      "_PasswordField.vue_vue_type_script_setup_true_lang-FC0zGIAW.js",
+      "_InputLabel.vue_vue_type_script_setup_true_lang-CZD4CPR-.js",
+      "_TextInput.vue_vue_type_script_setup_true_lang-DQQjgpi1.js",
+      "_BaseLink.vue_vue_type_script_setup_true_lang-D6yBJKTp.js",
+      "_BaseInput.vue_vue_type_script_setup_true_lang-B8qTTpdJ.js"
     ]
   },
   "src/utils/resetPasswordIsland.ts": {
-    "file": "assets/resetPassword-P7IQul24.js",
+    "file": "assets/resetPassword-BZM92owh.js",
     "name": "resetPassword",
     "src": "src/utils/resetPasswordIsland.ts",
     "isEntry": true,
     "imports": [
-      "_islands-CvRdAtFP.js",
-      "_useAuthConfig-BH77vTcF.js",
-      "_PasswordField.vue_vue_type_script_setup_true_lang-BHxJrb8M.js",
-      "_InputLabel.vue_vue_type_script_setup_true_lang-DOmKMaAR.js",
-      "_BaseLink.vue_vue_type_script_setup_true_lang-Cq0V9m-h.js",
-      "_BaseInput.vue_vue_type_script_setup_true_lang-BPauNQUe.js"
+      "_islands-xupt9cpY.js",
+      "_useAuthConfig-B1eTrFEk.js",
+      "_PasswordField.vue_vue_type_script_setup_true_lang-FC0zGIAW.js",
+      "_InputLabel.vue_vue_type_script_setup_true_lang-CZD4CPR-.js",
+      "_BaseLink.vue_vue_type_script_setup_true_lang-D6yBJKTp.js",
+      "_BaseInput.vue_vue_type_script_setup_true_lang-B8qTTpdJ.js"
     ]
   },
   "src/utils/settingsIsland.ts": {
-    "file": "assets/settings-DfoHwTir.js",
+    "file": "assets/settings-ZiQ9T_1g.js",
     "name": "settings",
     "src": "src/utils/settingsIsland.ts",
     "isEntry": true,
     "imports": [
-      "_islands-CvRdAtFP.js",
-      "_useWorkerStatusSocket-BPxXwfhu.js",
+      "_islands-xupt9cpY.js",
+      "_useWorkerStatusSocket-DnicZmfL.js",
       "__plugin-vue_export-helper-DlAUqK2U.js",
-      "_GameFormFields.vue_vue_type_script_setup_true_lang-C7vjYrEU.js",
-      "_InputLabel.vue_vue_type_script_setup_true_lang-DOmKMaAR.js",
-      "_TextInput.vue_vue_type_script_setup_true_lang-CV7Ydn7d.js",
-      "_EmptyState.vue_vue_type_script_setup_true_lang-D-MaYuCm.js",
-      "_ModalShell-CppTqaMo.js",
-      "_PasswordField.vue_vue_type_script_setup_true_lang-BHxJrb8M.js",
-      "_wsToken-mbUjdKxf.js",
-      "_BaseLink.vue_vue_type_script_setup_true_lang-Cq0V9m-h.js",
-      "_BaseInput.vue_vue_type_script_setup_true_lang-BPauNQUe.js"
+      "_GameFormFields.vue_vue_type_script_setup_true_lang-D5PWSsL8.js",
+      "_InputLabel.vue_vue_type_script_setup_true_lang-CZD4CPR-.js",
+      "_TextInput.vue_vue_type_script_setup_true_lang-DQQjgpi1.js",
+      "_EmptyState.vue_vue_type_script_setup_true_lang-Ce8_rfUO.js",
+      "_ModalShell-Lx8dG2aR.js",
+      "_PasswordField.vue_vue_type_script_setup_true_lang-FC0zGIAW.js",
+      "_wsToken-DmsAJ-dL.js",
+      "_workerRequiredRedirect-DRbVFzRw.js",
+      "_BaseLink.vue_vue_type_script_setup_true_lang-D6yBJKTp.js",
+      "_BaseInput.vue_vue_type_script_setup_true_lang-B8qTTpdJ.js"
     ],
     "css": [
-      "assets/settings-BQ-4M7F9.css"
+      "assets/settings-BDaYuL4R.css"
     ]
   },
   "src/utils/verifyOtpIsland.ts": {
-    "file": "assets/verifyOtp-ClBuhXvQ.js",
+    "file": "assets/verifyOtp-DCRRwDAF.js",
     "name": "verifyOtp",
     "src": "src/utils/verifyOtpIsland.ts",
     "isEntry": true,
     "imports": [
-      "_islands-CvRdAtFP.js",
-      "_useAuthConfig-BH77vTcF.js",
-      "_InputLabel.vue_vue_type_script_setup_true_lang-DOmKMaAR.js",
+      "_islands-xupt9cpY.js",
+      "_useAuthConfig-B1eTrFEk.js",
+      "_InputLabel.vue_vue_type_script_setup_true_lang-CZD4CPR-.js",
       "__plugin-vue_export-helper-DlAUqK2U.js",
-      "_BaseLink.vue_vue_type_script_setup_true_lang-Cq0V9m-h.js"
+      "_BaseLink.vue_vue_type_script_setup_true_lang-D6yBJKTp.js"
     ],
     "css": [
       "assets/verifyOtp-D7pQkBZ0.css"
     ]
   },
   "src/utils/workerRequiredIsland.ts": {
-    "file": "assets/workerRequired-CQ9aIIs0.js",
+    "file": "assets/workerRequired-XEtvVNTu.js",
     "name": "workerRequired",
     "src": "src/utils/workerRequiredIsland.ts",
     "isEntry": true,
     "imports": [
-      "_islands-CvRdAtFP.js",
+      "_islands-xupt9cpY.js",
       "__plugin-vue_export-helper-DlAUqK2U.js",
-      "_wsToken-mbUjdKxf.js"
+      "_wsToken-DmsAJ-dL.js",
+      "_workerRequiredRedirect-DRbVFzRw.js"
     ]
   }
 }

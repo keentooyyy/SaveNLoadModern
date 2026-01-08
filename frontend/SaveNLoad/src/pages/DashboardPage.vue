@@ -9,12 +9,19 @@
         @settings="goToSettings"
         @logout="onLogout"
       />
-      <div v-if="dashboardError" class="alert alert-danger mx-3 mt-3">
-        {{ dashboardError }}
-      </div>
-      <div v-if="showGuestBanner" class="alert alert-warning mx-3 mt-3">
-        Guest account will be deleted on {{ guestExpiryDate }} ({{ guestDaysLeft }} left).
-        <button class="btn btn-sm btn-dark ms-2" @click="goToSettings">Upgrade Account</button>
+      <div v-if="showGuestBanner" class="guest-expiry-banner mx-3 mt-3">
+        <div class="guest-expiry-banner__icon">
+          <i class="fas fa-user-clock"></i>
+        </div>
+        <div class="guest-expiry-banner__content">
+          <div class="guest-expiry-banner__title">Guest account expires soon</div>
+          <div class="guest-expiry-banner__meta">
+            Deletion on {{ guestExpiryDate }} · {{ guestDaysLeft }} left
+          </div>
+        </div>
+        <button class="guest-expiry-banner__cta" type="button" @click="goToSettings">
+          Upgrade Account
+        </button>
       </div>
       <RecentList :items="recentGames" :loading="recentLoading" @select="onRecentSelect" />
       <GameGrid
@@ -84,6 +91,7 @@ import { pauseBootstrapModals, restoreBootstrapModals } from '@/utils/modalStack
 import { useConfirm } from '@/composables/useConfirm';
 import { useWorkerStatusSocket } from '@/composables/useWorkerStatusSocket';
 import { getSharedWsToken } from '@/utils/wsToken';
+import { redirectToWorkerRequired } from '@/utils/workerRequiredRedirect';
 
 const store = useDashboardStore();
 const authStore = useAuthStore();
@@ -202,7 +210,7 @@ const handleAuthError = (err: any) => {
   if (status === 401) {
     window.location.assign('/login');
   } else if (status === 503) {
-    window.location.assign('/worker-required');
+    redirectToWorkerRequired();
   }
 };
 
@@ -599,7 +607,7 @@ useWorkerStatusSocket({
   suppressRedirectRef,
   getWsToken: () => getSharedWsToken(),
   onWorkerUnavailable: () => {
-    window.location.assign('/worker-required');
+    redirectToWorkerRequired();
   }
 });
 
@@ -820,3 +828,71 @@ onBeforeUnmount(() => {
   }
 });
 </script>
+
+<style scoped>
+.guest-expiry-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1.1rem;
+  border-radius: 14px;
+  border: 1px solid var(--white-opacity-10);
+  background: rgba(46, 56, 76, 0.9);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
+}
+
+.guest-expiry-banner__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--primary-opacity-20);
+  color: var(--color-primary);
+  font-size: 1.1rem;
+}
+
+.guest-expiry-banner__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.guest-expiry-banner__title {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--color-white);
+}
+
+.guest-expiry-banner__meta {
+  margin-top: 0.2rem;
+  color: var(--white-opacity-60);
+  font-size: 0.9rem;
+}
+
+.guest-expiry-banner__cta {
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--color-white);
+  font-weight: 600;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  transition: all 0.2s ease;
+}
+
+.guest-expiry-banner__cta:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--primary-opacity-20);
+}
+
+@media (max-width: 720px) {
+  .guest-expiry-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .guest-expiry-banner__cta {
+    width: 100%;
+    text-align: center;
+  }
+}
+</style>

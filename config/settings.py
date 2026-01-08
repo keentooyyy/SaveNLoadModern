@@ -184,7 +184,7 @@ STATICFILES_DIRS = [
 ]
 
 VITE_STATIC_URL = 'vite'
-VITE_MANIFEST_PATH = BASE_DIR / 'SaveNLoad' / 'static' / 'vite' / 'manifest.json'
+VITE_MANIFEST_PATH = BASE_DIR / 'SaveNLoad' / 'static' / 'vite' / '.vite' / 'manifest.json'
 VITE_DEV_SERVER = os.getenv('VITE_DEV_SERVER', '')
 
 # WhiteNoise configuration for production static file serving

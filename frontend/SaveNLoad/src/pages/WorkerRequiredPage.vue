@@ -86,6 +86,7 @@ import { useAuthStore } from '@/stores/auth';
 import { apiPost } from '@/utils/apiClient';
 import { notify } from '@/utils/notify';
 import { getSharedWsToken } from '@/utils/wsToken';
+import { clearWorkerRequiredReturnPath, getWorkerRequiredReturnPath, setWorkerRequiredReturnPath } from '@/utils/workerRequiredRedirect';
 
 const authStore = useAuthStore();
 const { workers } = useWorkerListSocket({
@@ -120,13 +121,29 @@ const claimedWorkerForClient = computed(() => {
   return onlineWorkers.value.find((worker) => worker.client_id === clientId && worker.claimed) || null;
 });
 
+const resolveReturnTarget = () => {
+  const params = new URLSearchParams(window.location.search);
+  const paramTarget = (params.get('return') || '').trim();
+  const storedTarget = getWorkerRequiredReturnPath();
+  const rawTarget = paramTarget || storedTarget;
+  if (!rawTarget || rawTarget.startsWith('/worker-required')) {
+    return '/dashboard';
+  }
+  if (!rawTarget.startsWith('/')) {
+    return `/${rawTarget}`;
+  }
+  return rawTarget;
+};
+
 const redirectIfClaimed = () => {
   if (redirecting.value) {
     return;
   }
   if (claimedWorkerForUser.value || claimedWorkerForClient.value) {
     redirecting.value = true;
-    window.location.assign('/dashboard');
+    const target = resolveReturnTarget();
+    clearWorkerRequiredReturnPath();
+    window.location.assign(target);
   }
 };
 
@@ -146,7 +163,9 @@ const claimWorker = async (clientId: string) => {
     } catch {
       // Ignore storage errors (private mode, etc.)
     }
-    window.location.assign('/dashboard');
+    const target = resolveReturnTarget();
+    clearWorkerRequiredReturnPath();
+    window.location.assign(target);
   } catch (error: any) {
     if (error?.message) {
       notify.error(error.message);
@@ -175,6 +194,11 @@ onMounted(async () => {
     if (!authStore.user) {
       window.location.assign('/login');
       return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const returnTarget = (params.get('return') || '').trim();
+    if (returnTarget) {
+      setWorkerRequiredReturnPath(returnTarget);
     }
     try {
       localClientId.value = window.localStorage.getItem('savenload_client_id');

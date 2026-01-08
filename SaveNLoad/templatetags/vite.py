@@ -18,6 +18,20 @@ def _load_manifest(path: Path) -> dict:
         return {}
 
 
+def _collect_css(manifest: dict, entry_name: str, visited: set[str] | None = None) -> list[str]:
+    if visited is None:
+        visited = set()
+    if entry_name in visited:
+        return []
+    visited.add(entry_name)
+
+    entry = manifest.get(entry_name) or {}
+    css_files = list(entry.get('css', []))
+    for imported in entry.get('imports', []):
+        css_files.extend(_collect_css(manifest, imported, visited))
+    return css_files
+
+
 @register.simple_tag
 def vite_asset(path: str) -> str:
     dev_server = getattr(settings, 'VITE_DEV_SERVER', '')
@@ -46,7 +60,7 @@ def vite_entry(entry_name: str) -> str:
         src = static(f"{getattr(settings, 'VITE_STATIC_URL', '/static/vite/').strip('/')}/{file_name}")
         tags.append(f'<script type="module" src="{src}"></script>')
 
-    for css_file in entry.get('css', []):
+    for css_file in _collect_css(manifest, entry_name):
         href = static(f"{getattr(settings, 'VITE_STATIC_URL', '/static/vite/').strip('/')}/{css_file}")
         tags.append(f'<link rel="stylesheet" href="{href}">')
 
