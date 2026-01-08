@@ -489,12 +489,7 @@ def delete_save_folder(request, game_id, folder_number):
         if error_response:
             return error_response
 
-        remote_ftp_path = _build_full_remote_path(
-            username=user.username,
-            game_name=game.name,
-            save_folder_number=folder_number,
-            path_index=None
-        )
+        remote_ftp_path = save_folder.smb_path
 
         operation_id = create_operation(
             {
@@ -663,12 +658,7 @@ def delete_all_saves(request, game_id):
                     invalid_folders.append(save_folder)
                     continue
 
-                remote_ftp_path = _build_full_remote_path(
-                    username=user.username,
-                    game_name=game.name,
-                    save_folder_number=save_folder.folder_number,
-                    path_index=None
-                )
+                remote_ftp_path = save_folder.smb_path
 
                 operation_id = create_operation(
                     {
