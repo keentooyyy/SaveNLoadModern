@@ -831,7 +831,7 @@ onMounted(async () => {
   }, 60000);
   try {
     await authStore.refreshUser();
-    await store.loadDashboard();
+    await refreshGames();
   } catch (err: any) {
     await handleAuthError(err);
   }
