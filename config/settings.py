@@ -218,14 +218,14 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CSRF Protection Settings
 # For local production (no HTTPS), keep secure cookies disabled
-CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'False') == 'True'  # Set to True only with HTTPS
+CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'False')  # Set to True only with HTTPS
 CSRF_COOKIE_HTTPONLY = False  # Must be False for AJAX to work
 CSRF_COOKIE_SAMESITE = 'Lax'  # Prevents CSRF attacks while allowing AJAX
 CSRF_USE_SESSIONS = False  # Use cookie-based CSRF tokens
 CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'  # Default CSRF failure view
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
-    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:8000,http://localhost:8001').split(',')
+    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:8000, http://localhost:8001, http://192.168.88.101:8000').split(',')
     if origin.strip()
 ]
 
@@ -235,14 +235,14 @@ if not DEBUG:
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
     SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'True') == 'True'
+    SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False')
     SESSION_COOKIE_SAMESITE = 'Lax'
 
 # JWT Auth (Cookie-based)
 AUTH_ACCESS_COOKIE_NAME = os.getenv('AUTH_ACCESS_COOKIE_NAME', 'snl_access')
 AUTH_REFRESH_COOKIE_NAME = os.getenv('AUTH_REFRESH_COOKIE_NAME', 'snl_refresh')
 AUTH_RESET_COOKIE_NAME = os.getenv('AUTH_RESET_COOKIE_NAME', 'snl_reset')
-AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', 'True' if not DEBUG else 'False') == 'True'
+AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', 'False')
 AUTH_COOKIE_SAMESITE = os.getenv('AUTH_COOKIE_SAMESITE', 'Lax')
 AUTH_ACCESS_TOKEN_MINUTES = int(os.getenv('AUTH_ACCESS_TOKEN_MINUTES', '15'))
 AUTH_REFRESH_TOKEN_DAYS = int(os.getenv('AUTH_REFRESH_TOKEN_DAYS', '7'))
@@ -308,7 +308,7 @@ CACHES = {
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
-    for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:8000,http://localhost:8001').split(',')
+    for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:8000, http://localhost:8001, http://192.168.88.101:8000').split(',')
     if origin.strip()
 ]
 
