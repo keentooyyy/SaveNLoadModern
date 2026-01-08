@@ -68,7 +68,7 @@ def is_local_url(image_url, request=None):
         return False
 
 
-def download_image_from_url(image_url, save_path=None, timeout=3):
+def download_image_from_url(image_url, save_path=None, timeout=3, max_bytes=5 * 1024 * 1024):
     """
     Downloads an image from a URL and saves it locally.
     
@@ -96,6 +96,15 @@ def download_image_from_url(image_url, save_path=None, timeout=3):
         response = requests.get(image_url, headers=headers, timeout=timeout, stream=True)
         response.raise_for_status()
         
+        # Validate content length (prevent large downloads)
+        content_length = response.headers.get('Content-Length')
+        if content_length:
+            try:
+                if int(content_length) > max_bytes:
+                    return False, "Image is too large", None
+            except ValueError:
+                pass
+
         # Validate content type
         content_type = response.headers.get('Content-Type', '').lower()
         if not content_type.startswith('image/'):
@@ -120,13 +129,25 @@ def download_image_from_url(image_url, save_path=None, timeout=3):
         if save_path:
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             with open(save_path, 'wb') as f:
+                total = 0
                 for chunk in response.iter_content(chunk_size=8192):
+                    if not chunk:
+                        continue
+                    total += len(chunk)
+                    if total > max_bytes:
+                        return False, "Image is too large", None
                     f.write(chunk)
             return True, "Image downloaded successfully", save_path
         
         # Otherwise, return file object
         temp_file = NamedTemporaryFile(delete=False, suffix=ext)
+        total = 0
         for chunk in response.iter_content(chunk_size=8192):
+            if not chunk:
+                continue
+            total += len(chunk)
+            if total > max_bytes:
+                return False, "Image is too large", None
             temp_file.write(chunk)
         temp_file.flush()
         temp_file.seek(0)

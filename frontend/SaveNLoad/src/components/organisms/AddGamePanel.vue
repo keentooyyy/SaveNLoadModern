@@ -9,13 +9,13 @@
     chevron-class="add-game-chevron"
     chevron-id="addGameChevron"
   >
-    <div class="d-flex justify-content-end mb-3">
+    <div v-if="isRawgEnabled" class="d-flex justify-content-end mb-3">
       <IconButton variant="outline-secondary" size="sm" class="text-white" icon="fa-search" @click="toggleSearch">
         Search Game
       </IconButton>
     </div>
 
-    <div v-if="showSearch" class="mb-4">
+    <div v-if="isRawgEnabled && showSearch" class="mb-4">
       <div class="mb-3">
         <InputLabel text="SEARCH BY GAME NAME" />
         <InputGroup
@@ -47,6 +47,7 @@
     </form>
 
     <GameSearchModal
+      v-if="isRawgEnabled"
       v-model:query="modalQuery"
       :open="searchModalOpen"
       :results="searchResults"
@@ -56,7 +57,7 @@
       @select="onSelectGame"
       @close="searchModalOpen = false"
     />
-    <Teleport to="body">
+    <Teleport v-if="isRawgEnabled" to="body">
       <div
         v-if="searchLoading"
         class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-75 search-overlay"
@@ -73,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import CollapsibleCard from '@/components/molecules/CollapsibleCard.vue';
 import GameFormFields from '@/components/molecules/GameFormFields.vue';
 import FormActions from '@/components/molecules/FormActions.vue';
@@ -81,12 +82,15 @@ import InputGroup from '@/components/molecules/InputGroup.vue';
 import IconButton from '@/components/atoms/IconButton.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
 import GameSearchModal from '@/components/organisms/GameSearchModal.vue';
+import { notify } from '@/utils/notify';
 const props = defineProps<{
   createGame: (payload: { name: string; save_file_locations: string[]; banner?: string }) => Promise<any>;
+  rawgEnabled?: boolean | null;
 }>();
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
+const isRawgEnabled = computed(() => props.rawgEnabled !== false);
 const showSearch = ref(false);
 const searchQuery = ref('');
 const modalQuery = ref('');
@@ -101,6 +105,10 @@ const saveLocations = ref<string[]>(['']);
 const saving = ref(false);
 
 const toggleSearch = () => {
+  if (!isRawgEnabled.value) {
+    notify.warning('Game search is currently disabled by the admin.');
+    return;
+  }
   showSearch.value = !showSearch.value;
 };
 
@@ -177,6 +185,11 @@ const onSubmit = async () => {
     saving.value = false;
   }
 };
+
+if (!isRawgEnabled.value) {
+  showSearch.value = false;
+  searchModalOpen.value = false;
+}
 </script>
 
 <style scoped>

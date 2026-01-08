@@ -4,6 +4,7 @@ DRF API endpoints for client worker registration and communication.
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from django_ratelimit.decorators import ratelimit
 
 from SaveNLoad.models import SimpleUsers
 from SaveNLoad.services.redis_worker_service import (
@@ -17,6 +18,7 @@ from SaveNLoad.services.redis_worker_service import (
     get_workers_snapshot,
     issue_ws_token,
 )
+from SaveNLoad.utils.redis_client import get_redis_client
 from SaveNLoad.views.api_helpers import (
     parse_json_body,
     json_response_error,
@@ -29,6 +31,7 @@ from SaveNLoad.views.custom_decorators import get_current_user
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
+@ratelimit(key='ip', rate='10/m', block=True)
 def register_client(request):
     """
     Register a client worker - client_id must be unique per PC.
@@ -73,6 +76,7 @@ def register_client(request):
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
+@ratelimit(key='ip', rate='10/m', block=True)
 def unregister_client(request):
     """
     Unregister a client worker (called on shutdown).
@@ -178,7 +182,11 @@ def unclaim_worker(request):
 
         worker_info = get_worker_info(client_id)
         if not worker_info:
-            return json_response_error('Worker not found', status=404)
+            # Idempotent: worker may have gone offline between claim and logout.
+            redis_client = get_redis_client()
+            redis_client.srem(f'user:{user.id}:workers', client_id)
+            redis_unclaim_worker(client_id)
+            return json_response_success(message='Worker already offline or unclaimed.')
 
         if not worker_info.get('user_id') or worker_info['user_id'] != user.id:
             return json_response_error('Worker not found or not owned by you', status=404)
@@ -221,7 +229,7 @@ def list_workers(request):
 @permission_classes([AllowAny])
 def unclaim_all_workers(request):
     """
-    Unclaim all online workers (Admin only).
+    Unclaim all workers (Admin only).
     """
     user = get_current_user(request)
     if not user:

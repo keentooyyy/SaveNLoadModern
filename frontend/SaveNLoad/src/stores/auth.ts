@@ -19,33 +19,6 @@ type FieldErrors = Record<string, string | string[]>;
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 const GUEST_CREDS_KEY = 'savenload_guest_credentials';
-
-const loadGuestCreds = () => {
-  try {
-    const stored = window.sessionStorage.getItem(GUEST_CREDS_KEY)
-      || window.localStorage.getItem(GUEST_CREDS_KEY);
-    if (!stored) {
-      return null;
-    }
-    return JSON.parse(stored);
-  } catch {
-    return null;
-  }
-};
-
-const clearGuestCredsStorage = () => {
-  try {
-    window.sessionStorage.removeItem(GUEST_CREDS_KEY);
-  } catch {
-    // ignore
-  }
-  try {
-    window.localStorage.removeItem(GUEST_CREDS_KEY);
-  } catch {
-    // ignore
-  }
-};
-
 const buildErrorMessage = (data: any) => {
   const fallback = (data?.message || data?.error || '').toString().trim();
   const isGenericFallback = fallback === 'Please fix the errors below.';
@@ -77,6 +50,40 @@ const buildErrorMessage = (data: any) => {
   }
 
   return fallback || 'Request failed.';
+};
+
+const readGuestCredentials = () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    const stored = window.sessionStorage.getItem(GUEST_CREDS_KEY)
+      || window.localStorage.getItem(GUEST_CREDS_KEY);
+    if (!stored) {
+      return null;
+    }
+    return JSON.parse(stored) as { username: string; email?: string; password: string };
+  } catch {
+    return null;
+  }
+};
+
+const writeGuestCredentials = (creds: { username: string; email?: string; password: string } | null) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  try {
+    if (creds) {
+      const payload = JSON.stringify(creds);
+      window.sessionStorage.setItem(GUEST_CREDS_KEY, payload);
+      window.localStorage.setItem(GUEST_CREDS_KEY, payload);
+    } else {
+      window.sessionStorage.removeItem(GUEST_CREDS_KEY);
+      window.localStorage.removeItem(GUEST_CREDS_KEY);
+    }
+  } catch {
+    // ignore storage errors
+  }
 };
 
 async function apiPost(path: string, body: Record<string, unknown>) {
@@ -111,12 +118,15 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref('');
   const fieldErrors = ref<FieldErrors | null>(null);
   const otpEmail = ref('');
-  const guestCredentials = ref<{ username: string; email: string; password: string } | null>(null);
+  const guestCredentials = ref<{ username: string; email: string; password: string } | null>(
+    readGuestCredentials()
+  );
   const isLoggingOut = ref(false);
   const suppressWorkerRedirect = ref(false);
   const authConfig = ref({
     emailEnabled: false,
-    emailRegistrationRequired: true
+    emailRegistrationRequired: true,
+    guestEnabled: false
   });
   const authConfigLoaded = ref(false);
 
@@ -141,12 +151,9 @@ export const useAuthStore = defineStore('auth', () => {
 
     if (response.ok) {
       user.value = data?.user || null;
-      if (user.value?.is_guest && !guestCredentials.value) {
-        guestCredentials.value = loadGuestCreds();
-      }
       if (user.value && !user.value.is_guest) {
         guestCredentials.value = null;
-        clearGuestCredsStorage();
+        writeGuestCredentials(null);
       }
       return;
     }
@@ -168,12 +175,14 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await apiGet('/settings/public');
       authConfig.value = {
         emailEnabled: data?.settings?.email_enabled ?? true,
-        emailRegistrationRequired: data?.settings?.email_registration_required ?? true
+        emailRegistrationRequired: data?.settings?.email_registration_required ?? true,
+        guestEnabled: data?.settings?.guest_enabled ?? false
       };
     } catch {
       authConfig.value = {
         emailEnabled: false,
-        emailRegistrationRequired: true
+        emailRegistrationRequired: true,
+        guestEnabled: false
       };
     } finally {
       authConfigLoaded.value = true;
@@ -189,7 +198,7 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await apiPost('/auth/login', payload);
       user.value = data?.user || null;
       guestCredentials.value = null;
-      clearGuestCredsStorage();
+      writeGuestCredentials(null);
       message.value = data?.message || '';
       return data;
     } catch (err: any) {
@@ -211,19 +220,9 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await apiPost('/auth/guest', {});
       user.value = data?.user || null;
       guestCredentials.value = data?.guest_credentials || null;
-      try {
-        if (guestCredentials.value) {
-          const serialized = JSON.stringify(guestCredentials.value);
-          window.sessionStorage.setItem(GUEST_CREDS_KEY, serialized);
-          window.localStorage.setItem(GUEST_CREDS_KEY, serialized);
-        }
-      } catch {
-        // ignore
-      }
+      writeGuestCredentials(guestCredentials.value);
       message.value = data?.message || '';
-      if (message.value) {
-        notify.success(message.value);
-      }
+      notify.success('Guest session created. Save these credentials to log in again.');
       return data;
     } catch (err: any) {
       error.value = err.message || '';
@@ -402,7 +401,7 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await apiPost('/auth/logout', {});
       user.value = null;
       guestCredentials.value = null;
-      clearGuestCredsStorage();
+      writeGuestCredentials(null);
       const dashboardStore = useDashboardStore();
       dashboardStore.resetState();
       try {

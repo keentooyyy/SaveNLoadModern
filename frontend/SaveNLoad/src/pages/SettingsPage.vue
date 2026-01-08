@@ -16,7 +16,7 @@
         <p class="text-white-50 mt-2 mb-0">Loading settings...</p>
       </div>
       <div v-else>
-        <AddGamePanel v-if="isAdmin" :create-game="createGame" />
+        <AddGamePanel v-if="isAdmin" :create-game="createGame" :rawg-enabled="rawgEnabled" />
         <AdminSettingsPanel
           v-if="isAdmin"
           :load-settings="loadAdminSettings"
@@ -29,6 +29,7 @@
           :list-users="listUsers"
           :reset-user-password="resetUserPassword"
           :delete-user="deleteUser"
+          :cleanup-guests="cleanupGuests"
           :check-operation-status="checkOperationStatus"
         />
         <OperationQueuePanel
@@ -99,6 +100,7 @@ const resolveAdmin = (user: { role?: string } | null) => {
 
 const isAdmin = computed(() => resolveAdmin(authStore.user));
 const isGuest = computed(() => authStore.user?.is_guest);
+const rawgEnabled = computed(() => settingsStore.adminSettings['feature.rawg.enabled']);
 
 const goToSettings = () => window.location.assign('/settings');
 const goToProfile = () => window.location.assign('/settings');
@@ -149,6 +151,7 @@ const revealAdminSettings = async (keys: string[], password: string) => (
 const listUsers = async (query: string, page: number) => settingsStore.listUsers(query, page);
 const resetUserPassword = async (userId: number) => settingsStore.resetUserPassword(userId);
 const deleteUser = async (userId: number) => settingsStore.deleteUser(userId);
+const cleanupGuests = async (mode: 'expired' | 'all') => settingsStore.cleanupGuests(mode);
 const checkOperationStatus = async (operationId: string) => settingsStore.checkOperationStatus(operationId);
 const loadQueueStats = async () => settingsStore.queueStats();
 const clearQueue = async () => settingsStore.cleanupQueue('all');

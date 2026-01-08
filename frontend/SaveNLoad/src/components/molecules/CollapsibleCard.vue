@@ -75,24 +75,49 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-:is(.add-game-header, .account-settings-header, .operation-queue-header, .manage-accounts-header, .admin-settings-header, .guest-upgrade-header) {
+:is(
+  .add-game-header,
+  .account-settings-header,
+  .operation-queue-header,
+  .manage-accounts-header,
+  .admin-settings-header,
+  .guest-upgrade-header,
+  .worker-management-header
+) {
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
-:is(.add-game-header, .account-settings-header, .operation-queue-header, .manage-accounts-header, .admin-settings-header, .guest-upgrade-header)
+:is(
+  .add-game-header,
+  .account-settings-header,
+  .operation-queue-header,
+  .manage-accounts-header,
+  .admin-settings-header,
+  .guest-upgrade-header,
+  .worker-management-header
+)
   :is(
     .add-game-chevron,
     .account-settings-chevron,
     .operation-queue-chevron,
     .manage-accounts-chevron,
     .admin-settings-chevron,
-    .guest-upgrade-chevron
+    .guest-upgrade-chevron,
+    .worker-management-chevron
   ) {
   transition: transform 0.3s ease;
 }
 
-:is(.add-game-header, .account-settings-header, .operation-queue-header, .manage-accounts-header, .admin-settings-header, .guest-upgrade-header).active
+:is(
+  .add-game-header,
+  .account-settings-header,
+  .operation-queue-header,
+  .manage-accounts-header,
+  .admin-settings-header,
+  .guest-upgrade-header,
+  .worker-management-header
+).active
   :is(
     .add-game-icon,
     .add-game-title,
@@ -111,19 +136,31 @@ onBeforeUnmount(() => {
     .admin-settings-chevron,
     .guest-upgrade-icon,
     .guest-upgrade-title,
-    .guest-upgrade-chevron
+    .guest-upgrade-chevron,
+    .worker-management-icon,
+    .worker-management-title,
+    .worker-management-chevron
   ) {
   color: var(--color-primary) !important;
 }
 
-:is(.add-game-header, .account-settings-header, .operation-queue-header, .manage-accounts-header, .admin-settings-header, .guest-upgrade-header).active
+:is(
+  .add-game-header,
+  .account-settings-header,
+  .operation-queue-header,
+  .manage-accounts-header,
+  .admin-settings-header,
+  .guest-upgrade-header,
+  .worker-management-header
+).active
   :is(
     .add-game-chevron,
     .account-settings-chevron,
     .operation-queue-chevron,
     .manage-accounts-chevron,
     .admin-settings-chevron,
-    .guest-upgrade-chevron
+    .guest-upgrade-chevron,
+    .worker-management-chevron
   ) {
   transform: rotate(90deg);
 }

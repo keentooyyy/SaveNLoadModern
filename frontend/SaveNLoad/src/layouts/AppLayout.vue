@@ -19,11 +19,13 @@
         :on-load-version="onLoadVersion"
       />
     </div>
+    <ConfirmModal />
   </div>
 </template>
 
 <script setup lang="ts">
 import SidebarNav from '@/components/organisms/SidebarNav.vue';
+import ConfirmModal from '@/components/organisms/ConfirmModal.vue';
 
 defineProps({
   versionLabel: { type: String, default: '' },

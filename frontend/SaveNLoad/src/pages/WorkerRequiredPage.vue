@@ -30,7 +30,7 @@
           </div>
           <div class="list-group list-group-flush">
             <div
-              v-for="worker in workers"
+              v-for="worker in onlineWorkers"
               :key="worker.client_id"
               class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center"
             >
@@ -101,21 +101,23 @@ const hasShownSingleAvailableToast = ref(false);
 const redirecting = ref(false);
 const localClientId = ref<string | null>(null);
 
-const hasWorkers = computed(() => workers.value.length > 0);
-const availableWorkers = computed(() => workers.value.filter(worker => !worker.claimed));
+const isOnline = (worker: { online?: boolean }) => worker.online !== false;
+const onlineWorkers = computed(() => workers.value.filter(worker => isOnline(worker)));
+const hasWorkers = computed(() => onlineWorkers.value.length > 0);
+const availableWorkers = computed(() => onlineWorkers.value.filter(worker => !worker.claimed));
 const claimedWorkerForUser = computed(() => {
   const username = authStore.user?.username;
   if (!username) {
     return null;
   }
-  return workers.value.find((worker) => worker.claimed && worker.linked_user === username) || null;
+  return onlineWorkers.value.find((worker) => worker.claimed && worker.linked_user === username) || null;
 });
 const claimedWorkerForClient = computed(() => {
   const clientId = localClientId.value;
   if (!clientId) {
     return null;
   }
-  return workers.value.find((worker) => worker.client_id === clientId && worker.claimed) || null;
+  return onlineWorkers.value.find((worker) => worker.client_id === clientId && worker.claimed) || null;
 });
 
 const redirectIfClaimed = () => {

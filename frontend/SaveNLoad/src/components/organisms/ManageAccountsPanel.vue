@@ -20,6 +20,39 @@
 
     <hr class="border-secondary mb-4" />
 
+    <div class="mb-4">
+      <SectionTitle text="Guest Cleanup" />
+      <div class="d-flex flex-column flex-md-row gap-3 align-items-start">
+        <SettingsToggle
+          id="guestCleanupMode"
+          v-model="cleanupExpiredOnly"
+          label="Clean expired guests only"
+          on-text="Expired Only"
+          off-text="All Guests"
+          :disabled="cleanupLoading"
+          wrapper-class="guest-cleanup-toggle"
+        />
+        <div class="ms-md-auto">
+          <IconButton
+            type="button"
+            variant="danger"
+            class="text-white fw-bold"
+            icon="fa-trash"
+            :loading="cleanupLoading"
+            :disabled="cleanupLoading"
+            @click="onCleanupGuests"
+          >
+            Clean Guests
+          </IconButton>
+        </div>
+      </div>
+      <p class="text-white-50 small mb-0 mt-2">
+        This queues FTP cleanup and marks matching guest accounts for deletion.
+      </p>
+    </div>
+
+    <hr class="border-secondary mb-4" />
+
     <div class="mb-3">
       <SectionTitle text="All Users" />
       <div class="text-white">
@@ -41,11 +74,27 @@
                 <td class="text-white-50">{{ user.email }}</td>
                 <td class="text-end">
                   <div class="d-inline-flex gap-2">
-                    <button class="btn btn-sm btn-outline-secondary text-white" type="button" @click="onReset(user)">
+                    <button
+                      class="btn btn-sm btn-outline-secondary text-white"
+                      type="button"
+                      :disabled="deletingId === user.id"
+                      @click="onReset(user)"
+                    >
                       Reset Password
                     </button>
-                    <button class="btn btn-sm btn-outline-danger text-white" type="button" @click="onDelete(user)">
-                      Delete
+                    <button
+                      class="btn btn-sm btn-outline-danger text-white"
+                      type="button"
+                      :disabled="deletingId === user.id"
+                      @click="onDelete(user)"
+                    >
+                      <span
+                        v-if="deletingId === user.id"
+                        class="spinner-border spinner-border-sm me-2"
+                        role="status"
+                        aria-hidden="true"
+                      ></span>
+                      {{ deletingId === user.id ? 'Deleting...' : 'Delete' }}
                     </button>
                   </div>
                 </td>
@@ -87,6 +136,8 @@ import SectionTitle from '@/components/atoms/SectionTitle.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import LoadingState from '@/components/molecules/LoadingState.vue';
 import EmptyState from '@/components/molecules/EmptyState.vue';
+import IconButton from '@/components/atoms/IconButton.vue';
+import SettingsToggle from '@/components/molecules/SettingsToggle.vue';
 import { notify } from '@/utils/notify';
 
 type UserItem = {
@@ -99,6 +150,7 @@ const props = defineProps<{
   listUsers: (query: string, page: number) => Promise<any>;
   resetUserPassword: (userId: number) => Promise<any>;
   deleteUser: (userId: number) => Promise<any>;
+  cleanupGuests: (mode: 'expired' | 'all') => Promise<any>;
   checkOperationStatus: (operationId: string) => Promise<any>;
 }>();
 
@@ -108,6 +160,9 @@ const users = ref<UserItem[]>([]);
 const loading = ref(false);
 const error = ref('');
 const isRefreshing = ref(false);
+const cleanupExpiredOnly = ref(true);
+const cleanupLoading = ref(false);
+const deletingId = ref<number | null>(null);
 const pagination = ref({
   page: 1,
   total_pages: 1,
@@ -205,7 +260,7 @@ const onDelete = async (user: UserItem) => {
   if (!confirmed) {
     return;
   }
-  loading.value = true;
+  deletingId.value = user.id;
   error.value = '';
   try {
     const data = await props.deleteUser(user.id);
@@ -228,9 +283,50 @@ const onDelete = async (user: UserItem) => {
       notify.error(error.value);
     }
   } finally {
-    if (!isRefreshing.value) {
-      loading.value = false;
+    deletingId.value = null;
+  }
+};
+
+const onCleanupGuests = async () => {
+  if (cleanupLoading.value) {
+    return;
+  }
+  const mode = cleanupExpiredOnly.value ? 'expired' : 'all';
+  const message = cleanupExpiredOnly.value
+    ? 'Remove expired guest accounts and queue cleanup?'
+    : 'Remove all guest accounts (including active ones) and queue cleanup?';
+  const confirmed = await requestConfirm({
+    title: 'Clean Guest Accounts',
+    message,
+    confirmText: 'Clean Guests',
+    variant: 'danger'
+  });
+  if (!confirmed) {
+    return;
+  }
+  cleanupLoading.value = true;
+  try {
+    const data = await props.cleanupGuests(mode);
+    const operationIds = Array.isArray(data?.operation_ids) ? data.operation_ids : [];
+    if (operationIds.length) {
+      for (const operationId of operationIds) {
+        const result = await waitForDeletion(operationId);
+        if (result.status !== 'completed') {
+          throw new Error(result.message || 'Guest cleanup failed.');
+        }
+      }
     }
+    if (data?.message) {
+      notify.flashSuccess(data.message);
+    }
+    refreshAndOpen(0);
+  } catch (err: any) {
+    const message = err?.message || '';
+    if (message) {
+      notify.error(message);
+    }
+  } finally {
+    cleanupLoading.value = false;
   }
 };
 

@@ -137,10 +137,12 @@ class WorkerConsumer(JsonWebsocketConsumer):
             print(f"WS receive: missing type client_id={self.client_id}")
             return
 
+        # Treat any inbound worker message as activity to refresh presence.
+        ping_worker(self.client_id)
+
         if message_type == 'heartbeat':
             # Keep Redis heartbeat fresh during WS session.
             print(f"WS receive heartbeat: client_id={self.client_id}")
-            ping_worker(self.client_id)
             return
 
         if message_type == 'operation_started':

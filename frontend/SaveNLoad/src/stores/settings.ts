@@ -121,6 +121,14 @@ export const useSettingsStore = defineStore('settings', () => {
     return data;
   };
 
+  const cleanupGuests = async (mode: 'expired' | 'all') => {
+    const data = await apiPost('/guests/cleanup/', { mode });
+    if (data?.message) {
+      notify.success(data.message);
+    }
+    return data;
+  };
+
   const checkOperationStatus = async (operationId: string) => {
     const data = await apiGet(`/operations/${operationId}/status/`);
     if (!data?.success && data?.error) {
@@ -260,6 +268,7 @@ export const useSettingsStore = defineStore('settings', () => {
     listUsers,
     resetUserPassword,
     deleteUser,
+    cleanupGuests,
     checkOperationStatus,
     queueStats,
     cleanupQueue,

@@ -11,7 +11,7 @@
   >
     <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
       <div class="text-white-50 small">
-        Online workers are listed here. Use the kill switch to unpair all claims.
+        All workers are listed here. Use the kill switch to unpair everyone.
       </div>
       <div class="d-flex gap-2">
         <IconButton
@@ -40,7 +40,7 @@
 
     <LoadingState v-if="loading" />
     <EmptyState v-else-if="error" :message="error" />
-    <EmptyState v-else-if="!workers.length" message="No online workers found." />
+    <EmptyState v-else-if="!workers.length" message="No workers found." />
     <div v-else class="table-responsive">
       <table class="table table-dark table-hover align-middle mb-0 worker-table">
         <thead>
@@ -55,14 +55,19 @@
           <tr v-for="worker in workers" :key="worker.client_id">
             <td class="fw-semibold text-white">{{ worker.client_id }}</td>
             <td>
-              <span class="badge bg-success">Online</span>
+              <span
+                class="badge"
+                :class="worker.online ? 'bg-success' : 'bg-secondary'"
+              >
+                {{ worker.online ? 'Online' : 'Offline' }}
+              </span>
               <span
                 v-if="worker.claimed"
                 class="badge bg-warning text-dark ms-2"
               >
                 Claimed
               </span>
-              <span v-else class="badge bg-secondary ms-2">Unclaimed</span>
+              <span v-else class="badge bg-dark ms-2">Unclaimed</span>
             </td>
             <td class="text-white-50">
               {{ worker.linked_user || '—' }}
@@ -90,6 +95,7 @@ type WorkerSnapshot = {
   claimed: boolean;
   linked_user?: string | null;
   last_ping_response?: string | null;
+  online: boolean;
 };
 
 const props = defineProps<{
@@ -138,7 +144,7 @@ const onKillSwitch = async () => {
   }
   const confirmed = await requestConfirm({
     title: 'Unpair All Workers',
-    message: 'This will unpair every online worker from its current user. Continue?',
+    message: 'This will unpair every worker. Continue?',
     confirmText: 'Unpair All',
     variant: 'danger'
   });

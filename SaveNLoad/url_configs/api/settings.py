@@ -15,4 +15,5 @@ urlpatterns = [
     path('users/', settings_view.list_users, name='list_users'),
     path('users/<int:user_id>/reset-password/', settings_view.reset_user_password, name='reset_user_password'),
     path('users/<int:user_id>/delete/', settings_view.delete_user, name='delete_user'),
+    path('guests/cleanup/', settings_view.cleanup_guest_accounts, name='cleanup_guest_accounts'),
 ]

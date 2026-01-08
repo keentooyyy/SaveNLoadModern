@@ -11,6 +11,7 @@ export type WorkerSnapshot = {
   linked_user?: string | null;
   hostname?: string | null;
   last_ping_response?: string | null;
+  online?: boolean;
 };
 
 type WorkersUpdateMessage = {

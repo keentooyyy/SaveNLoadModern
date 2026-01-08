@@ -36,6 +36,8 @@ APP_VERSION = get_app_version(
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise RuntimeError('SECRET_KEY is required and must be set in the environment.')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
@@ -90,6 +92,7 @@ TEMPLATES = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'SaveNLoad.middleware.csp.ContentSecurityPolicyMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',  # WhiteNoise for static files
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -266,6 +269,30 @@ PERMISSIONS_POLICY = {
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
 # Content Security Policy (CSP)
+# Option A: allow inline styles (needed due to inline style attrs in templates/components).
+_csp_script_src = ["'self'"]
+_csp_style_src = ["'self'", "'unsafe-inline'"]
+_csp_connect_src = ["'self'", "ws:", "wss:"]
+_csp_img_src = ["'self'", "data:", "https://api.dicebear.com", "https://media.rawg.io"]
+_csp_font_src = ["'self'", "data:"]
+
+if DEBUG:
+    dev_server = (VITE_DEV_SERVER or '').rstrip('/')
+    if dev_server:
+        _csp_script_src.append(dev_server)
+        _csp_connect_src.append(dev_server)
+
+CSP_POLICY = (
+    "default-src 'self'; "
+    f"script-src {' '.join(_csp_script_src)}; "
+    f"style-src {' '.join(_csp_style_src)}; "
+    f"img-src {' '.join(_csp_img_src)}; "
+    f"font-src {' '.join(_csp_font_src)}; "
+    f"connect-src {' '.join(_csp_connect_src)}; "
+    "base-uri 'self'; "
+    "frame-ancestors 'none'"
+)
+
 # Cache (required for django-ratelimit)
 CACHES = {
     'default': {

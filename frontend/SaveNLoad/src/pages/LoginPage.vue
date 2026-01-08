@@ -55,7 +55,7 @@
           LOGIN
         </IconButton>
       </div>
-      <div class="d-grid mt-2">
+      <div v-if="guestEnabled" class="d-grid mt-2">
         <IconButton
           type="button"
           variant="outline-secondary"
@@ -161,6 +161,7 @@ const showForgotPassword = computed(() => (
   && store.authConfig.emailEnabled
   && store.authConfig.emailRegistrationRequired
 ));
+const guestEnabled = computed(() => store.authConfigLoaded && store.authConfig.guestEnabled);
 
 useAuthConfig({ loadAuthConfig: () => store.loadAuthConfig() });
 const activeAction = ref<'login' | 'guest' | null>(null);

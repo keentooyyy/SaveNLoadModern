@@ -14,15 +14,11 @@
         Features default to OFF until explicitly enabled and configured.
       </p>
       <div class="mb-3">
-        <div class="form-check form-switch">
-          <input
-            id="rawgEnabled"
-            class="form-check-input bg-primary border-secondary"
-            type="checkbox"
-            v-model="form.rawgEnabled"
-          />
-          <label class="form-check-label text-white" for="rawgEnabled">Enable RAWG</label>
-        </div>
+        <SettingsToggle
+          id="rawgEnabled"
+          v-model="form.rawgEnabled"
+          label="Enable RAWG"
+        />
       </div>
       <div v-if="form.rawgEnabled" class="mb-3">
         <InputLabel for-id="rawgApiKey" text="RAWG API KEY" />
@@ -45,29 +41,19 @@
       </div>
 
       <div class="mb-3">
-        <div class="form-check form-switch">
-          <input
-            id="emailEnabled"
-            class="form-check-input bg-primary border-secondary"
-            type="checkbox"
-            v-model="form.emailEnabled"
-          />
-          <label class="form-check-label text-white" for="emailEnabled">Enable Email</label>
-        </div>
+        <SettingsToggle
+          id="emailEnabled"
+          v-model="form.emailEnabled"
+          label="Enable Email"
+        />
       </div>
 
       <div v-if="form.emailEnabled" class="mb-3">
-        <div class="form-check form-switch">
-          <input
-            id="emailRegistrationRequired"
-            class="form-check-input bg-primary border-secondary"
-            type="checkbox"
-            v-model="form.emailRegistrationRequired"
-          />
-          <label class="form-check-label text-white" for="emailRegistrationRequired">
-            Require Email on Registration
-          </label>
-        </div>
+        <SettingsToggle
+          id="emailRegistrationRequired"
+          v-model="form.emailRegistrationRequired"
+          label="Require Email on Registration"
+        />
       </div>
 
       <div v-if="form.emailEnabled" class="row g-3">
@@ -101,15 +87,11 @@
       </div>
 
       <div class="mt-4 mb-3">
-        <div class="form-check form-switch">
-          <input
-            id="guestEnabled"
-            class="form-check-input bg-primary border-secondary"
-            type="checkbox"
-            v-model="form.guestEnabled"
-          />
-          <label class="form-check-label text-white" for="guestEnabled">Enable Guest Accounts</label>
-        </div>
+        <SettingsToggle
+          id="guestEnabled"
+          v-model="form.guestEnabled"
+          label="Enable Guest Accounts"
+        />
       </div>
       <div v-if="form.guestEnabled" class="mb-3">
         <InputLabel for-id="guestTtl" text="GUEST ACCOUNT EXPIRY (DAYS)" />
@@ -211,6 +193,7 @@ import FormActions from '@/components/molecules/FormActions.vue';
 import IconButton from '@/components/atoms/IconButton.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
 import ModalShell from '@/components/molecules/ModalShell.vue';
+import SettingsToggle from '@/components/molecules/SettingsToggle.vue';
 const props = defineProps<{
   loadSettings: () => Promise<Record<string, any> | null | undefined>;
   updateSettings: (payload: Record<string, any>) => Promise<any>;

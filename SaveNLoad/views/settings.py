@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 from django.core.files import File
 from django.db import models
+from django.utils import timezone
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import AllowAny
 from django.views.decorators.csrf import csrf_protect
@@ -672,6 +673,73 @@ def delete_user(request, user_id):
 @api_view(["POST"])
 @authentication_classes([])
 @csrf_protect
+def cleanup_guest_accounts(request):
+    """
+    Queue cleanup for expired or all guest accounts (Admin only).
+    """
+    admin_user, error_response = _require_user(request)
+    if error_response:
+        return error_response
+
+    error_response = check_admin_or_error(admin_user)
+    if error_response:
+        return error_response
+
+    data, error_response = parse_json_body(request)
+    if error_response:
+        return error_response
+
+    mode = (data.get('mode') or 'expired').strip().lower()
+
+    try:
+        from SaveNLoad.models import SimpleUsers
+
+        guests = SimpleUsers.objects.filter(is_guest=True).exclude(pending_deletion=True)
+        if mode == 'expired':
+            guests = guests.filter(
+                guest_expires_at__isnull=False,
+                guest_expires_at__lte=timezone.now()
+            )
+        elif mode != 'all':
+            return json_response_error('Invalid cleanup mode. Must be: expired or all', status=400)
+
+        if not guests.exists():
+            return json_response_success(
+                message='No guest accounts matched the selected cleanup.',
+                data={'count': 0, 'operation_ids': []}
+            )
+
+        operation_ids = []
+        for guest in guests:
+            success, error_message, operation_id = _queue_user_deletion_operations(
+                guest,
+                admin_user=admin_user,
+                request=request
+            )
+            if not success:
+                return json_response_error(
+                    error_message or 'Failed to queue guest cleanup operations',
+                    status=503
+                )
+            guest.pending_deletion = True
+            guest.save(update_fields=['pending_deletion'])
+            if operation_id:
+                operation_ids.append(operation_id)
+
+        count = guests.count()
+        scope_label = 'expired' if mode == 'expired' else 'all'
+        return json_response_success(
+            message=f'Queued cleanup for {count} {scope_label} guest account(s).',
+            data={'count': count, 'operation_ids': operation_ids}
+        )
+    except Exception as e:
+        print(f"ERROR: Error cleaning up guest accounts: {str(e)}")
+        return json_response_error('Failed to clean up guest accounts', status=500)
+
+
+@api_view(["POST"])
+@authentication_classes([])
+@csrf_protect
 def reset_user_password(request, user_id):
     """
     Reset a user's password to default constant (Admin only).
@@ -898,11 +966,13 @@ def admin_settings_reveal(request):
 def public_settings(request):
     email_enabled = bool(get_setting_value('feature.email.enabled', False))
     email_registration_required = bool(get_setting_value('feature.email.registration_required', True))
+    guest_enabled = bool(get_setting_value('feature.guest.enabled', False))
     return json_response_success(
         data={
             'settings': {
                 'email_enabled': email_enabled,
-                'email_registration_required': email_registration_required
+                'email_registration_required': email_registration_required,
+                'guest_enabled': guest_enabled
             }
         }
     )

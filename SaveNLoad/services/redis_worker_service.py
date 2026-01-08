@@ -355,17 +355,27 @@ def unclaim_user_workers(user_id):
     return processed
 
 
-def unclaim_all_workers():
+def unclaim_all_workers(exempt_user_id=None):
     """
-    Unclaim all workers across all users.
+    Unclaim all workers across all users, optionally excluding one user.
+
+    Args:
+        exempt_user_id: User ID whose workers should not be unclaimed
 
     Returns:
         list of client_ids that were processed
     """
     redis_client = get_redis_client()
     processed = []
+    exempt_user_id = str(exempt_user_id) if exempt_user_id is not None else None
     user_worker_keys = redis_client.keys('user:*:workers') or []
-    for key in user_worker_keys:
+    for raw_key in user_worker_keys:
+        key = raw_key.decode('utf-8') if isinstance(raw_key, bytes) else raw_key
+        user_id = None
+        if key.startswith('user:') and key.endswith(':workers'):
+            user_id = key[len('user:'):-len(':workers')]
+        if exempt_user_id and user_id == exempt_user_id:
+            continue
         worker_ids = redis_client.smembers(key) or []
         for raw_id in worker_ids:
             client_id = raw_id.decode('utf-8') if isinstance(raw_id, bytes) else raw_id
@@ -524,9 +534,15 @@ def get_unclaimed_workers():
     return unclaimed
 
 
+def _decode_redis_value(value):
+    if isinstance(value, bytes):
+        return value.decode('utf-8')
+    return value
+
+
 def get_workers_snapshot():
     """
-    Get a snapshot of all online workers with claim status.
+    Get a snapshot of all known workers with claim status.
     
     Args:
         None
@@ -536,26 +552,63 @@ def get_workers_snapshot():
     """
     from SaveNLoad.models import SimpleUsers
     
+    redis_client = get_redis_client()
     workers_list = []
-    for client_id in sorted(get_online_workers()):
-        worker_info = get_worker_info(client_id)
-        user_id = worker_info.get('user_id') if worker_info else None
-        linked_username = worker_info.get('username') if worker_info else None
+    seen = set()
+
+    info_keys = redis_client.keys('worker:*:info') or []
+    for raw_key in info_keys:
+        key = _decode_redis_value(raw_key)
+        if not key or not key.startswith('worker:') or not key.endswith(':info'):
+            continue
+        client_id = key[len('worker:'):-len(':info')]
+        if not client_id or client_id in seen:
+            continue
+
+        info = redis_client.hgetall(key) or {}
+        normalized = {
+            _decode_redis_value(k): _decode_redis_value(v)
+            for k, v in info.items()
+        }
+
+        user_id = normalized.get('user_id') or None
+        linked_username = normalized.get('username') or None
+        try:
+            user_id = int(user_id) if user_id is not None and user_id != '' else None
+        except (TypeError, ValueError):
+            user_id = None
+
         if user_id and not linked_username:
             try:
                 linked_user = SimpleUsers.objects.get(pk=user_id)
                 linked_username = linked_user.username
             except SimpleUsers.DoesNotExist:
                 linked_username = None
-        
+
+        online = is_worker_online(client_id)
         workers_list.append({
             'client_id': client_id,
-            'last_ping_response': worker_info.get('last_ping') if worker_info else None,
+            'last_ping_response': normalized.get('last_ping'),
             'hostname': client_id,
             'linked_user': linked_username,
-            'claimed': user_id is not None
+            'claimed': user_id is not None,
+            'online': online
         })
-    
+        seen.add(client_id)
+
+    for client_id in get_online_workers():
+        if client_id in seen:
+            continue
+        workers_list.append({
+            'client_id': client_id,
+            'last_ping_response': None,
+            'hostname': client_id,
+            'linked_user': None,
+            'claimed': False,
+            'online': True
+        })
+
+    workers_list.sort(key=lambda worker: (not worker.get('online', False), worker.get('client_id', '')))
     return workers_list
 
 
