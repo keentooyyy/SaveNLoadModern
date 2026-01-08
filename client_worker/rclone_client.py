@@ -699,8 +699,6 @@ class RcloneClient:
             'does not exist',
             'directory not found',
             'file does not exist',
-            'failed to list',
-            'error listing'
         ]
         if any(pattern in error_text for pattern in not_found_patterns):
             self._rc_call("operations/rmdir", {"fs": f"{self.remote_name}:", "remote": normalized_path}, timeout=60)
