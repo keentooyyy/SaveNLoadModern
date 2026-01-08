@@ -75,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRef } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRef, watch } from 'vue';
 import PageHeader from '@/components/organisms/PageHeader.vue';
 import RecentList from '@/components/organisms/RecentList.vue';
 import GameGrid from '@/components/organisms/GameGrid.vue';
@@ -99,6 +99,7 @@ const metaStore = useMetaStore();
 const { requestConfirm } = useConfirm();
 const suppressRedirectRef = toRef(authStore, 'suppressWorkerRedirect');
 
+const SEARCH_STORAGE_KEY = 'snl_dashboard_search_query';
 const searchQuery = ref('');
 const sortBy = ref('name_asc');
 
@@ -156,6 +157,11 @@ const restoreGameSavesModal = ref(false);
 
 let successCloseTimer: number | null = null;
 let backupCloseTimer: number | null = null;
+const handlePageShow = (event: PageTransitionEvent) => {
+  if (event.persisted) {
+    void refreshGames();
+  }
+};
 
 const guestExpiryDate = computed(() => {
   if (!guestExpiresAt.value) {
@@ -520,8 +526,12 @@ const runSearch = async (query: string, sort: string) => {
 const refreshGames = async () => {
   const query = searchQuery.value.trim();
   if (!query) {
-    await refreshGames();
+    await store.loadDashboard();
     return;
+  }
+  const needsDashboard = !store.recentGames.length || !store.user;
+  if (needsDashboard) {
+    await store.loadDashboard();
   }
   await runSearch(query, sortBy.value);
 };
@@ -830,6 +840,15 @@ onMounted(async () => {
     now.value = Date.now();
   }, 60000);
   try {
+    const savedQuery = window.localStorage.getItem(SEARCH_STORAGE_KEY);
+    if (savedQuery && !searchQuery.value) {
+      searchQuery.value = savedQuery;
+    }
+  } catch {
+    // ignore storage errors
+  }
+  window.addEventListener('pageshow', handlePageShow);
+  try {
     await authStore.refreshUser();
     await refreshGames();
   } catch (err: any) {
@@ -842,6 +861,19 @@ onBeforeUnmount(() => {
   if (bannerTimer) {
     clearInterval(bannerTimer);
     bannerTimer = null;
+  }
+  window.removeEventListener('pageshow', handlePageShow);
+});
+
+watch(searchQuery, (value) => {
+  try {
+    if (!value || !value.trim()) {
+      window.localStorage.removeItem(SEARCH_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(SEARCH_STORAGE_KEY, value);
+  } catch {
+    // ignore storage errors
   }
 });
 </script>
