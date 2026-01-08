@@ -2,6 +2,13 @@ FROM node:20-alpine AS frontend-build
 
 WORKDIR /app/frontend/SaveNLoad
 
+ARG VITE_API_BASE
+ARG VITE_API_ORIGIN
+ARG VITE_WS_BASE
+ENV VITE_API_BASE=${VITE_API_BASE}
+ENV VITE_API_ORIGIN=${VITE_API_ORIGIN}
+ENV VITE_WS_BASE=${VITE_WS_BASE}
+
 COPY frontend/SaveNLoad/package.json frontend/SaveNLoad/package-lock.json ./
 RUN npm ci
 
