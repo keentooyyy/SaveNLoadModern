@@ -84,7 +84,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,  # Add icon path here if you have one
+    icon=str(CLIENT_WORKER_DIR / 'icon.ico'),
     uac_admin=True,  # Request admin privileges
 )
 

@@ -39,14 +39,15 @@ const buildErrorMessage = (data: any) => {
     });
   }
 
-  if (errorMessages.length) {
+  const deduped = Array.from(new Set(errorMessages.map((message) => message.trim()).filter(Boolean)));
+  if (deduped.length) {
     if (isGenericFallback) {
-      return errorMessages.join(' ');
+      return deduped.join(' ');
     }
-    if (fallback && !errorMessages.includes(fallback)) {
-      return `${fallback} ${errorMessages.join(' ')}`.trim();
+    if (fallback && !deduped.includes(fallback)) {
+      return `${fallback} ${deduped.join(' ')}`.trim();
     }
-    return errorMessages.join(' ');
+    return deduped.join(' ');
   }
 
   return fallback || 'Request failed.';

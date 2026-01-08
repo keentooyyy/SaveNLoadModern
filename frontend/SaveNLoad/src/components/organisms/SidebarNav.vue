@@ -119,6 +119,19 @@ onMounted(async () => {
   width: var(--sidebar-width) !important;
 }
 
+@media (max-width: 991.98px) {
+  .sidebar.offcanvas {
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.25s ease, visibility 0.25s ease;
+  }
+
+  .sidebar.offcanvas.show {
+    transform: translateX(0);
+    visibility: visible;
+  }
+}
+
 @media (max-width: 767.98px) {
   .sidebar.offcanvas {
     --bs-offcanvas-width: 80% !important;

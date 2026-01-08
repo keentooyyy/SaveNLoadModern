@@ -277,7 +277,13 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 _csp_script_src = ["'self'"]
 _csp_style_src = ["'self'", "'unsafe-inline'"]
 _csp_connect_src = ["'self'", "ws:", "wss:"]
-_csp_img_src = ["'self'", "data:", "https://api.dicebear.com", "https://media.rawg.io"]
+_csp_img_src = [
+    "'self'",
+    "data:",
+    "https://api.dicebear.com",
+    "https://media.rawg.io",
+    "https://images.igdb.com",
+]
 _csp_font_src = ["'self'", "data:"]
 
 if DEBUG:
