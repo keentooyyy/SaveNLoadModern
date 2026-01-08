@@ -281,11 +281,10 @@ _csp_img_src = [
 ]
 _csp_font_src = ["'self'", "data:"]
 
-if DEBUG:
-    dev_server = (VITE_DEV_SERVER or '').rstrip('/')
-    if dev_server:
-        _csp_script_src.append(dev_server)
-        _csp_connect_src.append(dev_server)
+dev_server = (VITE_DEV_SERVER or '').rstrip('/')
+if dev_server:
+    _csp_script_src.append(dev_server)
+    _csp_connect_src.append(dev_server)
 
 CSP_POLICY = (
     "default-src 'self'; "

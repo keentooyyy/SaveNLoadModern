@@ -35,7 +35,7 @@ def _collect_css(manifest: dict, entry_name: str, visited: set[str] | None = Non
 @register.simple_tag
 def vite_asset(path: str) -> str:
     dev_server = getattr(settings, 'VITE_DEV_SERVER', '')
-    if settings.DEBUG and dev_server:
+    if dev_server:
         return f"{dev_server.rstrip('/')}/{path.lstrip('/')}"
     base_url = getattr(settings, 'VITE_STATIC_URL', '/static/vite/')
     return static(f"{base_url.strip('/')}/{path.lstrip('/')}")
@@ -44,7 +44,7 @@ def vite_asset(path: str) -> str:
 @register.simple_tag
 def vite_entry(entry_name: str) -> str:
     dev_server = getattr(settings, 'VITE_DEV_SERVER', '')
-    if settings.DEBUG and dev_server:
+    if dev_server:
         script_tag = f'<script type="module" src="{dev_server.rstrip("/")}/{entry_name}"></script>'
         return mark_safe(script_tag)
 
