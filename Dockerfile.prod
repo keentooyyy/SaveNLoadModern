@@ -1,3 +1,14 @@
+FROM node:20-alpine AS frontend-build
+
+WORKDIR /app/frontend/SaveNLoad
+
+COPY frontend/SaveNLoad/package.json frontend/SaveNLoad/package-lock.json ./
+RUN npm ci
+
+COPY frontend/SaveNLoad ./
+RUN mkdir -p /app/SaveNLoad/static/vite \
+  && npm run build-only
+
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -27,9 +38,10 @@ RUN apt-get purge -y gcc \
 
 # Copy project files
 COPY . /app/
+COPY --from=frontend-build /app/SaveNLoad/static/vite /app/SaveNLoad/static/vite
 
 # Create logs directory for Django logging (required by settings.py)
 RUN mkdir -p /app/logs
 
 # Expose port
-EXPOSE 8001
+EXPOSE 8000

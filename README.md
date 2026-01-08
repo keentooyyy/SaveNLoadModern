@@ -14,6 +14,7 @@ SaveNLoadModern is a modern, web-based game save file management system built wi
 
 - **Django Backend**: Manages user authentication, game database, operation queue, and API endpoints
 - **Redis**: Handles operation queue, real-time status updates, and worker coordination (ping/heartbeat)
+- **Frontend (Vite + Vue)**: Built into static assets served by Django/WhiteNoise in production
 - **Client Worker**: Standalone executable that runs on user PCs to perform actual file operations (save/load/delete)
 - **Remote Storage**: Stores all save files (typically FTP, accessed via rclone)
 - **Operation Flow**: Backend queues operations in Redis → Client worker polls Redis → Executes and reports progress via API
@@ -177,6 +178,11 @@ The application will be available at `http://localhost:8000`
 ```bash
 docker-compose -f docker-compose.prod.yml up -d --build
 ```
+
+This will:
+- Build the production backend image (including Vite assets)
+- Run migrations and collect static files on startup
+- Serve frontend assets from the Django container via WhiteNoise
 
 > **Note:** Docker deployment eliminates dependency conflicts and ensures consistent environments. Manual setup should only be used when Docker is not available.
 
@@ -505,8 +511,17 @@ docker-compose -f docker-compose.prod.yml up -d
 Docker Compose automatically handles:
 - Service orchestration and networking
 - Database initialization and migrations
-- Static file collection
+- Static file collection (including Vite assets)
 - Process management and health checks
+
+**Optional Frontend Preview (not required for production):**
+If you need to preview the Vite build output separately, you can run the `frontend` profile:
+
+```bash
+docker-compose -f docker-compose.prod.yml --profile frontend up -d
+```
+
+This starts a Vite preview server on `http://localhost:8002`.
 
 > **Alternative:** For manual deployment without Docker, see the [Manual Production Deployment](#manual-production-deployment) section at the bottom of this document.
 
@@ -736,8 +751,8 @@ SaveNLoadModern/
 - **Backend Framework**: Django 6.0
 - **Database**: PostgreSQL 16
 - **Message Broker/Cache**: Redis
-- **Frontend**: Bootstrap 5.3, JavaScript (Vanilla)
-- **Styling**: Sass/SCSS
+- **Frontend**: Vue 3 + Vite
+- **Styling**: Bootstrap 5.3, Sass/SCSS
 - **Containerization**: Docker, Docker Compose
 - **File Storage**: FTP
 - **File Transfer**: rclone (for client worker FTP operations)

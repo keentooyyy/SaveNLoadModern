@@ -13,6 +13,7 @@ ENV/
 .git
 .gitignore
 .env
+.env.*
 .venv
 *.log
 node_modules/
@@ -22,9 +23,15 @@ build/
 .coverage
 htmlcov/
 .pytest_cache/
+# Local data and runtime artifacts
+postgres_data/
+media/
+logs/
 # Frontend build artifacts (not needed in backend image)
 frontend/SaveNLoad/node_modules/
 frontend/SaveNLoad/dist/
+# Vite build output from local dev (built inside image)
+SaveNLoad/static/vite/
 # Rclone executable and config (not needed in Docker)
 client_worker/rclone/
 
