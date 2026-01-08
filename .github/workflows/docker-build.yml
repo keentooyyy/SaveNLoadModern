@@ -43,6 +43,11 @@ jobs:
             type=raw,value=prod-latest,enable={{is_default_branch}}
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Verify VITE build args are set
+        run: |
+          test -n "${{ secrets.VITE_API_BASE }}" || (echo "VITE_API_BASE missing" && exit 1)
+          test -n "${{ secrets.VITE_API_ORIGIN }}" || (echo "VITE_API_ORIGIN missing" && exit 1)
+
       - name: Build and push production image
         uses: docker/build-push-action@v5
         with:
@@ -51,6 +56,9 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-prod.outputs.tags }}
           labels: ${{ steps.meta-prod.outputs.labels }}
+          build-args: |
+            VITE_API_BASE=${{ secrets.VITE_API_BASE }}
+            VITE_API_ORIGIN=${{ secrets.VITE_API_ORIGIN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
