@@ -703,8 +703,56 @@ class RcloneClient:
         if any(pattern in error_text for pattern in not_found_patterns):
             self._rc_call("operations/rmdir", {"fs": f"{self.remote_name}:", "remote": normalized_path}, timeout=60)
             return True, "Directory already deleted"
+        # Fall back to manual recursive delete (some FTP servers reject purge).
+        fallback_success, fallback_message = self._delete_directory_fallback(normalized_path)
+        if fallback_success:
+            return True, fallback_message
         error_msg = rc_error or "Delete failed"
         return False, error_msg
+
+    def _delete_directory_fallback(self, normalized_path: str) -> Tuple[bool, str]:
+        """Fallback delete: list, delete files, then delete dirs bottom-up."""
+        list_success, items, list_error = self._rc_list(normalized_path)
+        if not list_success:
+            return False, list_error or "Delete failed (listing failed)"
+
+        files = []
+        dirs = []
+        for item in items:
+            path = (item.get('Path') or '').replace('\\', '/')
+            if not path:
+                continue
+            if item.get('IsDir', False):
+                dirs.append(path)
+            else:
+                files.append(path)
+
+        # Delete files first.
+        for file_path in files:
+            delete_success, _, delete_error = self._rc_call(
+                "operations/deletefile",
+                {"fs": f"{self.remote_name}:", "remote": file_path},
+                timeout=60
+            )
+            if not delete_success:
+                return False, delete_error or "Delete failed (file delete error)"
+
+        # Delete directories bottom-up.
+        dirs_sorted = sorted(dirs, key=lambda p: p.count('/'), reverse=True)
+        for dir_path in dirs_sorted:
+            self._rc_call(
+                "operations/rmdir",
+                {"fs": f"{self.remote_name}:", "remote": dir_path},
+                timeout=60
+            )
+
+        # Finally remove the root.
+        self._rc_call(
+            "operations/rmdir",
+            {"fs": f"{self.remote_name}:", "remote": normalized_path},
+            timeout=60
+        )
+        return True, "Directory deleted (fallback)"
     
     def check_status(self) -> Tuple[bool, str]:
         """
