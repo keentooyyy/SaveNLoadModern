@@ -4,6 +4,7 @@ import uuid
 
 import jwt
 from django.conf import settings
+from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect
 from django_ratelimit.decorators import ratelimit
 from django.utils import timezone
@@ -133,7 +134,22 @@ def _build_login_response(user, remember_me=False, user_agent=None, ip_address=N
 @permission_classes([AllowAny])
 @ensure_csrf_cookie
 def csrf_view(request):
-    return Response({'message': 'CSRF cookie set.'}, status=status.HTTP_200_OK)
+    token = get_token(request)
+    response = Response(
+        {'message': 'CSRF cookie set.', 'csrfToken': token},
+        status=status.HTTP_200_OK
+    )
+    response.set_cookie(
+        settings.CSRF_COOKIE_NAME,
+        token,
+        max_age=getattr(settings, 'CSRF_COOKIE_AGE', None),
+        secure=settings.CSRF_COOKIE_SECURE,
+        httponly=settings.CSRF_COOKIE_HTTPONLY,
+        samesite=settings.CSRF_COOKIE_SAMESITE,
+        path=getattr(settings, 'CSRF_COOKIE_PATH', '/'),
+        domain=getattr(settings, 'CSRF_COOKIE_DOMAIN', None)
+    )
+    return response
 
 
 @api_view(["POST"])
