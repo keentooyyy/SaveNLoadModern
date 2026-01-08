@@ -8,54 +8,49 @@
 
 ## About
 
-SaveNLoadModern is a modern, web-based game save file management system built with Django. It provides a centralized platform for users to save, load, and manage their game progress across multiple games and save slots. The system features a client worker application that runs on user machines to handle local save file operations, FTP storage integration using rclone for reliable file transfers, and a comprehensive admin dashboard for managing games, users, and operations.
+SaveNLoadModern is a web-based game save file management system built with Django. It gives users a central place to save, load, and manage game progress across multiple titles and save slots. A client worker runs on user machines to handle local file operations, while the backend manages authentication, metadata, and an async operation queue. Save files are stored remotely via rclone (typically to an FTP server).
 
 ### Architecture Overview
 
-- **Django Backend**: Manages user authentication, game database, operation queue, and API endpoints
-- **Redis**: Handles operation queue, real-time status updates, and worker coordination (ping/heartbeat)
-- **Frontend (Vite + Vue)**: Built into static assets served by Django/WhiteNoise in production
-- **Client Worker**: Standalone executable that runs on user PCs to perform actual file operations (save/load/delete)
-- **Remote Storage**: Stores all save files (typically FTP, accessed via rclone)
-- **Operation Flow**: Backend queues operations in Redis → Client worker polls Redis → Executes and reports progress via API
+- **Django Backend**: Auth, game database, operation queue, API endpoints
+- **Redis**: Operation queue, progress updates, worker heartbeat
+- **Frontend (Vite + Vue)**: Built into static assets for Django/WhiteNoise in production
+- **Client Worker**: Standalone Windows executable that performs save/load/delete operations
+- **Remote Storage**: FTP (or any rclone-compatible backend)
+- **Operation Flow**: Backend queues work in Redis → client worker polls → executes → reports progress
 
-### Key Features
+## Key Features
 
-- **Game Save Management**: Save and load game files with support for multiple save slots per game
-- **Multi-Path Save/Load**: Support for games with multiple save file locations - all paths are saved/loaded simultaneously with automatic subfolder organization
-- **Client Worker Application**: Standalone Python executable that runs on client PCs to handle save/load operations
-- **FTP Storage**: FTP storage integration using rclone for reliable file transfers with progress tracking and parallel transfers
-- **User Authentication**: Custom authentication system with role-based access (Admin/User)
-- **Admin Dashboard**: Comprehensive admin panel for managing games, users, and operations
-- **Admin Account Management**: Searchable user management interface for admins to view users and reset passwords
-- **RAWG API Integration**: Automatic game information retrieval using RAWG API for banners and metadata
-- **Operation Queue**: Asynchronous operation queue system for handling save/load requests
-- **Password Reset**: Secure OTP-based password reset functionality with email notifications
-- **Multi-Save Support**: Support for up to 10 save folders per user per game
-- **Open Save Location**: Quick access to open save file locations directly from the game management interface
-- **Modern UI**: Responsive Bootstrap 5 interface with custom styling
+- Multi-game save management with up to 10 save slots per user per game
+- Multi-path save/load support (games with multiple save locations)
+- Client worker for local file operations and progress reporting
+- Rclone-based FTP transfer support with parallel transfers
+- Custom authentication with admin and user roles
+- Admin dashboard for games, users, and operations
+- RAWG API integration for game metadata and banners
+- OTP-based password reset via email
+- Quick access to local save locations
+- Modern Bootstrap-based UI
 
 ## Prerequisites
 
-> **Recommended Deployment Method:** Docker is the recommended deployment method for SaveNLoadModern. Docker containers automatically manage the Django application, PostgreSQL database, and Node.js dependencies.
-
-Before setting up the project, ensure you have the following installed:
+> **Recommended Deployment Method:** Docker is the primary deployment path. Docker containers handle Django, PostgreSQL, Redis, and Node dependencies.
 
 **Required:**
-- **[Docker](https://www.docker.com/get-started)** and **Docker Compose** - Primary deployment method (includes Redis)
-- **Remote Storage** - An FTP server or other rclone-compatible storage for save files
-- **[rclone](https://rclone.org/downloads/)** - Required ONLY for **building** the client worker (bundled into the final executable; end users do not need to install this)
+- **[Docker](https://www.docker.com/get-started)** and **Docker Compose** (includes Redis)
+- **Remote Storage**: FTP server or any rclone-compatible backend
+- **[rclone](https://rclone.org/downloads/)** (required only for building the client worker)
 
-**Separate Services (Required, not included in Docker):**
-- **FTP Server** - An FTP server accessible from both the Django server and client worker machines
-- **Gmail Account** - Required for email notifications (requires App Password)
+**Separate Services (required, not included in Docker):**
+- **FTP Server**: Accessible from both the server and client worker machines
+- **Gmail Account**: For email notifications (requires App Password)
 
-**Optional (for manual setup only):**
-- **[Python 3.12](https://www.python.org/downloads/)** - Required only if not using Docker
-- **[PostgreSQL 16](https://www.postgresql.org/download/)** - Required only if not using Docker
-- **[Node.js 20.x](https://nodejs.org/)** - Required only if not using Docker (automatically handled by Docker)
+**Optional (manual setup only):**
+- **[Python 3.12](https://www.python.org/downloads/)**
+- **[PostgreSQL 16](https://www.postgresql.org/download/)**
+- **[Node.js 20.x](https://nodejs.org/)**
 
-You can verify Docker installation with:
+Verify Docker:
 
 ```bash
 docker --version
@@ -64,52 +59,32 @@ docker-compose --version
 
 ### Redis Requirement
 
-SaveNLoadModern relies heavily on Redis for:
-- Operation queuing (background tasks)
+SaveNLoadModern depends on Redis for:
+- Operation queueing
 - Real-time progress updates
 - Worker presence (pings/heartbeats)
 
-**Docker Deployment**: Redis is automatically included and configured.
-**Manual Deployment**: You must install and run a Redis server individually.
+**Docker Deployment** includes Redis automatically.
+**Manual Deployment** requires a separate Redis instance.
 
-## FTP Server Setup
+## FTP Server Setup (Required)
 
-> **Important:** An FTP server must be configured separately and accessible from client worker machines. The Django backend does NOT handle file storage - it only manages the operation queue. All file operations are performed by the client worker using rclone.
+The Django backend does not store files. All file operations are performed by the client worker using rclone. You must set up an FTP server separately.
 
-You need to install and configure an FTP server yourself. The Django backend does not include an FTP server - you must set one up separately.
+1. Install FTP software (FileZilla Server, vsftpd, IIS FTP, etc.)
+2. Create a user with read/write access
+3. Configure ports (21 control + passive ports if enabled)
+4. Record credentials and host details
 
-### Step 1: Install FTP Server Software
-
-- **Recommended**: [FileZilla Server](https://filezilla-project.org/download.php?type=server) (Free, Windows/Linux)
-- **Alternatives**: vsftpd (Linux), Windows IIS FTP, or any other FTP server software
-
-### Step 2: Configure FTP Server
-
-1. Create a user account with read/write permissions
-2. Configure the FTP server to listen on port 21 (default) or your preferred port
-3. Set up a directory for storing save files
-4. Ensure firewall allows FTP traffic (ports 21 for control, and passive mode ports if enabled)
-
-### Step 3: FileZilla Server Setup Resources
-
-- **[Official FileZilla Server Video Tutorial](https://www.youtube.com/watch?time_continue=31&v=XXLnkeNjdCo)** - Step-by-step video guide
-- **[Official FileZilla Server Documentation](https://filezillapro.com/docs/server/basic-usage-instructions-server/configure-filezilla-server/)** - Complete configuration guide
-
-### Step 4: Note FTP Server Details
-
-After setting up your FTP server, note the following details (you'll need these later):
-
-- **FTP Host**: IP address or hostname of the FTP server (e.g., `YOUR_FTP_SERVER_IP` or `192.168.1.100`)
-- **FTP Username**: Username for FTP access
-- **FTP Password**: Password for the FTP user account
-
-> **Note:** You'll configure these credentials in the client worker using rclone (see "Building the Client Worker" section).
+Helpful resources:
+- [FileZilla Server video guide](https://www.youtube.com/watch?time_continue=31&v=XXLnkeNjdCo)
+- [FileZilla Server documentation](https://filezillapro.com/docs/server/basic-usage-instructions-server/configure-filezilla-server/)
 
 ## Project Setup
 
 ### Step 1: Environment Configuration
 
-Create a `.env` file in the project root with the following variables:
+Create a `.env` file in the project root:
 
 ```env
 # DJANGO CONFIGS
@@ -126,7 +101,7 @@ DEFAULT_ADMIN_USERNAME=admin
 DEFAULT_ADMIN_EMAIL=admin@example.com
 DEFAULT_ADMIN_PASSWORD=your-admin-password-here
 
-# Admin password reset (for manage accounts feature)
+# Admin password reset (manage accounts feature)
 RESET_PASSWORD_DEFAULT=ResetPassword123
 
 # Redis Configuration
@@ -141,511 +116,260 @@ REDIS_PASSWORD=
 VERSION_GITHUB_URL=https://raw.githubusercontent.com/keentooyyy/SaveNLoadModern/refs/heads/main/version.txt
 ```
 
-> **Note:** 
-> - For Gmail, you need to generate an [App Password](https://support.google.com/accounts/answer/185833) instead of your regular password
-> - For production, set `DEBUG=False` and configure `ALLOWED_HOSTS` appropriately
-> - File storage is handled entirely by the client worker via rclone - no backend storage configuration needed
-> - `RESET_PASSWORD_DEFAULT` is used by admins to reset user passwords through the "Manage Accounts" feature. This password will be set when an admin resets a user's password.
+Notes:
+- Use a Gmail App Password for SMTP
+- Set `DEBUG=False` and configure `ALLOWED_HOSTS` for production
+- Save file storage is handled by the client worker via rclone
 
 ### Step 2: Docker Deployment (Recommended)
 
-Docker deployment automatically handles all system dependencies and configuration. This method is recommended for both development and production environments.
-
-**Benefits of Docker Deployment:**
-- Automatic dependency management (Python, PostgreSQL, Redis, Node.js)
-- Consistent environments across different systems
-- Simplified database setup and migrations
-- Integrated service orchestration
-- Reduced configuration complexity
-
-**Development Environment:**
+**Development:**
 
 ```bash
 docker-compose up --build
 ```
 
-This command will:
-- Build the Docker containers
-- Initialize PostgreSQL database
-- Run database migrations
+This will:
+- Build containers
+- Initialize PostgreSQL
+- Run migrations
 - Install npm dependencies and compile CSS
-- Start the Django development server
+- Start the Django dev server
 
-The application will be available at `http://localhost:8000`
+Visit `http://localhost:8000`.
 
-**Production Environment:**
+**Production:**
 
 ```bash
 docker-compose -f docker-compose.prod.yml up -d --build
 ```
 
 This will:
-- Build the production backend image (including Vite assets)
+- Build the production image (including Vite assets)
 - Run migrations and collect static files on startup
-- Serve frontend assets from the Django container via WhiteNoise
-
-> **Note:** Docker deployment eliminates dependency conflicts and ensures consistent environments. Manual setup should only be used when Docker is not available.
+- Serve assets via WhiteNoise
 
 ### Step 3: Manual Setup (Alternative)
 
-> **Note:** Manual setup requires installing and configuring Python, PostgreSQL, Node.js, and all dependencies individually. This method is more complex and time-consuming than Docker deployment. Use this method only if Docker is not available in your environment.
-> 
-> For detailed manual setup instructions (development and production), see the [Manual Production Deployment](#manual-production-deployment) section at the bottom of this document.
+Manual setup is intended only if Docker is not available. For full instructions, see [Manual Production Deployment](#manual-production-deployment).
 
 ## Building the Client Worker
 
-The client worker is a standalone Python executable that users run on their Windows machines to handle save/load operations. It communicates with the Django backend via REST API and uses rclone for file transfers.
+The client worker is a standalone Windows executable that performs local file operations and reports progress back to the server.
 
-### Prerequisites for Building
+### Prerequisites
 
-Before building the client worker, ensure you have:
+- Python 3.12
+- PyInstaller (via `client_worker/requirements.txt`)
+- `rclone.exe` in `client_worker/rclone/`
+- `rclone.conf` in `client_worker/rclone/`
 
-1. **Python 3.12** installed on your build machine
-2. **PyInstaller** (will be installed automatically via requirements.txt)
-3. **rclone.exe** in `client_worker/rclone/` directory
-4. **rclone.conf** configured in `client_worker/rclone/` directory
-
-### Step 1: Setup Build Environment
-
-1. Navigate to the client worker directory:
+### Step 1: Build Environment
 
 ```bash
 cd client_worker
-```
-
-2. Create a virtual environment (recommended):
-
-```bash
 python -m venv venv
 
-# Activate virtual environment
 # Windows:
 venv\Scripts\activate
 # Linux/Mac:
 source venv/bin/activate
-```
 
-3. Install build dependencies:
-
-```bash
 pip install -r requirements.txt
 ```
 
-This will install:
-- `requests` - HTTP client for API communication
-- `python-dotenv` - Environment variable management
-- `pyinstaller` - Executable builder
-- `rich` - Rich text and beautiful formatting for terminal output
+### Step 2: Configure rclone
 
-### Step 2: Configure Rclone
+> **Important:** The rclone configuration is bundled into the executable during build. Configure rclone before building.
 
-> **IMPORTANT: Rclone MUST be configured BEFORE building the executable!** The rclone configuration (`rclone.conf`) is bundled into the executable during the build process. If you build without configuring rclone first, the executable will not have FTP access configured and will need to be rebuilt.
-
-Before building, ensure rclone is properly configured:
-
-1. **Download rclone**: Get the Windows executable from [rclone.org](https://rclone.org/downloads/)
-2. **Place rclone.exe**: Copy `rclone.exe` to `client_worker/rclone/` directory
-3. **Configure FTP Remote**: Use rclone's interactive configuration to set up the FTP remote:
+1. Download rclone from [rclone.org](https://rclone.org/downloads/)
+2. Place `rclone.exe` in `client_worker/rclone/`
+3. Configure an FTP remote named `ftp`:
 
 ```bash
-# First, configure rclone (creates config in default location)
-# You can run rclone from anywhere, or use the one in client_worker/rclone/
 rclone.exe config
-
-# Follow the prompts:
-# 1. Type 'n' to create a new remote
-# 2. Enter a name for the remote (e.g., 'ftp')
-# 3. Select 'ftp' as the storage type (type the number for FTP)
-# 4. Enter your FTP server host/IP
-# 5. Enter your FTP username
-# 6. Enter your FTP password
-# 7. Configure other options as needed (or press Enter for defaults)
-# 8. Type 'y' to confirm and save
 ```
 
-**Example Configuration Flow:**
+Copy the generated config to:
+
 ```
-> rclone.exe config
-Current remotes:
-
-Name                 Type
-====                 ====
-
-e) Edit existing remote
-n) New remote
-d) Delete remote
-r) Rename remote
-c) Copy remote
-s) Set configuration password
-q) Quit config
-e/n/d/r/c/s/q> n
-name> ftp
-Storage> 4  # Select FTP (number may vary)
-FTP host to connect to> YOUR_FTP_SERVER_IP
-FTP username> your_ftp_username
-FTP password> [enter your password]
-Use FTP over TLS (SSL)?> n
-Edit advanced config?> n
-Remote config
---------------------
-[ftp]
-type = ftp
-host = YOUR_FTP_SERVER_IP
-user = your_ftp_username
-pass = *** ENCRYPTED ***
---------------------
-y) Yes this is OK
-e) Edit this remote
-d) Delete this remote
-y/e/d> y
+%APPDATA%\rclone\rclone.conf -> client_worker\rclone\rclone.conf
 ```
-
-4. **Copy rclone.conf to client_worker directory**: After configuration, copy the rclone config file from the default location (`%APPDATA%\rclone\rclone.conf`) to `client_worker/rclone/` directory.
-
-> **CRITICAL NOTES:** 
-> - **You MUST configure rclone BEFORE building the executable** - the configuration is bundled into the .exe during build
-> - You must download `rclone.exe` manually and place it in `client_worker/rclone/` directory before building
-> - The `rclone.exe` and `rclone.conf` files are bundled into the final executable during the PyInstaller build process
-> - The configuration file must be manually copied from the default rclone location (`%APPDATA%\rclone\rclone.conf`) to `client_worker/rclone/` directory before building
-> - If you need to change FTP settings after building, you must reconfigure rclone and rebuild the executable
-> - For more detailed configuration options, see the [rclone config command documentation](https://rclone.org/commands/rclone_config/)
 
 ### Step 3: Build the Executable
-
-> **IMPORTANT: Ensure rclone is configured (Step 2) before building!** The build process bundles `rclone.exe` and `rclone.conf` into the executable. If rclone is not configured before building, you will need to configure it and rebuild.
-
-Run the build script:
 
 ```bash
 python build_exe.py
 ```
 
-This will:
-- Fetch version from GitHub (if `VERSION_GITHUB_URL` is set in `.env`) or use local `version.txt` file
-- Generate Windows manifest with version information
-- Use PyInstaller to bundle all dependencies
-- Include rclone.exe and rclone.conf in the executable
-- Create `SaveNLoadClient.exe` in the `dist/` directory
-- Request admin privileges (UAC) when running
+Build output:
+- `client_worker/dist/SaveNLoadClient.exe`
+- `client_worker/build/` (safe to delete)
 
-> **Note:** The build script automatically fetches the version from GitHub (configured via `VERSION_GITHUB_URL` in `.env`) or falls back to the local `version.txt` file in the project root. This version is embedded in the Windows executable manifest.
+The build script reads version info from `VERSION_GITHUB_URL` (if set) or falls back to `version.txt` in the repo root.
 
-**Build Output:**
-- Executable: `client_worker/dist/SaveNLoadClient.exe` (includes rclone.exe and rclone.conf bundled inside)
-- Build artifacts: `client_worker/build/` (can be deleted after build)
+### Step 4: Distribution Package
 
-> **Note:** The executable is self-contained - rclone.exe and rclone.conf are bundled into the executable during the PyInstaller build process. Users only need the `.exe` file and a `.env` file for configuration.
-
-### Step 4: Prepare Distribution Package
-
-After building, create a distribution package for users:
-
-1. **Required Files:**
-   - `SaveNLoadClient.exe` (from `dist/` folder - includes rclone bundled inside)
-   - `.env` file (for server URL configuration)
-
-2. **Optional Files:**
-   - `.env.example` template file (for reference)
-   - README or setup instructions
-
-3. **Directory Structure for Distribution:**
 ```
 SaveNLoadClient/
-├── SaveNLoadClient.exe  (self-contained, includes rclone)
-└── .env                 (required for server URL)
+├── SaveNLoadClient.exe
+└── .env
 ```
 
 ### Step 5: User Configuration
 
-Users need to configure the client worker before first use:
+Create a `.env` file next to `SaveNLoadClient.exe`:
 
-1. **Server URL Configuration:**
-   - Create a `.env` file in the same directory as `SaveNLoadClient.exe`
-   - Add the Django server URL and optional version URL:
-   ```env
-   # Django Server URL
-   SAVENLOAD_SERVER_URL=http://YOUR_SERVER_IP:8000
-   
-   # Version (Optional - for version checking)
-   VERSION_GITHUB_URL=https://raw.githubusercontent.com/keentooyyy/SaveNLoadModern/refs/heads/main/version.txt
-   ```
-   - Replace `YOUR_SERVER_IP` with your actual Django server IP/domain
-
-2. **FTP Configuration:**
-   - The rclone configuration is bundled in the executable
-   - If you need to reconfigure FTP settings, you can extract rclone from the executable or rebuild with a new `rclone.conf`
-   - For build-time configuration, see Step 2 in build instructions
-   - The FTP remote must be named `ftp` in the rclone configuration (default remote name)
-
-3. **Worker Association (First Run):**
-   - The client worker will open a browser window to your server URL.
-   - If you are not logged in, log in to the web interface.
-   - Navigate to the **Connect Device** page (you will be redirected there automatically if you try to access the dashboard without an active device).
-   - Find your device in the list (refer to the **Tip** for ID matching) and click **Use Worker**.
+```env
+SAVENLOAD_SERVER_URL=http://YOUR_SERVER_IP:8000
+VERSION_GITHUB_URL=https://raw.githubusercontent.com/keentooyyy/SaveNLoadModern/refs/heads/main/version.txt
+```
 
 ### Step 6: Running the Client Worker
 
-1. **First Run:**
-   - Double-click `SaveNLoadClient.exe`
-   - Grant admin privileges when prompted (required for file operations)
-   - Browser window will open to the server URL.
-   - Log in to the web interface if prompted.
-   - Click **Use Worker** on the "Connect Device" page to claim your machine.
-   - Client worker will start polling for operations once claimed.
-
-2. **Subsequent Runs:**
-   - Double-click `SaveNLoadClient.exe`
-   - Grant admin privileges
-   - Client worker will use saved session cookie
-
-3. **Operation:**
-   - Client worker runs in the background
-   - Polls Django server every 5 seconds for pending operations
-   - Automatically processes save/load/delete operations
-   - Sends progress updates to the web interface
-
-### Build Troubleshooting
-
-**Issue: PyInstaller not found**
-```bash
-pip install pyinstaller
-```
-
-**Issue: rclone.exe not found**
-- Ensure `rclone.exe` is in `client_worker/rclone/` directory
-- Download from [rclone.org](https://rclone.org/downloads/) if missing
-
-**Issue: Build fails with import errors**
-- Ensure all dependencies are installed: `pip install -r requirements.txt`
-- Check that virtual environment is activated
-
-**Issue: Executable is too large**
-- This is normal - PyInstaller bundles Python interpreter and all dependencies
-- Typical size: 50-100 MB
-- Can be reduced with UPX compression (enabled by default)
-
-**Issue: Executable doesn't run on other machines**
-- Ensure target machine has Windows 10/11
-- May need Visual C++ Redistributable (usually pre-installed)
-- Check Windows Defender isn't blocking the executable
+1. Run `SaveNLoadClient.exe` and approve admin privileges
+2. Log in to the web UI (if prompted)
+3. Use **Connect Device** to claim your worker
+4. The worker will poll every 5 seconds and process queued operations
 
 ## Configuration
 
-### Database Configuration
-
-The application uses PostgreSQL. Configure connection in `.env`:
+### Database
 
 ```env
 POSTGRES_DB=savenload_db
 POSTGRES_USER=savenload_user
 POSTGRES_PASSWORD=your-password
-POSTGRES_HOST=db  # Use 'localhost' for non-Docker setup
+POSTGRES_HOST=db  # Use localhost for non-Docker
 POSTGRES_PORT=5432
 ```
 
-### FTP Configuration in Client Worker
+### Feature Flags and System Settings
 
-FTP settings are configured during the build process. The rclone configuration is bundled into the executable:
+Feature flags and integration settings are stored in the `system_settings` table and managed through **Admin Settings**. Defaults are seeded via migrations.
 
-1. **Before Building:** Configure rclone in `client_worker/rclone/` directory:
-   ```bash
-   # Navigate to rclone directory
-   cd client_worker/rclone
-   
-   # Run rclone config
-   rclone.exe config
-   
-   # Follow prompts to create/edit 'ftp' remote
-   # See "Building the Client Worker" section for detailed instructions
-   ```
+Feature flags:
+- `feature.rawg.enabled` (bool, default `False`) - Enables RAWG integration
+- `feature.email.enabled` (bool, default `False`) - Enables SMTP email features
+- `feature.email.registration_required` (bool, default `True`) - Require email registration flows
+- `feature.guest.enabled` (bool, default `False`) - Enables guest accounts
+- `feature.guest.ttl_days` (int, default `14`) - Guest account TTL (1-14 days)
 
-2. **Or use command-line configuration (non-interactive):**
-   ```bash
-   rclone.exe config create ftp ftp host=YOUR_FTP_SERVER_IP user=your_ftp_username pass=your_ftp_password
-   ```
+Integration settings:
+- `rawg.api_key` (string, default empty) - RAWG API key (stored encrypted)
+- `email.gmail_user` (string, default empty) - Gmail username
+- `email.gmail_app_password` (string, default empty) - Gmail App Password (stored encrypted)
+- `reset.default_password` (string, default empty) - Admin reset password default (stored encrypted)
 
-3. **The `rclone.conf` file** in `client_worker/rclone/` will be bundled into the executable during the PyInstaller build process.
+### FTP (Client Worker)
 
-> **Note:** 
-> - The FTP server must be accessible from client worker machines
-> - The FTP server can be on the same machine as Django or on a separate server
-> - The rclone executable (`rclone.exe`) and configuration file (`rclone.conf`) are bundled into the final executable - no separate rclone folder needed for distribution
-> - The Django backend does NOT need FTP credentials - it only manages the operation queue
-> - For advanced configuration options, see the [rclone config command documentation](https://rclone.org/commands/rclone_config/)
+FTP credentials live only in `client_worker/rclone/rclone.conf`. The backend never stores FTP credentials.
 
-### Email Configuration
+Non-interactive setup:
 
-Configure Gmail credentials in **Admin Settings** (stored in the database). Gmail requires an [App Password](https://support.google.com/accounts/answer/185833) for SMTP authentication.
+```bash
+rclone.exe config create ftp ftp host=YOUR_FTP_SERVER_IP user=your_ftp_username pass=your_ftp_password
+```
+
+### Email
+
+Gmail credentials are stored in **Admin Settings**. Use an App Password for SMTP.
 
 ### RAWG API
 
-The application uses RAWG API for game information. **An API key is required** for game search functionality. 
-
-To get a free API key:
-1. Visit [RAWG API](https://rawg.io/apidocs)
-2. Sign up for a free account
-3. Get your API key from the dashboard
-4. Add it in **Admin Settings** under RAWG API Key.
-
-The API key must be set in Admin Settings for the game search feature to work.
+A RAWG API key is required for game search. Add it in **Admin Settings**.
 
 ## Production Deployment
 
-> **Recommended Method:** Docker Compose is the recommended deployment method for production environments. It ensures consistent environments, simplifies scaling, and reduces maintenance overhead.
-
-### Docker Compose Deployment (Recommended)
-
-**Prerequisites:**
-1. Set `DEBUG=False` in `.env`
-2. Configure `ALLOWED_HOSTS` with your production domain (or use `*` for local deployment)
-3. Generate a strong `SECRET_KEY`
-4. Configure production database credentials
-5. Set up SSL/HTTPS (only needed if exposing to the internet; not required for local deployment)
-
-**Deployment:**
+**Recommended:** Docker Compose
 
 ```bash
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
-Docker Compose automatically handles:
-- Service orchestration and networking
-- Database initialization and migrations
-- Static file collection (including Vite assets)
-- Process management and health checks
-
-**Optional Frontend Preview (not required for production):**
-If you need to preview the Vite build output separately, you can run the `frontend` profile:
+Optional Vite preview:
 
 ```bash
 docker-compose -f docker-compose.prod.yml --profile frontend up -d
 ```
 
-This starts a Vite preview server on `http://localhost:8002`.
-
-> **Alternative:** For manual deployment without Docker, see the [Manual Production Deployment](#manual-production-deployment) section at the bottom of this document.
-
 ## Key Systems
 
-### Authentication System
+### Authentication
 
-- **Custom User Model**: Independent from Django's auth system
-- **Role-Based Access**: Admin and User roles with different permissions
-- **Session Management**: Django session-based authentication
-- **Password Reset**: OTP-based password reset with email verification
+- Custom user model (separate from Django auth)
+- Role-based access (Admin/User)
+- Session-based auth
+- OTP-based password reset
 
 ### Game Management
 
-- **Game Registration**: Add games manually or search via RAWG API
-- **Multiple Save File Locations**: Configure multiple save file paths for each game (supports games that save to multiple directories)
-- **Banner Images**: Automatic banner retrieval from RAWG API
-- **Game Metadata**: Store game information and last played timestamps
-- **Path Management**: Automatic path mapping and subfolder organization for multi-path games
+- Manual game registration or RAWG search
+- Multiple save paths per game
+- Banner and metadata storage
+- Automated path mapping for multi-path games
 
 ### Save/Load System
 
-- **Multiple Save Slots**: Support for up to 10 save folders per game per user
-- **Multi-Path Support**: Games with multiple save locations are automatically handled - all paths are saved/loaded simultaneously
-- **Path Organization**: Multiple save paths are organized into subfolders (path_1, path_2, etc.) on the FTP server for proper organization
-- **FTP Storage**: Save files stored on FTP server using rclone for reliable transfers
-- **Operation Queue**: Asynchronous processing of save/load operations with support for parallel multi-path operations
-- **Progress Tracking**: Real-time progress tracking with file counts and transfer speeds for all paths
-- **Empty Save Validation**: Automatic validation to prevent saving empty directories or files
-- **Backup Operations**: Download all saves, zip them, and save to local Downloads folder
-- **Open Save Location**: Quick access to open save file locations (opens all paths for multi-path games)
+- Up to 10 save slots per user per game
+- Multi-path operations for games with multiple save locations
+- Organized FTP storage (path_1, path_2, ...)
+- Async operations with progress updates
+- Backup downloads and local folder open shortcuts
 
 ### Client Worker
 
-- **Standalone Application**: Python executable that runs on client PCs
-- **Rclone Integration**: Uses rclone for fast, reliable FTP file transfers with parallel workers
-- **Save Operations**: Upload local save files to FTP server with progress tracking (supports multiple paths simultaneously)
-- **Load Operations**: Download save files from FTP server to local machine with progress tracking (supports multiple paths simultaneously)
-- **Multi-Path Operations**: Automatically handles games with multiple save locations - processes all paths in parallel
-- **Backup Operations**: Download all saves for a game, zip them, and save to Downloads folder
-- **Open Folder Operations**: Create local folders if needed and open them in file explorer (supports multiple paths)
-- **API Integration**: Communicates with Django backend via REST API
-- **Session Management**: Maintains authentication with Django server
-- **Real-time Progress**: Sends real-time progress updates to web UI during transfers for all operations
+- Standalone Windows executable
+- Rclone transfers with parallel workers
+- Local save upload/download with progress
+- Automatic folder creation and opening
+- REST API communication with the backend
 
 ### Admin Dashboard
 
-- **User Management**: View and manage all users with searchable interface
-- **Account Management**: Reset user passwords to default constant value (useful for password recovery)
-- **Game Management**: Add, edit, and remove games with support for multiple save file locations
-- **Operation Queue**: Monitor and manage save/load operations
-- **Settings**: Configure system-wide settings
-- **Statistics**: View usage statistics and analytics
-
+- User and account management
+- Game management with multi-path support
+- Operation queue monitoring
+- System settings and statistics
 
 ## Troubleshooting
 
 ### Database Connection Issues
 
-If you encounter database connection errors:
-
-1. **Check PostgreSQL Status**: Ensure PostgreSQL is running
-2. **Check Credentials**: Verify database credentials in `.env`
-3. **Check Host**: Use `localhost` for non-Docker, `db` for Docker
-4. **Check Port**: Default PostgreSQL port is `5432`
-5. **Check Database Exists**: Create database if it doesn't exist
+- Verify PostgreSQL is running
+- Confirm credentials in `.env`
+- Use `db` for Docker and `localhost` for manual setup
+- Ensure port `5432` is open
+- Create the database if missing
 
 ### FTP Connection Issues
 
-If FTP operations fail:
-
-1. **Check FTP Server**: Ensure the FTP server is running and accessible
-2. **Check Network**: Ensure client worker can reach the FTP server over the network (ping test)
-3. **Check Credentials**: Verify FTP credentials using `rclone.exe config show ftp` or check `rclone.conf` (NOT in Django .env)
-4. **Check Firewall**: Ensure firewall allows FTP traffic (port 21 for control, and passive mode ports if enabled)
-5. **Check Permissions**: Verify FTP user account has Read/Write permissions on the FTP directory
-6. **Check Rclone**: Ensure `rclone.exe` is in `client_worker/rclone/` directory
-7. **Check Rclone Config**: Verify FTP remote is configured correctly using `rclone.exe config show ftp` or reconfigure with `rclone.exe config`
-8. **Test FTP Connection**: Test FTP connection manually using an FTP client or rclone rc
-9. **Check Logs**: Review client worker output for detailed errors
-
-> **Note:** FTP issues are client worker issues, not Django backend issues. The Django backend only manages the operation queue.
+- Confirm FTP server is reachable
+- Verify credentials with `rclone.exe config show ftp`
+- Ensure port 21 and passive ports are open
+- Verify `rclone.exe` and `rclone.conf` exist in `client_worker/rclone/`
+- Review client worker logs for transfer errors
 
 ### Email Sending Issues
 
-If password reset emails don't send:
-
-1. **Check Gmail App Password**: Ensure you're using App Password, not regular password
-2. **Check 2FA**: Gmail requires 2FA enabled for App Passwords
-3. **Check Credentials**: Verify `GMAIL_USER` and `GMAIL_APP_PASSWORD` in `.env`
-4. **Check SMTP**: Test SMTP connection manually
-5. **Check Logs**: Check Docker logs (`docker-compose logs web`) or console output for email errors
+- Use Gmail App Passwords (not the account password)
+- Confirm SMTP credentials in Admin Settings
+- Check Docker logs (`docker-compose logs web`) or console output
 
 ### Client Worker Issues
 
-If client worker fails:
-
-1. **Check Server URL**: Verify Django server is accessible (test in browser)
-2. **Check .env File**: Ensure `SAVENLOAD_SERVER_URL` is set correctly in client worker directory (and optionally `VERSION_GITHUB_URL` for version checking)
-3. **Check Session Cookie**: Ensure valid session cookie (log in via web interface first)
-4. **Check Rclone**: Rclone is bundled in the executable - if FTP connection fails, the rclone configuration may need to be updated and the executable rebuilt
-5. **Check Rclone Config**: The rclone configuration is bundled in the executable - verify FTP settings were correct during build (host, user, pass in `client_worker/rclone/rclone.conf`)
-6. **Check FTP Server**: Verify the FTP server is accessible and credentials are correct
-7. **Check Network**: Ensure client can reach both Django server and FTP server
-8. **Check Admin Privileges**: Client worker requires admin privileges for file operations
-9. **Check Logs**: Review client worker console output for errors
+- Confirm `SAVENLOAD_SERVER_URL` is correct
+- Log in to the web UI to refresh session cookies
+- Rebuild if FTP settings change
+- Run as administrator for file operations
+- Review console output for errors
 
 ### Build Errors
 
-If Docker build fails:
-
-1. **Check Dependencies**: Ensure all files are present
-2. **Check Docker**: Verify Docker is running
-3. **Check Ports**: Ensure ports 8000 and 5432 are available
-4. **Check Logs**: Review Docker build logs
-5. **Clean Build**: Try `docker-compose down -v` and rebuild
-
-If client worker build fails:
-
-1. **Check Python Version**: Ensure Python 3.12 is installed
-2. **Check Dependencies**: Run `pip install -r requirements.txt` in client_worker directory
-3. **Check Rclone**: Ensure `rclone.exe` is in `client_worker/rclone/` directory before building (it will be bundled into the executable)
-4. **Check Virtual Environment**: Ensure virtual environment is activated
-5. **Check PyInstaller**: Verify PyInstaller is installed: `pip install pyinstaller`
+- Ensure Python 3.12 is installed
+- Install dependencies in `client_worker/` (`pip install -r requirements.txt`)
+- Verify `rclone.exe` is present before building
+- Install PyInstaller if missing (`pip install pyinstaller`)
 
 ## Project Structure
 
@@ -656,14 +380,14 @@ SaveNLoadModern/
 │   ├── rclone_client.py         # Rclone-based FTP client
 │   ├── version_utils.py         # Version checking utilities
 │   ├── rclone/                  # Rclone executable and config (for building)
-│   │   ├── rclone.exe          # Rclone Windows executable (bundled into .exe)
-│   │   └── rclone.conf         # Rclone FTP configuration (bundled into .exe)
-│   ├── build_exe.py            # PyInstaller build script
-│   ├── SaveNLoadClient.spec    # PyInstaller spec file
-│   ├── requirements.txt        # Client worker dependencies
+│   │   ├── rclone.exe           # Rclone Windows executable (bundled into .exe)
+│   │   └── rclone.conf          # Rclone FTP configuration (bundled into .exe)
+│   ├── build_exe.py             # PyInstaller build script
+│   ├── SaveNLoadClient.spec     # PyInstaller spec file
+│   ├── requirements.txt         # Client worker dependencies
 │   ├── dist/                    # Build output (after building)
-│   │   └── SaveNLoadClient.exe # Self-contained executable (includes rclone)
-│   └── build/                   # Build artifacts (can be deleted)
+│   │   └── SaveNLoadClient.exe  # Self-contained executable
+│   └── build/                   # Build artifacts
 │
 ├── config/                     # Django project configuration
 │   ├── settings.py             # Django settings
@@ -672,56 +396,20 @@ SaveNLoadModern/
 │   └── asgi.py                 # ASGI configuration
 │
 ├── SaveNLoad/                  # Main Django application
+│   ├── legacy/                 # Legacy code and templates
+│   ├── management/             # Management commands
+│   ├── migrations/             # Database migrations
 │   ├── models/                 # Database models
-│   │   ├── user.py             # User model
-│   │   ├── game.py             # Game model
-│   │   ├── save_folder.py     # Save folder model
-│   │   ├── operation_constants.py # Operation constants
-│   │   └── password_reset_otp.py # OTP model
-│   │
-│   ├── views/                  # View logic
-│   │   ├── auth.py             # Authentication views
-│   │   ├── dashboard.py        # Dashboard views
-│   │   ├── save_load_api.py    # Save/load API endpoints
-│   │   ├── client_worker_api.py # Client worker API
-│   │   ├── rawg_api.py         # RAWG API integration
-│   │   ├── settings.py         # Settings views
-│   │   ├── api_helpers.py      # API helper functions
-│   │   ├── custom_decorators.py # Custom decorators
-│   │   └── input_sanitizer.py  # Input sanitization
-│   │
 │   ├── services/               # Business logic services
-│   │   ├── redis_operation_service.py # Redis operation logic
-│   │   └── redis_worker_service.py    # Redis worker logic
-│   │
+│   ├── static/                 # App static files
+│   ├── templates/              # App templates
 │   ├── url_configs/            # URL routing
-│   │   ├── user/               # User URLs
-│   │   ├── admin/               # Admin URLs
-│   │   └── client_worker/      # Client worker URLs
-│   │
-│   ├── templates/              # HTML templates
-│   │   ├── SaveNLoad/          # App templates
-│   │   │   ├── login.html
-│   │   │   ├── register.html
-│   │   │   ├── user/           # User dashboard
-│   │   │   ├── admin/          # Admin dashboard
-│   │   │   └── includes/       # Reusable components
-│   │   └── base.html           # Base template
-│   │
 │   ├── utils/                  # Utility functions
-│   │   ├── email_service.py    # Email sending utilities
-│   │   ├── redis_client.py     # Redis client wrapper
-│   │   └── ...                 # Various utility modules
-│   │
-│   └── management/             # Management commands
-│       └── commands/           # Custom commands
+│   ├── views/                  # View logic
+│   └── ws_consumers/           # WebSocket consumers
 │
+├── frontend/                   # Vue + Vite frontend
 ├── static/                     # Static files
-│   ├── css/                    # Compiled CSS
-│   ├── js/                     # JavaScript files
-│   ├── scss/                   # Sass source files
-│   └── images/                 # Images and icons
-│
 ├── templates/                  # Global templates
 ├── media/                      # User uploaded media
 ├── postgres_data/              # PostgreSQL data (Docker)
@@ -733,161 +421,60 @@ SaveNLoadModern/
 ├── requirements.txt            # Python dependencies
 ├── package.json                # Node.js dependencies
 ├── manage.py                   # Django management script
-└── update_version.py           # Version update script
+├── update_version.py           # Version update script
+└── version.txt                 # Local version fallback
 ```
-
-## Development Notes
-
-- **Static Files**: Use `npm run watch-css` to watch for SCSS changes during development
-- **Migrations**: Run `python manage.py makemigrations` after model changes
-- **Admin Panel**: Access at `/admin/` (requires admin account)
-- **Debug Mode**: Set `DEBUG=True` in `.env` for development
-- **Logging**: Logs are output to console (stdout/stderr) - use `docker-compose logs web` to view
-- **Media Files**: User-uploaded files stored in `media/` directory
-- **Session Storage**: Uses database-backed sessions
 
 ## Tech Stack
 
-- **Backend Framework**: Django 6.0
+- **Backend**: Django 6.0
 - **Database**: PostgreSQL 16
-- **Message Broker/Cache**: Redis
+- **Cache/Queue**: Redis
 - **Frontend**: Vue 3 + Vite
 - **Styling**: Bootstrap 5.3, Sass/SCSS
 - **Containerization**: Docker, Docker Compose
-- **File Storage**: FTP
-- **File Transfer**: rclone (for client worker FTP operations)
-- **Email Service**: Gmail SMTP
+- **File Storage**: FTP via rclone
+- **Email**: Gmail SMTP
 - **Game API**: RAWG API
 - **Client Worker**: Python 3.12, PyInstaller
 
-## Dependencies
-
-### Python Packages
-
-- **Django**: Web framework
-- **psycopg2-binary**: PostgreSQL adapter
-- **python-dotenv**: Environment variable management
-- **redis**: Python client for Redis
-- **requests**: HTTP library for API calls
-- **gunicorn**: Production WSGI server
-- **whitenoise**: Static file serving
-
-### Node.js Packages
-
-- **Bootstrap**: CSS framework
-- **Sass**: CSS preprocessor
-
-### Client Worker Packages
-
-- **requests**: HTTP client for API communication
-- **python-dotenv**: Environment variable management
-- **PyInstaller**: Executable building
-- **rich**: Rich text and beautiful formatting for terminal output
-- **rclone**: External executable for FTP operations (included in `rclone/` directory)
-
 ## Manual Production Deployment
 
-> **Note:** Manual deployment requires additional configuration and maintenance. Docker Compose is recommended for production environments. Only use this method if Docker is not available in your environment.
+> **Note:** Docker Compose is recommended for production. Use manual deployment only when Docker is not available.
 
 **Prerequisites:**
-- **[Python 3.12](https://www.python.org/downloads/)** installed
-- **[PostgreSQL 16](https://www.postgresql.org/download/)** installed and running
-- **[Redis](https://redis.io/download/)** installed and running
-- **[Node.js 20.x](https://nodejs.org/)** installed
+- [Python 3.12](https://www.python.org/downloads/)
+- [PostgreSQL 16](https://www.postgresql.org/download/)
+- [Redis](https://redis.io/download/)
+- [Node.js 20.x](https://nodejs.org/)
 
 **Setup Steps:**
 
-1. **Create and activate virtual environment:**
-
 ```bash
-# Create virtual environment
 python -m venv venv
-
-# Activate virtual environment
 # Windows:
 venv\Scripts\activate
 # Linux/Mac:
 source venv/bin/activate
-```
 
-2. **Install Python dependencies:**
-
-```bash
 pip install -r requirements.txt
-```
-
-This installs all required packages including Django, PostgreSQL adapter, gunicorn, whitenoise, and other dependencies. See `requirements.txt` for the complete list.
-
-3. **Install Node.js dependencies and build CSS:**
-
-```bash
 npm install
 npm run build
-```
 
-See `package.json` for the complete list of Node.js dependencies.
-
-4. **Setup PostgreSQL database:**
-
-```bash
-# Create database (if not exists)
 createdb savenload_db
-```
-
-5. **Start Redis Server:**
-
-Ensure your Redis server is running on the default port (6379).
-
-```bash
-# Verify Redis is running (should return PONG)
 redis-cli ping
-```
 
-6. **Configure environment variables:**
-
-Ensure your `.env` file is properly configured with production settings:
-- Set `DEBUG=False`
-- Configure `ALLOWED_HOSTS` with your production domain
-- Set `REDIS_HOST=localhost` (assuming Redis is on the same machine)
-- Set strong `SECRET_KEY`
-- Configure production database credentials
-- Set email and RAWG API credentials
-
-7. **Run database migrations:**
-
-```bash
 python manage.py migrate
-```
-
-8. **Create admin user (if not exists):**
-
-```bash
 python manage.py seed_admin
-```
-
-9. **Collect static files:**
-
-```bash
 python manage.py collectstatic --noinput
-```
 
-10. **Start with Gunicorn:**
-
-```bash
 gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --threads 2 --timeout 120
 ```
 
-**Process Management (Recommended for Production):**
-
-For production environments, use a process manager to automatically restart Gunicorn if it crashes:
-
-- **Windows**: Use [NSSM (Non-Sucking Service Manager)](https://nssm.cc/) to run Gunicorn as a Windows service, or use Windows Task Scheduler to run it at startup
-- **Linux**: Use systemd or supervisor to manage the Gunicorn process
-
-**Optional: Reverse Proxy (For External Access Only):**
-
-If you need to expose the application to the internet (not just local network), set up a reverse proxy like Nginx in front of Gunicorn for better performance and SSL/HTTPS termination. For local deployment, this is not necessary.
+Process management:
+- **Windows**: NSSM or Task Scheduler
+- **Linux**: systemd or supervisor
 
 ## License
 
-This project is for **personal use only**. Any commercial use is not the responsibility of the project maintainer. Users must ensure they have proper rights and licenses for all assets, libraries, and dependencies used in this project. The project maintainer assumes no liability for any misuse or unauthorized use of this software.
+This project is for **personal use only**. Any commercial use is not the responsibility of the project maintainer. Users must ensure they have proper rights and licenses for all assets, libraries, and dependencies used in this project.
