@@ -1,18 +1,15 @@
 <template>
-  <component
-    :is="componentType"
-    :to="to"
-    :href="href"
+  <a
+    :href="resolvedHref"
     :class="linkClass"
     :tabindex="tabindex"
   >
     <slot />
-  </component>
+  </a>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { RouterLink } from 'vue-router';
 
 const props = defineProps({
   to: { type: [String, Object], default: '' },
@@ -21,5 +18,10 @@ const props = defineProps({
   tabindex: { type: [Number, String], default: undefined }
 });
 
-const componentType = computed(() => (props.to ? RouterLink : 'a'));
+const resolvedHref = computed(() => {
+  if (props.href) {
+    return props.href;
+  }
+  return typeof props.to === 'string' ? props.to : '';
+});
 </script>

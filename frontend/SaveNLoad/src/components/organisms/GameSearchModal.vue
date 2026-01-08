@@ -71,26 +71,44 @@ import LoadingState from '@/components/molecules/LoadingState.vue';
 import EmptyState from '@/components/molecules/EmptyState.vue';
 import ModalShell from '@/components/molecules/ModalShell.vue';
 
-const emit = defineEmits(['search', 'select', 'close']);
+type GameSearchResult = {
+  id: number;
+  name?: string;
+  banner?: string;
+  year?: string | number;
+  genres?: string[] | string;
+  company?: string;
+};
+
+const emit = defineEmits<{
+  (event: 'search'): void;
+  (event: 'select', game: GameSearchResult): void;
+  (event: 'close'): void;
+}>();
 
 const query = defineModel<string>('query', { default: '' });
 
-defineProps({
-  open: { type: Boolean, default: false },
-  results: { type: Array, default: () => [] },
-  loading: { type: Boolean, default: false },
-  error: { type: String, default: '' }
+withDefaults(defineProps<{
+  open: boolean;
+  results: GameSearchResult[];
+  loading: boolean;
+  error: string;
+}>(), {
+  open: false,
+  results: () => [],
+  loading: false,
+  error: ''
 });
 
 const labelId = `gameSearchModalLabel_${Math.random().toString(36).slice(2, 8)}`;
 
-const formatTitle = (game: any) => {
+const formatTitle = (game: GameSearchResult) => {
   const title = game?.name || 'Unknown';
   const year = game?.year || '';
   return year ? `${title} (${year})` : title;
 };
 
-const formatSubtitle = (game: any) => {
+const formatSubtitle = (game: GameSearchResult) => {
   const genres = game?.genres;
   if (Array.isArray(genres) && genres.length) {
     return genres.join(', ');

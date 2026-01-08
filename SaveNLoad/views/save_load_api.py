@@ -6,8 +6,10 @@ from rest_framework.decorators import api_view, authentication_classes
 from django.views.decorators.csrf import csrf_protect
 from rest_framework.response import Response
 
+from SaveNLoad.models import Game
 from SaveNLoad.services.redis_operation_service import create_operation
 from SaveNLoad.utils.datetime_utils import calculate_progress_percentage, to_isoformat
+from SaveNLoad.utils.image_utils import get_image_url_or_fallback
 from SaveNLoad.utils.path_utils import generate_game_directory_path, generate_save_folder_path
 from SaveNLoad.utils.string_utils import transform_path_error_message
 from SaveNLoad.views.api_helpers import (
@@ -189,6 +191,31 @@ def save_game(request, game_id):
         print(f"ERROR in save_game: {e}")
         print(traceback.format_exc())
         return json_response_error('Failed to save game', status=500)
+
+
+@api_view(["GET"])
+def get_game_detail(request, game_id):
+    """
+    Return a single game's detail for the authenticated user.
+    """
+    user = get_current_user(request)
+    if not user:
+        return json_response_error('Not authenticated. Please log in.', status=401)
+
+    game = Game.objects.filter(id=game_id).first()
+    if not game:
+        return json_response_error('Game not found.', status=404)
+
+    return json_response_success(
+        data={
+            'game': {
+                'id': game.id,
+                'name': game.name,
+                'banner': get_image_url_or_fallback(game),
+                'save_file_locations': get_game_save_locations(game)
+            }
+        }
+    )
 
 
 @api_view(["POST"])

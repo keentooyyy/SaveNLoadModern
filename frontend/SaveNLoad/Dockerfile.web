@@ -3,6 +3,6 @@ FROM node:20-alpine
 WORKDIR /app/frontend/SaveNLoad
 
 COPY frontend/SaveNLoad/package*.json ./
-RUN npm ci
+RUN npm install
 
 COPY frontend/SaveNLoad ./

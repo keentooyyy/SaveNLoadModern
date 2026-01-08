@@ -1,5 +1,9 @@
 <template>
-  <AuthLayout title="Save N Load" subtitle="Reset your password to regain access.">
+  <AuthLayout
+    title="Save N Load"
+    subtitle="Reset your password to regain access."
+    :on-reset="resetStatus"
+  >
     <form @submit.prevent="onSubmit">
       <div class="mb-3">
         <InputLabel text="EMAIL" />
@@ -16,14 +20,13 @@
           SEND OTP
         </IconButton>
       </div>
-      <AuthFooterLink prefix="Remember your password? " link-text="Login" to="/login" />
+      <AuthFooterLink prefix="Remember your password? " link-text="Login" to="/" />
     </form>
   </AuthLayout>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { useAuthStore } from '@/stores/auth';
 import IconButton from '@/components/atoms/IconButton.vue';
@@ -33,7 +36,6 @@ import AuthFooterLink from '@/components/molecules/AuthFooterLink.vue';
 import { useAuthConfig } from '@/composables/useAuthConfig';
 
 const store = useAuthStore();
-const router = useRouter();
 const email = ref('');
 
 const loading = computed(() => store.loading);
@@ -41,7 +43,11 @@ const fieldErrors = computed(() => store.fieldErrors);
 const submitting = ref(false);
 const isSubmitting = computed(() => loading.value || submitting.value);
 
-useAuthConfig({ requireEmailFlow: true });
+useAuthConfig({ requireEmailFlow: true, loadAuthConfig: () => store.loadAuthConfig() });
+
+const resetStatus = () => {
+  store.resetStatus();
+};
 
 const onSubmit = async () => {
   if (isSubmitting.value) {
@@ -50,7 +56,7 @@ const onSubmit = async () => {
   submitting.value = true;
   try {
     await store.forgotPassword({ email: email.value });
-    await router.push('/verify-otp');
+    window.location.assign('/verify-otp');
   } catch {
     // handled by store
   } finally {

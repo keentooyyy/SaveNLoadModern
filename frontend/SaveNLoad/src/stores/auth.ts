@@ -389,7 +389,7 @@ export const useAuthStore = defineStore('auth', () => {
       const clientId = window.localStorage.getItem('savenload_client_id');
       if (clientId) {
         try {
-          await apiPost('/api/client/unclaim/', { client_id: clientId });
+          await apiPost('/client/unclaim/', { client_id: clientId });
         } catch (err: any) {
           error.value = err?.message || '';
           if (error.value) {

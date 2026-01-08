@@ -15,17 +15,17 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
 import AuthCard from '@/components/organisms/AuthCard.vue';
-import { useAuthStore } from '@/stores/auth';
 
-defineProps({
+const props = defineProps({
   title: String,
-  subtitle: String
+  subtitle: String,
+  onReset: { type: Function, default: null }
 });
 
-const authStore = useAuthStore();
-
 onMounted(() => {
-  authStore.resetStatus();
+  if (props.onReset) {
+    props.onReset();
+  }
 });
 </script>
 

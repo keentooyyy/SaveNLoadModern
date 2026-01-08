@@ -48,11 +48,23 @@ import GameCard from '@/components/molecules/GameCard.vue';
 import LoadingState from '@/components/molecules/LoadingState.vue';
 import EmptyState from '@/components/molecules/EmptyState.vue';
 
-const emit = defineEmits(['select']);
+type RecentItem = {
+  id: number;
+  title: string;
+  footer?: string;
+  image?: string;
+};
 
-const props = defineProps({
-  items: { type: Array, default: () => [] },
-  loading: { type: Boolean, default: false }
+const emit = defineEmits<{
+  (event: 'select', item: RecentItem): void;
+}>();
+
+const props = withDefaults(defineProps<{
+  items: RecentItem[];
+  loading: boolean;
+}>(), {
+  items: () => [],
+  loading: false
 });
 
 const scrollContainer = ref<HTMLElement | null>(null);

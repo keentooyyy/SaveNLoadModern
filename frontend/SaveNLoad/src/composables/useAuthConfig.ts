@@ -1,15 +1,13 @@
 import { onMounted } from 'vue';
-import { useAuthStore } from '@/stores/auth';
 
 type AuthConfigOptions = {
   requireEmailFlow?: boolean;
+  loadAuthConfig: () => Promise<{ emailEnabled: boolean; emailRegistrationRequired: boolean }>;
 };
 
-export const useAuthConfig = (options: AuthConfigOptions = {}) => {
-  const store = useAuthStore();
-
+export const useAuthConfig = (options: AuthConfigOptions) => {
   const load = async () => {
-    const config = await store.loadAuthConfig();
+    const config = await options.loadAuthConfig();
     if (options.requireEmailFlow && (!config.emailEnabled || !config.emailRegistrationRequired)) {
       window.location.assign('/login');
     }

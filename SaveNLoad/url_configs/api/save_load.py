@@ -3,6 +3,7 @@ from django.urls import path
 from SaveNLoad.views import save_load_api
 
 urlpatterns = [
+    path('games/<int:game_id>/', save_load_api.get_game_detail, name='game_detail'),
     path('games/<int:game_id>/save/', save_load_api.save_game, name='save_game'),
     path('games/<int:game_id>/load/', save_load_api.load_game, name='load_game'),
     path('games/<int:game_id>/save-folders/', save_load_api.list_save_folders, name='list_save_folders'),

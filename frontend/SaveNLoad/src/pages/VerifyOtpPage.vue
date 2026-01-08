@@ -1,5 +1,9 @@
 <template>
-  <AuthLayout title="Save N Load" subtitle="We've sent a verification code to your email.">
+  <AuthLayout
+    title="Save N Load"
+    subtitle="We've sent a verification code to your email."
+    :on-reset="resetStatus"
+  >
     <form @submit.prevent="onSubmit">
       <div class="mb-3">
         <InputLabel text="6-Digit Verification Code" label-class="mb-2" />
@@ -32,7 +36,7 @@
           RESEND CODE
         </IconButton>
       </div>
-      <AuthFooterLink prefix="Remember your password? " link-text="Login" to="/login" />
+      <AuthFooterLink prefix="Remember your password? " link-text="Login" to="/" />
       <AuthFooterLink
         prefix="Wrong email? "
         link-text="Start Over"
@@ -45,7 +49,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import type { ComponentPublicInstance } from 'vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { useAuthStore } from '@/stores/auth';
 import IconButton from '@/components/atoms/IconButton.vue';
@@ -54,7 +58,6 @@ import AuthFooterLink from '@/components/molecules/AuthFooterLink.vue';
 import { useAuthConfig } from '@/composables/useAuthConfig';
 
 const store = useAuthStore();
-const router = useRouter();
 
 const email = ref(store.otpEmail || '');
 const otpDigits = ref<string[]>(Array.from({ length: 6 }, () => ''));
@@ -78,7 +81,11 @@ const resending = ref(false);
 const isVerifying = computed(() => loading.value || verifying.value);
 const isResending = computed(() => loading.value || resending.value);
 
-useAuthConfig({ requireEmailFlow: true });
+useAuthConfig({ requireEmailFlow: true, loadAuthConfig: () => store.loadAuthConfig() });
+
+const resetStatus = () => {
+  store.resetStatus();
+};
 
 const clearFieldError = (key: string) => {
   if (store.fieldErrors && store.fieldErrors[key]) {
@@ -100,11 +107,12 @@ watch(otpCode, (value) => {
   }
 });
 
-const setOtpRef = (el: HTMLInputElement | null, index: number) => {
-  if (!el) {
+const setOtpRef = (el: Element | ComponentPublicInstance | null, index: number) => {
+  const input = (el as HTMLInputElement | null);
+  if (!input) {
     return;
   }
-  otpRefs.value[index] = el;
+  otpRefs.value[index] = input;
 };
 
 const focusOtp = (index: number) => {
@@ -149,7 +157,7 @@ const onSubmit = async () => {
   verifying.value = true;
   try {
     await store.verifyOtp({ email: email.value, otp_code: otpCode.value });
-    await router.push('/reset-password');
+    window.location.assign('/reset-password');
   } catch {
     // handled by store
   } finally {

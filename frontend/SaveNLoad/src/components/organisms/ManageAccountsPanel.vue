@@ -84,7 +84,6 @@ import CollapsibleCard from '@/components/molecules/CollapsibleCard.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
 import TextInput from '@/components/atoms/TextInput.vue';
 import SectionTitle from '@/components/atoms/SectionTitle.vue';
-import { useSettingsStore } from '@/stores/settings';
 import { useConfirm } from '@/composables/useConfirm';
 import LoadingState from '@/components/molecules/LoadingState.vue';
 import EmptyState from '@/components/molecules/EmptyState.vue';
@@ -96,7 +95,13 @@ type UserItem = {
   email: string;
 };
 
-const store = useSettingsStore();
+const props = defineProps<{
+  listUsers: (query: string, page: number) => Promise<any>;
+  resetUserPassword: (userId: number) => Promise<any>;
+  deleteUser: (userId: number) => Promise<any>;
+  checkOperationStatus: (operationId: string) => Promise<any>;
+}>();
+
 const { requestConfirm } = useConfirm();
 const searchQuery = ref('');
 const users = ref<UserItem[]>([]);
@@ -114,7 +119,7 @@ const loadUsers = async (page = 1) => {
   loading.value = true;
   error.value = '';
   try {
-    const data = await store.listUsers(searchQuery.value.trim(), page);
+    const data = await props.listUsers(searchQuery.value.trim(), page);
     users.value = data?.users || [];
     pagination.value = data?.pagination || {
       page,
@@ -143,7 +148,7 @@ const onReset = async (user: UserItem) => {
   if (!confirmed) {
     return;
   }
-  await store.resetUserPassword(user.id);
+  await props.resetUserPassword(user.id);
 };
 
 const waitForDeletion = async (operationId: string) => {
@@ -152,7 +157,7 @@ const waitForDeletion = async (operationId: string) => {
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      const data = await store.checkOperationStatus(operationId);
+      const data = await props.checkOperationStatus(operationId);
       if (data?.completed || data?.status === 'completed') {
         return { status: 'completed', message: data?.message || '' };
       }
@@ -203,7 +208,7 @@ const onDelete = async (user: UserItem) => {
   loading.value = true;
   error.value = '';
   try {
-    const data = await store.deleteUser(user.id);
+    const data = await props.deleteUser(user.id);
     const operationId = data?.operation_id;
     let completionMessage = data?.message || '';
     if (operationId) {

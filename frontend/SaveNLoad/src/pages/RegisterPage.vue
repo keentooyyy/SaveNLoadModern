@@ -1,5 +1,9 @@
 <template>
-  <AuthLayout title="Save N Load" subtitle="Create your account to get started.">
+  <AuthLayout
+    title="Save N Load"
+    subtitle="Create your account to get started."
+    :on-reset="resetStatus"
+  >
     <form @submit.prevent="onSubmit">
       <div class="mb-3">
         <InputLabel text="USERNAME" />
@@ -43,14 +47,13 @@
           REGISTER
         </IconButton>
       </div>
-      <AuthFooterLink prefix="Already have an account? " link-text="Login" to="/login" />
+      <AuthFooterLink prefix="Already have an account? " link-text="Login" to="/" />
     </form>
   </AuthLayout>
 </template>
 
 <script setup lang="ts">
 import { reactive, computed, watch, ref } from 'vue';
-import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
 import { useAuthStore } from '@/stores/auth';
@@ -61,7 +64,6 @@ import AuthFooterLink from '@/components/molecules/AuthFooterLink.vue';
 import { useAuthConfig } from '@/composables/useAuthConfig';
 
 const store = useAuthStore();
-const router = useRouter();
 
 const form = reactive({
   username: '',
@@ -78,7 +80,7 @@ const showEmailField = computed(() => (
   store.authConfigLoaded && store.authConfig.emailRegistrationRequired
 ));
 
-useAuthConfig();
+useAuthConfig({ loadAuthConfig: () => store.loadAuthConfig() });
 
 const clearFieldError = (key: string) => {
   if (store.fieldErrors && store.fieldErrors[key]) {
@@ -89,6 +91,10 @@ const clearFieldError = (key: string) => {
   if (store.error) {
     store.error = '';
   }
+};
+
+const resetStatus = () => {
+  store.resetStatus();
 };
 
 watch(() => form.username, () => clearFieldError('username'));
@@ -111,7 +117,7 @@ const onSubmit = async () => {
       payload.email = form.email;
     }
     await store.register(payload);
-    await router.push('/login');
+    window.location.assign('/login');
   } catch {
     // handled by store
   } finally {

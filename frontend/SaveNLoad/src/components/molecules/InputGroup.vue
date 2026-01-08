@@ -54,6 +54,7 @@
 </template>
 
 <script setup lang="ts">
+import type { PropType } from 'vue';
 import IconButton from '@/components/atoms/IconButton.vue';
 import TextInput from '@/components/atoms/TextInput.vue';
 
@@ -68,7 +69,7 @@ defineProps({
   buttonVariant: { type: String, default: 'secondary' },
   buttonSize: { type: String, default: '' },
   buttonClass: { type: String, default: '' },
-  buttonType: { type: String, default: 'button' },
+  buttonType: { type: String as PropType<'button' | 'submit' | 'reset'>, default: 'button' },
   buttonId: { type: String, default: '' }
 });
 

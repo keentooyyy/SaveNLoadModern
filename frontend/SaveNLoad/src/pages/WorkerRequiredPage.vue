@@ -11,7 +11,7 @@
     <div v-else class="container d-flex align-items-center justify-content-center" style="min-height: 80vh;">
       <div class="text-center w-100" style="max-width: 600px;">
         <div class="mb-4">
-          <img src="/images/icon.png" alt="Worker Missing" width="80" height="80" />
+          <img :src="iconUrl" alt="Worker Missing" width="80" height="80" />
         </div>
         <h2 class="text-white mb-3">Worker Missing</h2>
         <p class="text-white-50 mb-4">To use the application you need to have a client worker running.</p>
@@ -81,15 +81,19 @@
 <script setup lang="ts">
 import BareLayout from '@/layouts/BareLayout.vue';
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
 import { useWorkerListSocket } from '@/composables/useWorkerListSocket';
 import { useAuthStore } from '@/stores/auth';
 import { apiPost } from '@/utils/apiClient';
 import { notify } from '@/utils/notify';
+import { getSharedWsToken } from '@/utils/wsToken';
 
-const router = useRouter();
-const { workers } = useWorkerListSocket({ reloadOnClose: false });
 const authStore = useAuthStore();
+const { workers } = useWorkerListSocket({
+  reloadOnClose: false,
+  userRef: computed(() => authStore.user),
+  getWsToken: () => getSharedWsToken()
+});
+const iconUrl = '/static/images/icon.png';
 const isLoading = ref(true);
 
 const claimingId = ref<string | null>(null);
@@ -131,7 +135,7 @@ const claimWorker = async (clientId: string) => {
 
   try {
     claimingId.value = clientId;
-    const data = await apiPost('/api/client/claim/', { client_id: clientId });
+    const data = await apiPost('/client/claim/', { client_id: clientId });
     if (data?.message) {
       notify.flashSuccess(data.message);
     }
@@ -140,7 +144,7 @@ const claimWorker = async (clientId: string) => {
     } catch {
       // Ignore storage errors (private mode, etc.)
     }
-    await router.push('/dashboard');
+    window.location.assign('/dashboard');
   } catch (error: any) {
     if (error?.message) {
       notify.error(error.message);

@@ -8,6 +8,9 @@ type DashboardUser = {
   username: string;
   role: string;
   email?: string;
+  is_guest?: boolean;
+  guest_expires_at?: string | null;
+  guest_migration_status?: string | null;
 };
 
 type GameSummary = {
@@ -20,13 +23,14 @@ type GameSummary = {
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE;
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || API_BASE.replace(/\/api\/?$/, '');
 
 const resolveMediaUrl = (url: string) => {
   if (!url) {
     return url;
   }
   if (url.startsWith('/media/')) {
-    return `${API_BASE}${url}`;
+    return `${API_ORIGIN}${url}`;
   }
   return url;
 };

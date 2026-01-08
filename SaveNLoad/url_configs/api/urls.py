@@ -6,5 +6,5 @@ urlpatterns = [
     path('', include('SaveNLoad.url_configs.api.auth')),
     path('', include('SaveNLoad.url_configs.api.save_load')),
     path('', include('SaveNLoad.url_configs.api.settings')),
-    path('api/client/', include('SaveNLoad.url_configs.client_worker.urls')),
+    path('client/', include('SaveNLoad.url_configs.client_worker.urls')),
 ]

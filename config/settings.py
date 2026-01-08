@@ -62,7 +62,6 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'django_ratelimit',
-    'csp',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -93,7 +92,6 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',  # WhiteNoise for static files
     'corsheaders.middleware.CorsMiddleware',
-    'csp.middleware.CSPMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -178,7 +176,13 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = []
+STATICFILES_DIRS = [
+    BASE_DIR / 'frontend' / 'SaveNLoad' / 'public'
+]
+
+VITE_STATIC_URL = 'vite'
+VITE_MANIFEST_PATH = BASE_DIR / 'SaveNLoad' / 'static' / 'vite' / 'manifest.json'
+VITE_DEV_SERVER = os.getenv('VITE_DEV_SERVER', '')
 
 # WhiteNoise configuration for production static file serving
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
@@ -218,7 +222,7 @@ CSRF_USE_SESSIONS = False  # Use cookie-based CSRF tokens
 CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'  # Default CSRF failure view
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
-    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:8000').split(',')
+    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:8000,http://localhost:8001').split(',')
     if origin.strip()
 ]
 
@@ -262,31 +266,6 @@ PERMISSIONS_POLICY = {
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
 # Content Security Policy (CSP)
-CONTENT_SECURITY_POLICY = {
-    'DIRECTIVES': {
-        'default-src': ("'self'",),
-        'img-src': ("'self'", 'data:'),
-        'font-src': ("'self'", 'data:'),
-        'style-src': ("'self'",),
-        'script-src': ("'self'",),
-        'connect-src': ("'self'",)
-    }
-}
-
-if DEBUG:
-    CONTENT_SECURITY_POLICY['DIRECTIVES'].update({
-        'script-src': ("'self'", "'unsafe-eval'", 'http://localhost:8000'),
-        'style-src': ("'self'", "'unsafe-inline'", 'http://localhost:8000'),
-        'connect-src': (
-            "'self'",
-            'http://localhost:8000',
-            'http://localhost:8001',
-            'ws://localhost:8000',
-            'ws://localhost:8001'
-        ),
-        'img-src': ("'self'", 'data:', 'http://localhost:8000')
-    })
-
 # Cache (required for django-ratelimit)
 CACHES = {
     'default': {
@@ -302,7 +281,7 @@ CACHES = {
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
-    for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:8000').split(',')
+    for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:8000,http://localhost:8001').split(',')
     if origin.strip()
 ]
 

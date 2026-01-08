@@ -15,10 +15,11 @@
 
 <script setup lang="ts">
 import { computed, useSlots } from 'vue';
+import type { PropType } from 'vue';
 import BaseButton from '@/components/atoms/BaseButton.vue';
 
 const props = defineProps({
-  type: { type: String, default: 'button' },
+  type: { type: String as PropType<'button' | 'submit' | 'reset'>, default: 'button' },
   variant: { type: String, default: 'secondary' },
   size: { type: String, default: '' },
   icon: { type: String, default: '' },

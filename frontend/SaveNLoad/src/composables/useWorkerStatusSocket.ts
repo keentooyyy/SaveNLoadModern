@@ -1,10 +1,8 @@
 // WS mirror from SaveNLoad/templates/workerStatus.js.
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { buildWsUrl } from '@/utils/ws';
-import { useDashboardStore } from '@/stores/dashboard';
-import { useSettingsStore } from '@/stores/settings';
-import { useAuthStore } from '@/stores/auth';
 import { getSharedWsToken } from '@/utils/wsToken';
+import type { Ref } from 'vue';
 
 type WorkerStatusMessage = {
   type?: string;
@@ -15,21 +13,26 @@ type WorkerStatusMessage = {
 
 type WorkerStatusOptions = {
   onWorkerUnavailable?: () => void | Promise<void>;
+  userRef: Ref<any | null>;
+  suppressRedirectRef?: Ref<boolean>;
+  getWsToken?: () => Promise<string | null>;
 };
 
-export const useWorkerStatusSocket = (options: WorkerStatusOptions = {}) => {
+export const useWorkerStatusSocket = (options: WorkerStatusOptions) => {
   const workerAvailable = ref<boolean | null>(null);
   const socketOpen = ref(false);
   const lastError = ref('');
-  const dashboardStore = useDashboardStore();
-  const settingsStore = useSettingsStore();
-  const authStore = useAuthStore();
 
   let socket: WebSocket | null = null;
   let reconnectTimer: number | null = null;
   let shouldReconnect = true;
 
-  const fetchWsToken = async () => getSharedWsToken(dashboardStore, settingsStore);
+  const fetchWsToken = async () => {
+    if (options.getWsToken) {
+      return options.getWsToken();
+    }
+    return getSharedWsToken();
+  };
 
   const closeSocket = () => {
     shouldReconnect = false;
@@ -49,7 +52,8 @@ export const useWorkerStatusSocket = (options: WorkerStatusOptions = {}) => {
       if (message.type === 'worker_status') {
         const connected = message.payload?.connected;
         workerAvailable.value = typeof connected === 'boolean' ? connected : null;
-        if (connected === false && options.onWorkerUnavailable && !authStore.suppressWorkerRedirect) {
+        const suppressRedirect = options.suppressRedirectRef?.value ?? false;
+        if (connected === false && options.onWorkerUnavailable && !suppressRedirect) {
           await options.onWorkerUnavailable();
         }
       }
@@ -62,7 +66,7 @@ export const useWorkerStatusSocket = (options: WorkerStatusOptions = {}) => {
     if (!window.WebSocket) {
       return;
     }
-    if (!authStore.user) {
+    if (!options.userRef?.value) {
       return;
     }
 
@@ -101,9 +105,9 @@ export const useWorkerStatusSocket = (options: WorkerStatusOptions = {}) => {
 
   onMounted(connect);
   watch(
-    () => authStore.user,
+    () => options.userRef?.value,
     () => {
-      if (!socket && authStore.user) {
+      if (!socket && options.userRef?.value) {
         connect();
       }
     }

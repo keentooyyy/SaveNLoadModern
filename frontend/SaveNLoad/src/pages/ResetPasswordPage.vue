@@ -1,5 +1,9 @@
 <template>
-  <AuthLayout title="Save N Load" subtitle="Set your new password.">
+  <AuthLayout
+    title="Save N Load"
+    subtitle="Set your new password."
+    :on-reset="resetStatus"
+  >
     <form @submit.prevent="onSubmit">
       <div class="mb-3">
         <InputLabel text="NEW PASSWORD" />
@@ -35,7 +39,6 @@
 
 <script setup lang="ts">
 import { reactive, computed, ref } from 'vue';
-import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
 import { useAuthStore } from '@/stores/auth';
@@ -45,7 +48,6 @@ import AuthFooterLink from '@/components/molecules/AuthFooterLink.vue';
 import { useAuthConfig } from '@/composables/useAuthConfig';
 
 const store = useAuthStore();
-const router = useRouter();
 
 const form = reactive({
   newPassword: '',
@@ -57,7 +59,11 @@ const fieldErrors = computed(() => store.fieldErrors);
 const submitting = ref(false);
 const isSubmitting = computed(() => loading.value || submitting.value);
 
-useAuthConfig({ requireEmailFlow: true });
+useAuthConfig({ requireEmailFlow: true, loadAuthConfig: () => store.loadAuthConfig() });
+
+const resetStatus = () => {
+  store.resetStatus();
+};
 
 const onSubmit = async () => {
   if (isSubmitting.value) {
@@ -69,7 +75,7 @@ const onSubmit = async () => {
       new_password: form.newPassword,
       confirm_password: form.confirmPassword
     });
-    await router.push('/login');
+    window.location.assign('/');
   } catch {
     // handled by store
   } finally {

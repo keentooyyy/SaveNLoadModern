@@ -3,14 +3,11 @@ import { ensureCsrfToken, requestWithRetry } from '@/utils/apiClient';
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 let wsTokenPromise: Promise<string | null> | null = null;
+let cachedToken: string | null = null;
 
-export const getSharedWsToken = async (dashboardStore: any, settingsStore: any) => {
-  if (dashboardStore.wsToken) {
-    return dashboardStore.wsToken;
-  }
-  if (settingsStore.wsToken) {
-    dashboardStore.wsToken = settingsStore.wsToken;
-    return settingsStore.wsToken;
+export const getSharedWsToken = async () => {
+  if (cachedToken) {
+    return cachedToken;
   }
 
   if (!wsTokenPromise) {
@@ -30,7 +27,7 @@ export const getSharedWsToken = async (dashboardStore: any, settingsStore: any) 
         }
         const token = data?.token || null;
         if (token) {
-          dashboardStore.wsToken = token;
+          cachedToken = token;
         }
         return token;
       } catch {

@@ -83,7 +83,6 @@ import CollapsibleCard from '@/components/molecules/CollapsibleCard.vue';
 import IconButton from '@/components/atoms/IconButton.vue';
 import LoadingState from '@/components/molecules/LoadingState.vue';
 import EmptyState from '@/components/molecules/EmptyState.vue';
-import { useSettingsStore } from '@/stores/settings';
 import { useConfirm } from '@/composables/useConfirm';
 
 type WorkerSnapshot = {
@@ -93,13 +92,17 @@ type WorkerSnapshot = {
   last_ping_response?: string | null;
 };
 
-const store = useSettingsStore();
+const props = defineProps<{
+  listWorkers: () => Promise<{ workers?: WorkerSnapshot[] } | void>;
+  unclaimAllWorkers: () => Promise<{ workers?: WorkerSnapshot[] } | void>;
+}>();
+
 const { requestConfirm } = useConfirm();
 
 const loading = ref(false);
 const isKilling = ref(false);
 const error = ref('');
-const workers = computed<WorkerSnapshot[]>(() => store.workers as WorkerSnapshot[]);
+const workers = ref<WorkerSnapshot[]>([]);
 const hasClaimedWorkers = computed(() => workers.value.some(worker => worker.claimed));
 
 const formatTimestamp = (value?: string | null) => {
@@ -117,7 +120,11 @@ const loadWorkers = async () => {
   loading.value = true;
   error.value = '';
   try {
-    await store.listWorkers();
+    const data = await props.listWorkers();
+    const next = (data as { workers?: WorkerSnapshot[] } | undefined)?.workers;
+    if (next) {
+      workers.value = next;
+    }
   } catch (err: any) {
     error.value = err?.message || '';
   } finally {
@@ -140,7 +147,11 @@ const onKillSwitch = async () => {
   }
   isKilling.value = true;
   try {
-    await store.unclaimAllWorkers();
+    const data = await props.unclaimAllWorkers();
+    const next = (data as { workers?: WorkerSnapshot[] } | undefined)?.workers;
+    if (next) {
+      workers.value = next;
+    }
   } catch (err: any) {
     error.value = err?.message || '';
   } finally {

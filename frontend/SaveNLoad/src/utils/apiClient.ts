@@ -1,8 +1,8 @@
-const API_BASE = import.meta.env.VITE_API_BASE;
+const API_BASE = import.meta.env.VITE_API_BASE || '';
 
 export const getCookie = (name: string) => {
   const match = document.cookie.match(new RegExp(`(^|;\\s*)${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[2]) : '';
+  return match?.[2] ? decodeURIComponent(match[2]) : '';
 };
 
 export const ensureCsrfToken = async () => {

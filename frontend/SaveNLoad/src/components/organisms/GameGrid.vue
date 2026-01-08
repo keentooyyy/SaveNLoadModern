@@ -79,15 +79,33 @@ import TextInput from '@/components/atoms/TextInput.vue';
 import LoadingState from '@/components/molecules/LoadingState.vue';
 import EmptyState from '@/components/molecules/EmptyState.vue';
 
-defineProps({
-  games: { type: Array, default: () => [] },
-  loading: { type: Boolean, default: false },
-  savingId: { type: Number, default: null },
-  loadingId: { type: Number, default: null },
-  searching: { type: Boolean, default: false }
+type GameItem = {
+  id: number;
+  title: string;
+  footer?: string;
+  image?: string;
+};
+
+withDefaults(defineProps<{
+  games: GameItem[];
+  loading: boolean;
+  savingId?: number | null;
+  loadingId?: number | null;
+  searching: boolean;
+}>(), {
+  games: () => [],
+  loading: false,
+  searching: false,
+  savingId: null,
+  loadingId: null
 });
 
-const emit = defineEmits(['search', 'open', 'save', 'load']);
+const emit = defineEmits<{
+  (event: 'search', payload: { query: string; sort: string }): void;
+  (event: 'open', game: GameItem): void;
+  (event: 'save', game: GameItem): void;
+  (event: 'load', game: GameItem): void;
+}>();
 const searchQuery = defineModel<string>('search', { default: '' });
 const sortBy = defineModel<string>('sort', { default: 'name_asc' });
 

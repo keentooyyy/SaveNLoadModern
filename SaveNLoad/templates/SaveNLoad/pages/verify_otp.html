@@ -1,0 +1,12 @@
+{% extends "SaveNLoad/base.html" %}
+{% load vite %}
+
+{% block title %}Verify OTP{% endblock %}
+
+{% block content %}
+  <div data-island="verify-otp" data-props="{{ props|escapejs }}"></div>
+{% endblock %}
+
+{% block islands %}
+  {% vite_entry "src/utils/verifyOtpIsland.ts" %}
+{% endblock %}

@@ -1,5 +1,9 @@
 <template>
-  <AuthLayout title="Save N Load" subtitle="Managing saves has never been easier.">
+  <AuthLayout
+    title="Save N Load"
+    subtitle="Managing saves has never been easier."
+    :on-reset="resetStatus"
+  >
     <form @submit.prevent="onSubmit">
       <div class="mb-3">
         <InputLabel text="USERNAME OR EMAIL" />
@@ -14,14 +18,14 @@
       <div class="mb-2">
         <div class="d-flex justify-content-between align-items-center">
           <InputLabel text="PASSWORD" label-class="mb-0" />
-          <RouterLink
+          <a
             v-if="showForgotPassword"
-            to="/forgot-password"
+            href="/forgot-password"
             class="text-secondary text-decoration-none fs-6"
             tabindex="-1"
           >
             Forgot Password?
-          </RouterLink>
+          </a>
         </div>
         <PasswordField
           v-model="form.password"
@@ -126,7 +130,6 @@
 
 <script setup lang="ts">
 import { reactive, computed, watch, ref, nextTick } from 'vue';
-import { useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
 import { useAuthStore } from '@/stores/auth';
@@ -142,7 +145,6 @@ import { notify } from '@/utils/notify';
 
 const store = useAuthStore();
 const dashboardStore = useDashboardStore();
-const router = useRouter();
 const guestModalShell = ref<{ modalEl: HTMLElement | null } | null>(null);
 let guestCloseFallbackTimer: number | null = null;
 
@@ -160,7 +162,7 @@ const showForgotPassword = computed(() => (
   && store.authConfig.emailRegistrationRequired
 ));
 
-useAuthConfig();
+useAuthConfig({ loadAuthConfig: () => store.loadAuthConfig() });
 const activeAction = ref<'login' | 'guest' | null>(null);
 const isSubmitting = computed(() => loading.value || activeAction.value !== null);
 const isLoginLoading = computed(() => activeAction.value === 'login' && isSubmitting.value);
@@ -189,6 +191,10 @@ const clearFieldError = (key: string) => {
   }
 };
 
+const resetStatus = () => {
+  store.resetStatus();
+};
+
 
 watch(() => form.username, () => clearFieldError('username'));
 watch(() => form.password, () => clearFieldError('password'));
@@ -207,16 +213,16 @@ const onSubmit = async () => {
     notify.flashSuccess(store.message || 'Login successful.');
     try {
       await dashboardStore.loadDashboard();
-      await router.push('/dashboard');
+      window.location.assign('/dashboard');
     } catch (err: any) {
       if (err?.status === 503) {
-        await router.push('/worker-required');
+        window.location.assign('/worker-required');
         return;
       }
       if (err?.status === 401) {
         return;
       }
-      await router.push('/dashboard');
+      window.location.assign('/dashboard');
     }
   } catch {
     // handled by store

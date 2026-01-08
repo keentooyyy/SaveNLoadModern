@@ -62,12 +62,15 @@ import { onMounted, ref } from 'vue';
 import CollapsibleCard from '@/components/molecules/CollapsibleCard.vue';
 import IconButton from '@/components/atoms/IconButton.vue';
 import SectionTitle from '@/components/atoms/SectionTitle.vue';
-import { useSettingsStore } from '@/stores/settings';
 import { useConfirm } from '@/composables/useConfirm';
 import LoadingState from '@/components/molecules/LoadingState.vue';
 import EmptyState from '@/components/molecules/EmptyState.vue';
 
-const store = useSettingsStore();
+const props = defineProps<{
+  loadQueueStats: () => Promise<any>;
+  clearQueue: () => Promise<any>;
+}>();
+
 const loading = ref(false);
 const error = ref('');
 const { requestConfirm } = useConfirm();
@@ -85,7 +88,7 @@ const loadStats = async () => {
   loading.value = true;
   error.value = '';
   try {
-    const data = await store.queueStats();
+    const data = await props.loadQueueStats();
     stats.value = data?.data || data || stats.value;
   } catch (err: any) {
     error.value = err?.message || '';
@@ -104,7 +107,7 @@ const clearAll = async () => {
   if (!confirmed) {
     return;
   }
-  await store.cleanupQueue('all');
+  await props.clearQueue();
   loadStats();
 };
 

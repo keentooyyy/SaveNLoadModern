@@ -81,10 +81,11 @@ import InputGroup from '@/components/molecules/InputGroup.vue';
 import IconButton from '@/components/atoms/IconButton.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
 import GameSearchModal from '@/components/organisms/GameSearchModal.vue';
-import { useSettingsStore } from '@/stores/settings';
+const props = defineProps<{
+  createGame: (payload: { name: string; save_file_locations: string[]; banner?: string }) => Promise<any>;
+}>();
 
 const API_BASE = import.meta.env.VITE_API_BASE;
-const store = useSettingsStore();
 
 const showSearch = ref(false);
 const searchQuery = ref('');
@@ -166,7 +167,7 @@ const onSubmit = async () => {
   const locations = saveLocations.value.map(location => location.trim()).filter(Boolean);
   saving.value = true;
   try {
-    await store.createGame({
+    await props.createGame({
       name,
       save_file_locations: locations,
       banner: bannerUrl.value.trim() || ''

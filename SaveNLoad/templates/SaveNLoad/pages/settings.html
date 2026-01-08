@@ -1,0 +1,12 @@
+{% extends "SaveNLoad/base.html" %}
+{% load vite %}
+
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+  <div data-island="settings" data-props="{{ props|escapejs }}"></div>
+{% endblock %}
+
+{% block islands %}
+  {% vite_entry "src/utils/settingsIsland.ts" %}
+{% endblock %}

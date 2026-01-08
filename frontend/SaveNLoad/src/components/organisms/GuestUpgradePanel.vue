@@ -64,30 +64,35 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { onMounted, ref, toRef } from 'vue';
 import CollapsibleCard from '@/components/molecules/CollapsibleCard.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
 import TextInput from '@/components/atoms/TextInput.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
 import FormActions from '@/components/molecules/FormActions.vue';
 import IconButton from '@/components/atoms/IconButton.vue';
-import { useAuthStore } from '@/stores/auth';
-import { useSettingsStore } from '@/stores/settings';
-
-const authStore = useAuthStore();
-const settingsStore = useSettingsStore();
+const props = defineProps<{
+  migrationStatus: string;
+  isSubmitting: boolean;
+  guestCredentials: { username?: string; password?: string } | null;
+  currentUsername: string;
+  upgradeGuest: (payload: { username: string; email: string; password: string }) => Promise<any>;
+  refreshUser: () => Promise<any>;
+  checkOperationStatus: (operationId: string) => Promise<any>;
+  clearGuestCredentials: () => void;
+  getIsGuest: () => boolean;
+}>();
 
 const GUEST_CREDS_KEY = 'savenload_guest_credentials';
 
 const username = ref('');
 const email = ref('');
 const password = ref('');
-
-const migrationStatus = computed(() => authStore.user?.guest_migration_status || '');
-const isSubmitting = computed(() => authStore.loading);
+const migrationStatus = toRef(props, 'migrationStatus');
+const isSubmitting = toRef(props, 'isSubmitting');
 
 const onSubmit = async () => {
-  if (isSubmitting.value || migrationStatus.value === 'migrating') {
+  if (props.isSubmitting || props.migrationStatus === 'migrating') {
     return;
   }
   const trimmedUsername = username.value.trim();
@@ -99,7 +104,7 @@ const onSubmit = async () => {
     return;
   }
   try {
-    const data = await authStore.upgradeGuest({
+    const data = await props.upgradeGuest({
       username: trimmedUsername,
       email: email.value.trim(),
       password: password.value
@@ -108,9 +113,9 @@ const onSubmit = async () => {
     if (operationId) {
       await pollUpgradeStatus(operationId);
     } else {
-      await authStore.refreshUser();
-      if (!authStore.user?.is_guest) {
-        clearGuestCredentials();
+      await props.refreshUser();
+      if (!props.getIsGuest()) {
+        props.clearGuestCredentials();
       }
     }
   } catch {
@@ -123,11 +128,11 @@ const pollUpgradeStatus = async (operationId: string) => {
   const delayMs = 2000;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      const status = await settingsStore.checkOperationStatus(operationId);
+      const status = await props.checkOperationStatus(operationId);
       if (status?.completed || status?.failed) {
-        await authStore.refreshUser();
-        if (status?.completed && !authStore.user?.is_guest) {
-          clearGuestCredentials();
+        await props.refreshUser();
+        if (status?.completed && !props.getIsGuest()) {
+          props.clearGuestCredentials();
         }
         return;
       }
@@ -136,35 +141,21 @@ const pollUpgradeStatus = async (operationId: string) => {
     }
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
-  await authStore.refreshUser();
-  if (!authStore.user?.is_guest) {
-    clearGuestCredentials();
-  }
-};
-
-const clearGuestCredentials = () => {
-  authStore.guestCredentials = null;
-  try {
-    window.sessionStorage.removeItem(GUEST_CREDS_KEY);
-  } catch {
-    // ignore
-  }
-  try {
-    window.localStorage.removeItem(GUEST_CREDS_KEY);
-  } catch {
-    // ignore
+  await props.refreshUser();
+  if (!props.getIsGuest()) {
+    props.clearGuestCredentials();
   }
 };
 
 onMounted(() => {
-  if (authStore.guestCredentials?.username) {
-    username.value = authStore.guestCredentials.username;
+  if (props.guestCredentials?.username) {
+    username.value = props.guestCredentials.username;
   }
-  if (authStore.guestCredentials?.password) {
-    password.value = authStore.guestCredentials.password;
+  if (props.guestCredentials?.password) {
+    password.value = props.guestCredentials.password;
   }
-  if (!username.value && authStore.user?.username) {
-    username.value = authStore.user.username;
+  if (!username.value && props.currentUsername) {
+    username.value = props.currentUsername;
   }
   if (!password.value) {
     try {

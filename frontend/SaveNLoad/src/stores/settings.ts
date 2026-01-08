@@ -227,13 +227,13 @@ export const useSettingsStore = defineStore('settings', () => {
   };
 
   const listWorkers = async () => {
-    const data = await apiGet('/api/client/workers/');
+    const data = await apiGet('/client/workers/');
     workers.value = data?.workers || [];
     return data;
   };
 
   const unclaimAllWorkers = async () => {
-    const data = await apiPost('/api/client/unclaim-all/', {});
+    const data = await apiPost('/client/unclaim-all/', {});
     if (data?.message) {
       notify.success(data.message);
     }

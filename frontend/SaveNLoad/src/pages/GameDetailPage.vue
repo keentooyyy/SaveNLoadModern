@@ -1,5 +1,5 @@
 <template>
-  <AppLayout>
+  <AppLayout :version-label="versionLabel" :on-logout="onLogout" :on-load-version="loadVersion">
     <div class="container-fluid px-0">
       <PageHeader
         title="Game Details"
@@ -50,23 +50,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { computed, onMounted, ref, toRef } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import PageHeader from '@/components/organisms/PageHeader.vue';
 import GameFormFields from '@/components/molecules/GameFormFields.vue';
 import IconButton from '@/components/atoms/IconButton.vue';
-import { useDashboardStore } from '@/stores/dashboard';
 import { useSettingsStore } from '@/stores/settings';
 import { useAuthStore } from '@/stores/auth';
+import { useMetaStore } from '@/stores/meta';
+import { useWorkerStatusSocket } from '@/composables/useWorkerStatusSocket';
+import { getSharedWsToken } from '@/utils/wsToken';
+import { apiGet } from '@/utils/apiClient';
 
-const route = useRoute();
-const router = useRouter();
-const dashboardStore = useDashboardStore();
 const settingsStore = useSettingsStore();
 const authStore = useAuthStore();
+const metaStore = useMetaStore();
+const suppressRedirectRef = toRef(authStore, 'suppressWorkerRedirect');
 
-const gameId = computed(() => Number(route.params.id));
+const gameId = ref<number | null>(null);
 const bannerUrl = ref('');
 const gameName = ref('');
 const saveLocations = ref<string[]>(['']);
@@ -74,21 +75,26 @@ const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
 
-const headerName = computed(() => dashboardStore.user?.username || authStore.user?.username || '');
-const headerRole = computed(() => (dashboardStore.user?.role || authStore.user?.role || '').toUpperCase());
+const headerName = computed(() => authStore.user?.username || '');
+const headerRole = computed(() => (authStore.user?.role || '').toUpperCase());
+const versionLabel = computed(() => metaStore.versionLabel);
 
 const loadGame = async () => {
   loading.value = true;
   error.value = '';
   try {
-    await dashboardStore.loadDashboard();
-    const game = dashboardStore.games.find((item) => item.id === gameId.value);
-    if (!game) {
-      await router.replace('/dashboard');
+    if (!gameId.value) {
+      window.location.assign('/dashboard');
       return;
     }
-    gameName.value = game.title || '';
-    bannerUrl.value = game.image || '';
+    const data = await apiGet(`/games/${gameId.value}/`);
+    const game = data?.game;
+    if (!game) {
+      window.location.assign('/dashboard');
+      return;
+    }
+    gameName.value = game.name || '';
+    bannerUrl.value = game.banner || '';
     const locations = Array.isArray(game.save_file_locations) ? game.save_file_locations : [];
     saveLocations.value = locations.length ? [...locations] : [''];
   } catch (err: any) {
@@ -109,7 +115,7 @@ const onSave = async () => {
       banner: bannerUrl.value.trim(),
       save_file_locations: saveLocations.value.map((loc) => loc.trim()).filter(Boolean)
     });
-    await dashboardStore.loadDashboard();
+    await loadGame();
   } catch {
     // errors are surfaced via store notifications
   } finally {
@@ -118,16 +124,21 @@ const onSave = async () => {
 };
 
 const goBack = () => {
-  router.back();
+  window.history.back();
 };
 
 onMounted(() => {
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  const id = parts.length >= 2 ? Number(parts[1]) : NaN;
+  gameId.value = Number.isFinite(id) ? id : null;
+  void authStore.refreshUser();
   void loadGame();
 });
 
 const goToSettings = () => window.location.assign('/settings');
 const goToProfile = () => window.location.assign('/settings');
 const onLogout = async () => {
+  authStore.suppressWorkerRedirect = true;
   try {
     await authStore.logout();
   } catch {
@@ -136,4 +147,17 @@ const onLogout = async () => {
     window.location.assign('/login');
   }
 };
+
+const loadVersion = async () => {
+  await metaStore.loadVersion();
+};
+
+useWorkerStatusSocket({
+  userRef: computed(() => authStore.user),
+  suppressRedirectRef,
+  getWsToken: () => getSharedWsToken(),
+  onWorkerUnavailable: () => {
+    window.location.assign('/worker-required');
+  }
+});
 </script>

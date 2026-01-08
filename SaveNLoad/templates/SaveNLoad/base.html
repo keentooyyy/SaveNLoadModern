@@ -1,0 +1,22 @@
+{% load static %}
+{% load vite %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Save N Load{% endblock %}</title>
+    <link rel="icon" href="{% static 'images/icon.png' %}" />
+    <link rel="stylesheet" href="{% static 'vendor/bootstrap/bootstrap.css' %}" />
+    <link rel="stylesheet" href="{% static 'vendor/toastr/toastr.min.css' %}" />
+    <link rel="stylesheet" href="{% static 'vendor/fontawesome/css/all.min.css' %}" />
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body class="text-white">
+    {% block content %}{% endblock %}
+    <script src="{% static 'vendor/jquery/jquery.min.js' %}" defer></script>
+    <script src="{% static 'vendor/toastr/toastr.min.js' %}" defer></script>
+    <script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}" defer></script>
+    {% block islands %}{% endblock %}
+  </body>
+</html>

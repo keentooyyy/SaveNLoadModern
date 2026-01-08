@@ -47,18 +47,24 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import CollapsibleCard from '@/components/molecules/CollapsibleCard.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
 import FormActions from '@/components/molecules/FormActions.vue';
 import IconButton from '@/components/atoms/IconButton.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
 import TextInput from '@/components/atoms/TextInput.vue';
-import { useSettingsStore } from '@/stores/settings';
-import { useAuthStore } from '@/stores/auth';
 
-const store = useSettingsStore();
-const authStore = useAuthStore();
+const props = defineProps<{
+  email: string;
+  onSave: (payload: {
+    email?: string;
+    current_password?: string;
+    new_password?: string;
+    confirm_password?: string;
+  }) => Promise<void>;
+}>();
+
 const email = ref('');
 const currentPassword = ref('');
 const newPassword = ref('');
@@ -66,7 +72,7 @@ const confirmPassword = ref('');
 const saving = ref(false);
 
 const loadProfile = () => {
-  email.value = authStore.user?.email || '';
+  email.value = props.email || '';
 };
 
 const onReset = () => {
@@ -78,7 +84,7 @@ const onReset = () => {
 const onSubmit = async () => {
   saving.value = true;
   try {
-    await store.updateAccount({
+    await props.onSave({
       email: email.value.trim(),
       current_password: currentPassword.value,
       new_password: newPassword.value,
@@ -94,6 +100,8 @@ const onSubmit = async () => {
     saving.value = false;
   }
 };
+
+watch(() => props.email, loadProfile);
 
 onMounted(loadProfile);
 </script>

@@ -1,11 +1,9 @@
 // WS mirror from SaveNLoad/templates/workerClaim.js.
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { buildWsUrl } from '@/utils/ws';
-import { useDashboardStore } from '@/stores/dashboard';
-import { useSettingsStore } from '@/stores/settings';
-import { useAuthStore } from '@/stores/auth';
 import { getSharedWsToken } from '@/utils/wsToken';
 import { notify } from '@/utils/notify';
+import type { Ref } from 'vue';
 
 export type WorkerSnapshot = {
   client_id: string;
@@ -24,23 +22,27 @@ type WorkersUpdateMessage = {
 
 type WorkerListOptions = {
   reloadOnClose?: boolean;
+  userRef: Ref<any | null>;
+  getWsToken?: () => Promise<string | null>;
 };
 
-export const useWorkerListSocket = (options: WorkerListOptions = {}) => {
+export const useWorkerListSocket = (options: WorkerListOptions) => {
   const workers = ref<WorkerSnapshot[]>([]);
   const socketOpen = ref(false);
   const lastError = ref('');
   const supportsWebSocket = ref(true);
-  const dashboardStore = useDashboardStore();
-  const settingsStore = useSettingsStore();
-  const authStore = useAuthStore();
 
   let socket: WebSocket | null = null;
   let reconnectTimer: number | null = null;
   let hasOpened = false;
   let shouldReconnect = true;
 
-  const fetchWsToken = async () => getSharedWsToken(dashboardStore, settingsStore);
+  const fetchWsToken = async () => {
+    if (options.getWsToken) {
+      return options.getWsToken();
+    }
+    return getSharedWsToken();
+  };
 
   const closeSocket = () => {
     shouldReconnect = false;
@@ -70,7 +72,7 @@ export const useWorkerListSocket = (options: WorkerListOptions = {}) => {
       supportsWebSocket.value = false;
       return;
     }
-    if (!authStore.user) {
+    if (!options.userRef?.value) {
       return;
     }
 
@@ -115,9 +117,9 @@ export const useWorkerListSocket = (options: WorkerListOptions = {}) => {
 
   onMounted(connect);
   watch(
-    () => authStore.user,
+    () => options.userRef?.value,
     () => {
-      if (!socket && authStore.user) {
+      if (!socket && options.userRef?.value) {
         connect();
       }
     }

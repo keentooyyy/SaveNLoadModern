@@ -203,7 +203,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 import CollapsibleCard from '@/components/molecules/CollapsibleCard.vue';
 import InputLabel from '@/components/atoms/InputLabel.vue';
 import TextInput from '@/components/atoms/TextInput.vue';
@@ -211,9 +211,12 @@ import FormActions from '@/components/molecules/FormActions.vue';
 import IconButton from '@/components/atoms/IconButton.vue';
 import PasswordField from '@/components/molecules/PasswordField.vue';
 import ModalShell from '@/components/molecules/ModalShell.vue';
-import { useSettingsStore } from '@/stores/settings';
-
-const store = useSettingsStore();
+const props = defineProps<{
+  loadSettings: () => Promise<Record<string, any> | null | undefined>;
+  updateSettings: (payload: Record<string, any>) => Promise<any>;
+  checkHealth: () => Promise<Record<string, any> | null | undefined>;
+  revealSettings: (keys: string[], password: string) => Promise<Record<string, any>>;
+}>();
 
   const form = reactive({
     rawgEnabled: false,
@@ -227,10 +230,9 @@ const store = useSettingsStore();
     resetDefaultPassword: ''
   });
 
-const isSaving = computed(() => store.adminSettingsSaving);
-const isHealthChecking = computed(() => store.adminSettingsHealthLoading);
-const isRevealLoading = computed(() => store.adminSettingsRevealLoading);
-const health = computed(() => store.adminSettingsHealth);
+const isSaving = ref(false);
+const isHealthChecking = ref(false);
+const isRevealLoading = ref(false);
 const revealState = reactive({
   rawgApiKey: false,
   gmailAppPassword: false,
@@ -263,13 +265,22 @@ const revealModal = reactive({
   };
 
 const loadSettings = async () => {
-  const settings = await store.loadAdminSettings();
-  applySettings(settings || {});
+  isSaving.value = true;
+  try {
+    const settings = await props.loadSettings();
+    applySettings(settings || {});
+  } finally {
+    isSaving.value = false;
+  }
 };
 
 const onSubmit = async () => {
+  if (isSaving.value) {
+    return;
+  }
+  isSaving.value = true;
   try {
-    await store.updateAdminSettings({
+    await props.updateSettings({
       'feature.rawg.enabled': form.rawgEnabled,
       'rawg.api_key': form.rawgApiKey.trim(),
       'feature.email.enabled': form.emailEnabled,
@@ -289,11 +300,18 @@ const onSubmit = async () => {
     if (t?.error) {
       t.error('Failed to save admin settings.');
     }
+  } finally {
+    isSaving.value = false;
   }
 };
 
 const onHealthCheck = async () => {
-  const health = await store.checkAdminSettingsHealth();
+  if (isHealthChecking.value) {
+    return;
+  }
+  isHealthChecking.value = true;
+  const health = await props.checkHealth();
+  isHealthChecking.value = false;
   if (!health) {
     return;
   }
@@ -344,8 +362,12 @@ const confirmReveal = async () => {
   if (!revealModal.password) {
     return;
   }
+  if (isRevealLoading.value) {
+    return;
+  }
+  isRevealLoading.value = true;
   try {
-    const revealed = await store.revealAdminSettings(revealModal.keys, revealModal.password);
+    const revealed = await props.revealSettings(revealModal.keys, revealModal.password);
     if (revealed['rawg.api_key'] !== undefined) {
       form.rawgApiKey = revealed['rawg.api_key'] || '';
       revealState.rawgApiKey = true;
@@ -364,6 +386,8 @@ const confirmReveal = async () => {
     closeReveal();
   } catch {
     // handled by store
+  } finally {
+    isRevealLoading.value = false;
   }
 };
 

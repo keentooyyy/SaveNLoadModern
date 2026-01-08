@@ -1,5 +1,5 @@
 <template>
-  <AppLayout>
+  <AppLayout :version-label="versionLabel" :on-logout="onLogout" :on-load-version="loadVersion">
     <div class="container-fluid px-0">
       <PageHeader
         title="Home"
@@ -9,6 +9,9 @@
         @settings="goToSettings"
         @logout="onLogout"
       />
+      <div v-if="dashboardError" class="alert alert-danger mx-3 mt-3">
+        {{ dashboardError }}
+      </div>
       <div v-if="showGuestBanner" class="alert alert-warning mx-3 mt-3">
         Guest account will be deleted on {{ guestExpiryDate }} ({{ guestDaysLeft }} left).
         <button class="btn btn-sm btn-dark ms-2" @click="goToSettings">Upgrade Account</button>
@@ -65,8 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRef } from 'vue';
 import PageHeader from '@/components/organisms/PageHeader.vue';
 import RecentList from '@/components/organisms/RecentList.vue';
 import GameGrid from '@/components/organisms/GameGrid.vue';
@@ -76,14 +78,18 @@ import BackupCompleteModal from '@/components/organisms/BackupCompleteModal.vue'
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useDashboardStore } from '@/stores/dashboard';
 import { useAuthStore } from '@/stores/auth';
+import { useMetaStore } from '@/stores/meta';
 import { notify } from '@/utils/notify';
 import { pauseBootstrapModals, restoreBootstrapModals } from '@/utils/modalStack';
 import { useConfirm } from '@/composables/useConfirm';
+import { useWorkerStatusSocket } from '@/composables/useWorkerStatusSocket';
+import { getSharedWsToken } from '@/utils/wsToken';
 
-const router = useRouter();
 const store = useDashboardStore();
 const authStore = useAuthStore();
+const metaStore = useMetaStore();
 const { requestConfirm } = useConfirm();
+const suppressRedirectRef = toRef(authStore, 'suppressWorkerRedirect');
 
 const searchQuery = ref('');
 const sortBy = ref('name_asc');
@@ -93,8 +99,10 @@ const recentGames = computed(() => store.recentGames);
 const recentLoading = computed(() => store.loading && recentGames.value.length === 0);
 const gamesLoading = computed(() => store.loading && games.value.length === 0);
 const isAdmin = computed(() => store.isAdmin);
+const dashboardError = computed(() => store.error);
 const headerName = computed(() => store.user?.username || authStore.user?.username || '');
 const headerRole = computed(() => (store.user?.role || authStore.user?.role || '').toUpperCase());
+const versionLabel = computed(() => metaStore.versionLabel);
 const guestExpiresAt = computed(() => {
   const value = store.user?.guest_expires_at || authStore.user?.guest_expires_at;
   return value ? new Date(value) : null;
@@ -189,12 +197,12 @@ const clearBackupCloseTimer = () => {
   }
 };
 
-const handleAuthError = async (err: any) => {
+const handleAuthError = (err: any) => {
   const status = err?.status;
   if (status === 401) {
-    await router.push('/login');
+    window.location.assign('/login');
   } else if (status === 503) {
-    await router.push('/worker-required');
+    window.location.assign('/worker-required');
   }
 };
 
@@ -572,6 +580,7 @@ const onQuickLoadGame = async (game: { id: number; title?: string }) => {
 const goToSettings = () => window.location.assign('/settings');
 const goToProfile = () => window.location.assign('/settings');
 const onLogout = async () => {
+  authStore.suppressWorkerRedirect = true;
   try {
     await authStore.logout();
   } catch {
@@ -580,6 +589,19 @@ const onLogout = async () => {
     window.location.assign('/login');
   }
 };
+
+const loadVersion = async () => {
+  await metaStore.loadVersion();
+};
+
+useWorkerStatusSocket({
+  userRef: computed(() => authStore.user),
+  suppressRedirectRef,
+  getWsToken: () => getSharedWsToken(),
+  onWorkerUnavailable: () => {
+    window.location.assign('/worker-required');
+  }
+});
 
 const loadSaveFolders = async () => {
   if (!selectedGameId.value) {
@@ -774,7 +796,7 @@ const onEditGame = () => {
     return;
   }
   savesModalOpen.value = false;
-  void router.push({ path: `/games/${selectedGameId.value}` });
+  window.location.assign(`/games/${selectedGameId.value}`);
 };
 
 onMounted(async () => {
@@ -783,6 +805,7 @@ onMounted(async () => {
     now.value = Date.now();
   }, 60000);
   try {
+    await authStore.refreshUser();
     await store.loadDashboard();
   } catch (err: any) {
     await handleAuthError(err);

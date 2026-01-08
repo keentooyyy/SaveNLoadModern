@@ -143,9 +143,9 @@ class ClientWorkerServiceRclone:
             if ':' not in rest.split('/')[0]:
                 host = rest.split('/')[0]
                 path = rest[len(host):] if len(rest) > len(host) else ''
-                server_url = f'{scheme}://{host}:8001{path}'
+                server_url = f'{scheme}://{host}:8000{path}'
         self.server_url = server_url.rstrip('/')
-        self.ws_port = int(os.getenv('SAVENLOAD_WS_PORT', '8001'))
+        self.ws_port = int(os.getenv('SAVENLOAD_WS_PORT', '8000'))
         self.ui_port = int(os.getenv('SAVENLOAD_UI_PORT', '8000'))
         parsed_ui = urlparse(self.server_url)
         ui_host = parsed_ui.hostname or parsed_ui.netloc

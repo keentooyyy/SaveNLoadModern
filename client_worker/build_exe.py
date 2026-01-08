@@ -119,7 +119,7 @@ def build_exe():
         print("1. Copy SaveNLoadClient.exe to your desired location")
         print("   (The executable is self-contained - rclone and config are bundled inside)")
         print("2. Create a .env file in the same directory with:")
-        print("   - SAVENLOAD_SERVER_URL=http://YOUR_SERVER_IP:8001")
+        print("   - SAVENLOAD_SERVER_URL=http://YOUR_SERVER_IP:8000")
         print("   - REDIS_HOST=YOUR_REDIS_HOST")
         print("   - REDIS_PORT=6379")
         print("   - REDIS_PASSWORD=YOUR_REDIS_PASSWORD (leave empty if none)")
