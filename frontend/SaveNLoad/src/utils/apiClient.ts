@@ -10,8 +10,21 @@ export const ensureCsrfToken = async () => {
   if (token) {
     return token;
   }
-  await fetch(`${API_BASE}/auth/csrf`, { credentials: 'include' });
-  return getCookie('csrftoken');
+  const response = await fetch(`${API_BASE}/auth/csrf`, { credentials: 'include' });
+  let nextToken = getCookie('csrftoken');
+  if (!nextToken) {
+    try {
+      const data = await response.json();
+      const fallbackToken = data?.csrfToken;
+      if (fallbackToken) {
+        document.cookie = `csrftoken=${encodeURIComponent(fallbackToken)}; path=/; samesite=lax`;
+        nextToken = getCookie('csrftoken') || fallbackToken;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return nextToken;
 };
 
 export const refreshSession = async () => {

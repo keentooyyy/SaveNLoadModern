@@ -42,17 +42,25 @@ if not SECRET_KEY:
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
+def require_env(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or value == '':
+        raise RuntimeError(f'{name} is required and must be set in the environment.')
+    return value
+
+
+def env_bool(name: str) -> bool:
+    value = require_env(name).strip().lower()
+    return value in ('1', 'true', 'yes', 'on')
+
+
+def env_csv(name: str) -> list[str]:
+    return [item.strip() for item in require_env(name).split(',') if item.strip()]
+
+
 # Production: LAN access (localhost + local network)
-# For local production deployment accessible via LAN (192.168.88.0/24)
 if not DEBUG:
-    # Allow localhost and LAN IPs via environment variable.
-    # Set ALLOWED_HOSTS in .env as comma-separated values to restrict.
-    allowed_hosts_env = os.getenv('ALLOWED_HOSTS', '*')
-    if allowed_hosts_env:
-        ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(',')]
-    else:
-        # Safe default: require explicit host allowlist outside DEBUG.
-        ALLOWED_HOSTS = ['*']
+    ALLOWED_HOSTS = env_csv('ALLOWED_HOSTS')
 else:
     ALLOWED_HOSTS = ['*']
 
@@ -218,16 +226,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CSRF Protection Settings
 # For local production (no HTTPS), keep secure cookies disabled
-CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'False')  # Set to True only with HTTPS
+CSRF_COOKIE_SECURE = env_bool('CSRF_COOKIE_SECURE')  # Set to True only with HTTPS
 CSRF_COOKIE_HTTPONLY = False  # Must be False for AJAX to work
 CSRF_COOKIE_SAMESITE = 'Lax'  # Prevents CSRF attacks while allowing AJAX
 CSRF_USE_SESSIONS = False  # Use cookie-based CSRF tokens
 CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'  # Default CSRF failure view
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:8000, http://localhost:8001, http://192.168.88.101:8000').split(',')
-    if origin.strip()
-]
+CSRF_TRUSTED_ORIGINS = env_csv('CSRF_TRUSTED_ORIGINS')
 
 # Security Settings for Production
 if not DEBUG:
@@ -235,14 +239,14 @@ if not DEBUG:
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
     SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False')
+    SESSION_COOKIE_SECURE = env_bool('SESSION_COOKIE_SECURE')
     SESSION_COOKIE_SAMESITE = 'Lax'
 
 # JWT Auth (Cookie-based)
 AUTH_ACCESS_COOKIE_NAME = os.getenv('AUTH_ACCESS_COOKIE_NAME', 'snl_access')
 AUTH_REFRESH_COOKIE_NAME = os.getenv('AUTH_REFRESH_COOKIE_NAME', 'snl_refresh')
 AUTH_RESET_COOKIE_NAME = os.getenv('AUTH_RESET_COOKIE_NAME', 'snl_reset')
-AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', 'False')
+AUTH_COOKIE_SECURE = env_bool('AUTH_COOKIE_SECURE')
 AUTH_COOKIE_SAMESITE = os.getenv('AUTH_COOKIE_SAMESITE', 'Lax')
 AUTH_ACCESS_TOKEN_MINUTES = int(os.getenv('AUTH_ACCESS_TOKEN_MINUTES', '15'))
 AUTH_REFRESH_TOKEN_DAYS = int(os.getenv('AUTH_REFRESH_TOKEN_DAYS', '7'))
@@ -306,13 +310,8 @@ CACHES = {
 
 # CORS (Vue dev server)
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:8000, http://localhost:8001, http://192.168.88.101:8000').split(',')
-    if origin.strip()
-]
+CORS_ALLOWED_ORIGINS = env_csv('CORS_ALLOWED_ORIGINS')
 
 
 
 # Logging Configuration
-
