@@ -58,11 +58,8 @@ def env_csv(name: str) -> list[str]:
     return [item.strip() for item in require_env(name).split(',') if item.strip()]
 
 
-# Production: LAN access (localhost + local network)
-if not DEBUG:
-    ALLOWED_HOSTS = env_csv('ALLOWED_HOSTS')
-else:
-    ALLOWED_HOSTS = ['*']
+# Hosts: always require env to avoid debug/prod drift
+ALLOWED_HOSTS = env_csv('ALLOWED_HOSTS')
 
 
 # Application definition
@@ -233,14 +230,13 @@ CSRF_USE_SESSIONS = False  # Use cookie-based CSRF tokens
 CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'  # Default CSRF failure view
 CSRF_TRUSTED_ORIGINS = env_csv('CSRF_TRUSTED_ORIGINS')
 
-# Security Settings for Production
-if not DEBUG:
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
-    X_FRAME_OPTIONS = 'DENY'
-    SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SECURE = env_bool('SESSION_COOKIE_SECURE')
-    SESSION_COOKIE_SAMESITE = 'Lax'
+# Security Settings (keep consistent across environments)
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = env_bool('SESSION_COOKIE_SECURE')
+SESSION_COOKIE_SAMESITE = 'Lax'
 
 # JWT Auth (Cookie-based)
 AUTH_ACCESS_COOKIE_NAME = os.getenv('AUTH_ACCESS_COOKIE_NAME', 'snl_access')
