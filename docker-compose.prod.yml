@@ -58,9 +58,8 @@ services:
       context: .
       dockerfile: Dockerfile.prod
       args:
-        VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8000/api}
-        VITE_API_ORIGIN: ${VITE_API_ORIGIN:-http://localhost:8000}
-        VITE_WS_BASE: ${VITE_WS_BASE:-}
+        VITE_API_BASE: ${VITE_API_BASE}
+        VITE_API_ORIGIN: ${VITE_API_ORIGIN}
     container_name: savenload_backend_prod
     command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && daphne -b 0.0.0.0 -p 8000 config.asgi:application"
     ports:
