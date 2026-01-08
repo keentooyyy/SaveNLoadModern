@@ -426,7 +426,7 @@ const pollOperations = async (
           const isBackup = isBackupLabel(label);
           if (normalizedLabel.includes('save') && !isBackup) {
             try {
-              await store.loadDashboard();
+              await refreshGames();
             } catch {
               // Ignore refresh errors to avoid blocking success flow.
             }
@@ -503,7 +503,7 @@ const pollOperations = async (
 };
 
 
-const onSearch = async ({ query, sort }: { query: string; sort: string }) => {
+const runSearch = async (query: string, sort: string) => {
   const requestId = ++searchRequestId;
   searching.value = true;
   try {
@@ -515,6 +515,23 @@ const onSearch = async ({ query, sort }: { query: string; sort: string }) => {
       searching.value = false;
     }
   }
+};
+
+const refreshGames = async () => {
+  const query = searchQuery.value.trim();
+  if (!query) {
+    await refreshGames();
+    return;
+  }
+  await runSearch(query, sortBy.value);
+};
+
+const onSearch = async ({ query, sort }: { query: string; sort: string }) => {
+  if (!query.trim()) {
+    await store.loadDashboard();
+    return;
+  }
+  await runSearch(query, sort);
 };
 
 const scrollToAvailableGames = () => {
@@ -771,12 +788,12 @@ const onDeleteGame = async () => {
         `Deleting ${selectedGameTitle.value || 'game'}...`,
         async () => {
           resetSelection();
-          await store.loadDashboard();
+          await refreshGames();
         }
       );
     } else {
       resetSelection();
-      await store.loadDashboard();
+      await refreshGames();
     }
   } catch (err: any) {
     await handleAuthError(err);
