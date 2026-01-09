@@ -19,6 +19,7 @@ type FieldErrors = Record<string, string | string[]>;
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 const GUEST_CREDS_KEY = 'savenload_guest_credentials';
+const OTP_EMAIL_KEY = 'savenload_otp_email';
 const buildErrorMessage = (data: any) => {
   const fallback = (data?.message || data?.error || '').toString().trim();
   const isGenericFallback = fallback === 'Please fix the errors below.';
@@ -87,6 +88,36 @@ const writeGuestCredentials = (creds: { username: string; email?: string; passwo
   }
 };
 
+const readOtpEmail = () => {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  try {
+    return window.sessionStorage.getItem(OTP_EMAIL_KEY)
+      || window.localStorage.getItem(OTP_EMAIL_KEY)
+      || '';
+  } catch {
+    return '';
+  }
+};
+
+const writeOtpEmail = (email: string) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  try {
+    if (email) {
+      window.sessionStorage.setItem(OTP_EMAIL_KEY, email);
+      window.localStorage.setItem(OTP_EMAIL_KEY, email);
+    } else {
+      window.sessionStorage.removeItem(OTP_EMAIL_KEY);
+      window.localStorage.removeItem(OTP_EMAIL_KEY);
+    }
+  } catch {
+    // ignore storage errors
+  }
+};
+
 async function apiPost(path: string, body: Record<string, unknown>) {
   const csrfToken = await ensureCsrfToken();
   const response = await requestWithRetry(() => (
@@ -118,7 +149,7 @@ export const useAuthStore = defineStore('auth', () => {
   const message = ref('');
   const error = ref('');
   const fieldErrors = ref<FieldErrors | null>(null);
-  const otpEmail = ref('');
+  const otpEmail = ref(readOtpEmail());
   const guestCredentials = ref<{ username: string; email?: string; password: string } | null>(
     readGuestCredentials()
   );
@@ -297,6 +328,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const data = await apiPost('/auth/forgot-password', payload);
       otpEmail.value = payload.email;
+      writeOtpEmail(payload.email);
       message.value = data?.message || '';
       if (message.value) {
         notify.flashSuccess(message.value);
@@ -367,6 +399,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (message.value) {
         notify.flashSuccess(message.value);
       }
+      writeOtpEmail('');
       return data;
     } catch (err: any) {
       error.value = err.message || '';
